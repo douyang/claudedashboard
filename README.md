@@ -23,6 +23,14 @@ The dashboard shows every Claude project, cloud and local. For each project it s
 3. **Job rows.** Sessions write `jobs/<id>` for each task, with progress, estimates and token figures.
 4. **The project registry.** `projects/<slug>` maps sessions and job names to a project, and records cloud or local.
 
+## Hourly sync
+
+A Claude Code session named "Claude dashboard usage sync" (`session_01DUrUFjVcU4hAjn48SH57kc`) runs `list_sessions` and `scripts/ccr_sync_doc.py`, and writes one `syncs` document. The routine "Claude dashboard hourly usage sync" (`trig_01KWTg8RqfUtRYo3FhjnTAGz`) wakes it at 26 minutes past each hour.
+
+- A routine that starts a fresh session does not work here: fresh routine sessions do not get the Claude Code Remote tools.
+- To stop the sync, disable the routine in claude.ai Routines.
+- One test run cost about $0.11 at API list prices.
+
 ## Publish
 
 1. Edit `dashboard/index.html`.
