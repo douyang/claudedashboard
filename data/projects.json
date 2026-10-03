@@ -1,0 +1,265 @@
+{
+  "_comment": "Project registry for the dashboard's projects collection. Keys are document ids. Session ids, repos and artifact links come from list_sessions, list_repos and the artifact gallery on 2026-10-03. 'Gmail update' takes its name from the session title.",
+  "heart-by-ultrasound": {
+    "name": "The Heart by Ultrasound",
+    "where": "cloud",
+    "surface": "Claude Code · web",
+    "sessions": [
+      "session_01NtQNVy8YQ5NUAw3xwF3MnN",
+      "session_01L6ffXHBzN7s27eDw35KmyT",
+      "session_01YMwyhqV23a9zD8vYUn5Tqp"
+    ],
+    "repos": [
+      "douyang/echodemo",
+      "douyang/heartmodel"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/PZJCYQW4J4U6v1eoX59Yxm",
+      "https://claude.ai/artifact/JuLHC45hrSq3jmn8JSxx2t",
+      "https://claude.ai/artifact/NAo2uQQ2sU1vsWcUTb9jmx"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "amyloid-heart": {
+    "name": "The Amyloid Heart",
+    "aliases": [
+      "The Amyloid Heart films"
+    ],
+    "where": "cloud",
+    "surface": "Claude Code · web",
+    "sessions": [
+      "session_011c5FSFnh88SGTTkXPZpUX9"
+    ],
+    "repos": [
+      "douyang/heartmodel",
+      "douyang/AmyloidEcho"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/VXhGbNztZJHpb7Xp18LKfj",
+      "https://claude.ai/artifact/CAMC4wZPJ2y1NGoT6umvte"
+    ],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "imvaria-film": {
+    "name": "IMVARIA Labs film",
+    "where": "cloud",
+    "surface": "Claude Code · web",
+    "sessions": [],
+    "repos": [],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "pca-films": {
+    "name": "InVision PCA films",
+    "where": "cloud",
+    "surface": "Claude Code · web",
+    "sessions": [],
+    "repos": [],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "r01-genetics-echo": {
+    "name": "Genetics and Echo R01",
+    "where": "local",
+    "surface": "Cowork",
+    "sessions": [
+      "cowork-grants"
+    ],
+    "repos": [],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "gmail-update": {
+    "name": "Gmail update",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_011kruFcBnNG6jyn8aTJ361G"
+    ],
+    "repos": [
+      "douyang/AmyloidEcho"
+    ],
+    "artifacts": [],
+    "note": "Name from the session title.",
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "cardiology-practices": {
+    "name": "Cardiology Practice Tracker",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01XU6r9WP7rR5McDptZzyjpa",
+      "session_01Fg8TCo5EiD9ifiJY5QPcxT",
+      "session_01GAsEGumFB5DPFqpyhfKKBt"
+    ],
+    "repos": [
+      "douyang/Cardiologyprivatepractices",
+      "douyang/Businesstrack"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/1TY5qqmsRnhz6aTZRzYz5b"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "business-tracker": {
+    "name": "InVision Business Tracker",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01WY5RgnvXkvnuKSJXzKaBFZ",
+      "session_018PUA2p6XyQWfmPWSVRoK6g"
+    ],
+    "repos": [
+      "douyang/Businesstrack",
+      "douyang/NTAP"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/Xg5XXkQRJVQzAdEXvtiDTw"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "ntap-hospitals": {
+    "name": "NTAP hospital data",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_018JhjW38TFLqhv1wgVGrn4j"
+    ],
+    "repos": [
+      "douyang/AmyloidEcho"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/Bq3xF9F5fbSSGhzcCzCw8e"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "ai-echo-central": {
+    "name": "AI Echo Central",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01XwTTa6SWNrNXUkyMUL8ExW"
+    ],
+    "repos": [
+      "douyang/ASERegistryExample"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/Ha4aqtD5Xnfz8b33ih6ssc"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "invision-website": {
+    "name": "InVision website",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01CdpwM7pF6uFPZfwyYWeRXm"
+    ],
+    "repos": [
+      "invisionmedtech/invisionmedtech.github.io"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/8iytAX7CRTeUKxYeSYDrB9"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "lab-website": {
+    "name": "Ouyang Lab website",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01WnVVuTx41LriFU4Y3cE53V"
+    ],
+    "repos": [
+      "douyang/douyang.github.io"
+    ],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "cpacs": {
+    "name": "Cardiology PACS",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_018qKhizPVrvQhaqEhoiX9yE"
+    ],
+    "repos": [
+      "douyang/CPACS"
+    ],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "geometry-wars": {
+    "name": "Geometry Wars game",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01BgUHqoicNRGLyn2r2VncEw",
+      "session_01E1XLvSPKTtQzyBDEGTzJUp"
+    ],
+    "repos": [
+      "douyang/pewpew",
+      "douyang/Game_test"
+    ],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "personal-webpage": {
+    "name": "Personal webpage",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01QG7KhX9LFKZufQPVeVsDqq",
+      "session_0162dxAVP7dc2eq5ytHtoyYn"
+    ],
+    "repos": [
+      "douyang/personal-webpage"
+    ],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "flight-page": {
+    "name": "Flight information page",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01XdMvMpRHR2amDfZHR3gDuu"
+    ],
+    "repos": [
+      "douyang/douyang.github.io"
+    ],
+    "artifacts": [],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  },
+  "claude-dashboard": {
+    "name": "Claude dashboard",
+    "where": "cloud",
+    "surface": "Claude Code · cloud",
+    "sessions": [
+      "session_01FBzJZBGZdGeTCPoJbfdV2o"
+    ],
+    "repos": [
+      "douyang/claudedashboard"
+    ],
+    "artifacts": [
+      "https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4"
+    ],
+    "aliases": [],
+    "updatedAt": "2026-10-03T23:30:00Z"
+  }
+}

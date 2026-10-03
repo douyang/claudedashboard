@@ -1,0 +1,1452 @@
+<title>Claude Activity Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+/* Projects, each holding its own job rows, in the paper-and-graphite palette the
+   board started with. One column; filters above; every colour a token. */
+:root {
+  --paper: #e2e4e3; --paper-2: #f1f2f0; --paper-3: #e9ebe9;
+  --ink: #1f262b; --ink-2: #4a555c; --ink-3: #6f7c85;
+  --rule: #b9bdbb; --rule-2: #cdd1cf;
+  --accent: #2b5d8a; --accent-soft: #a9c1d8;
+  --ok: #3f7a45; --flag: #b23a2e; --wait: #9a6b1f; --track: #d5d8d7;
+  --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1a1f23; --paper-2: #222a30; --paper-3: #1f272c;
+    --ink: #e4e7e3; --ink-2: #b1bcc1; --ink-3: #88969d;
+    --rule: #3b464e; --rule-2: #2f3940;
+    --accent: #86b4e0; --accent-soft: #36597c;
+    --ok: #8cc47a; --flag: #e8705f; --wait: #e0b057; --track: #2b343a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1a1f23; --paper-2: #222a30; --paper-3: #1f272c;
+  --ink: #e4e7e3; --ink-2: #b1bcc1; --ink-3: #88969d;
+  --rule: #3b464e; --rule-2: #2f3940;
+  --accent: #86b4e0; --accent-soft: #36597c;
+  --ok: #8cc47a; --flag: #e8705f; --wait: #e0b057; --track: #2b343a;
+  color-scheme: dark;
+}
+body { background: var(--paper); color: var(--ink); font: 400 15px/1.5 var(--sans); }
+.wrap { max-width: 900px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 44px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+/* long paths and ids in reports must wrap on a phone instead of widening the page */
+.label, .note, .blocked, .line, .ask .q, .ask .p, .proj-name { overflow-wrap: anywhere; }
+.eyebrow { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+h1 { margin: 4px 0 0; font: 400 clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)/1.1 var(--serif); text-wrap: balance; }
+.sub { margin: 6px 0 0; color: var(--ink-2); max-width: 62ch; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* summary ------------------------------------------------------------- */
+.summary { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 10px; padding: 15px 18px; display: grid; gap: 11px; }
+.tally { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.tile { display: flex; align-items: baseline; gap: 6px; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper-3); }
+.tile .n { font: 500 1.05rem/1 var(--mono); font-variant-numeric: tabular-nums; }
+.tile .k { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); }
+.tile.running .n { color: var(--accent); }
+.tile.waiting .n { color: var(--wait); }
+.tile.done .n { color: var(--ok); }
+.tile.bad .n { color: var(--flag); }
+.line { color: var(--ink-2); font-size: 0.9rem; }
+.line b { color: var(--ink); font-weight: 600; }
+.note-line { border-top: 1px solid var(--rule); padding-top: 9px; color: var(--ink-3); }
+
+/* the top lines: the project that ends last and the job with the most work left */
+.outlook { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+.ol-row { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 3px 14px; align-items: baseline; }
+.ol-k { font: 500 0.68rem/1.3 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.ol-v { display: grid; gap: 2px; min-width: 0; }
+.ol-name { font: 500 1.12rem/1.3 var(--serif); color: var(--ink); overflow-wrap: anywhere; }
+.ol-name a { color: inherit; }
+.ol-when { color: var(--ink-2); font-size: 0.9rem; }
+.ol-when b { color: var(--ink); font-weight: 600; }
+.ol-why { color: var(--ink-3); font-size: 0.84rem; }
+.ol-why.waits { color: var(--wait); }
+.ol-x { margin: 0; color: var(--ink-3); font-size: 0.84rem; }
+@media (max-width: 520px) { .ol-row { grid-template-columns: minmax(0, 1fr); } }
+.livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 7px; vertical-align: 1px; animation: breathe 2.4s ease-in-out infinite; }
+.livedot.cold { background: var(--ink-3); animation: none; }
+@keyframes breathe { 0%, 100% { opacity: 1 } 50% { opacity: 0.32 } }
+@media (prefers-reduced-motion: reduce) { .livedot { animation: none } }
+
+/* waiting on a person -------------------------------------------------- */
+.askband { border: 1px solid var(--wait); border-left-width: 3px; border-radius: 10px; background: var(--paper-2); padding: 13px 16px; display: grid; gap: 9px; }
+.askband h2 { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--wait); }
+.ask { display: grid; gap: 3px; padding-top: 8px; border-top: 1px solid var(--rule-2); }
+.ask:first-of-type { border-top: 0; padding-top: 0; }
+.ask .qrow { display: flex; align-items: baseline; gap: 10px; }
+.ask .q { font-weight: 600; min-width: 0; }
+.ask .w { color: var(--wait); font-size: 0.86rem; }
+.ask .p { color: var(--ink-3); font-size: 0.86rem; }
+.note-line .lead { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 6px; }
+
+/* closing a row by hand: the first tap arms the button, the second writes --- */
+button.close { flex: none; margin-left: auto; font: 500 0.72rem/1 var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+button.close:hover { border-color: var(--ink-3); color: var(--ink); }
+button.close.arm { border-color: var(--ok); color: var(--ok); }
+button.close:disabled { opacity: 0.55; cursor: default; }
+.close-err { color: var(--flag); font-size: 0.82rem; flex-basis: 100%; }
+
+/* filters -------------------------------------------------------------- */
+.filters { display: grid; gap: 8px; }
+.filters .set { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.filters .lab { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 2px; }
+button.f { font: 500 0.78rem/1 var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 6px 11px; cursor: pointer; }
+button.f:hover { border-color: var(--ink-3); color: var(--ink); }
+button.f[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper-2); }
+
+/* projects ------------------------------------------------------------- */
+.proj-card { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 14px 16px 6px; display: grid; gap: 10px; margin-bottom: 16px; }
+.proj-head { display: grid; gap: 7px; }
+.proj-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
+.proj-name { margin: 0; font: 500 1.08rem/1.25 var(--serif); min-width: 0; }
+.proj-pct { font: 500 0.95rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.proj-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.84rem; color: var(--ink-3); }
+.badge { font: 500 0.66rem/1 var(--sans); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 6px; }
+
+.bar { position: relative; height: 9px; border-radius: 5px; background: var(--track); overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; transition: width 0.6s linear; }
+.bar .proj { background: var(--accent-soft); }
+.bar .done { background: var(--accent); }
+.row.is-done .bar .done { background: var(--ok); }
+.row.is-failed .bar .done, .row.is-stopped .bar .done { background: var(--flag); }
+.row.is-waiting .bar .done { background: var(--wait); }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+
+.group { display: grid; gap: 2px; }
+.group > h3 { margin: 10px 0 0; font: 500 0.68rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.row { display: grid; gap: 7px; padding: 11px 0; border-top: 1px solid var(--rule-2); }
+.row .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 9px; }
+.label { font-weight: 600; min-width: 0; }
+.label a { color: inherit; }
+.note { color: var(--ink-3); font-size: 0.86rem; flex-basis: 100%; min-width: 0; }
+.blocked { color: var(--wait); font-size: 0.86rem; flex-basis: 100%; min-width: 0; }
+.chip { font: 500 0.66rem/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.running { color: var(--accent); }
+.chip.done { color: var(--ok); }
+.chip.failed, .chip.stopped { color: var(--flag); }
+.chip.waiting { color: var(--wait); }
+.chip.queued { color: var(--ink-3); }
+.chip.answered { color: var(--ok); }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.85rem; color: var(--ink-2); }
+.stats b { color: var(--ink); font-weight: 500; }
+.stats .warn { color: var(--wait); }
+.stats .late { color: var(--flag); }
+.empty { color: var(--ink-2); padding: 16px 0; border-top: 1px solid var(--rule); }
+
+/* how to post ---------------------------------------------------------- */
+details.howto { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 12px 16px; }
+details.howto summary { cursor: pointer; font-weight: 600; }
+details.howto .body { display: grid; gap: 9px; margin-top: 10px; }
+details.howto p { margin: 0; color: var(--ink-2); max-width: 70ch; }
+details.howto dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 0.88rem; }
+details.howto dt { font-family: var(--mono); color: var(--ink); }
+details.howto dd { margin: 0; color: var(--ink-2); min-width: 0; }
+@media (max-width: 480px) { details.howto dl { grid-template-columns: 1fr; gap: 1px 0; } details.howto dd { margin-bottom: 7px; } }
+
+/* Claude usage: the account's limit as Claude Code reports it, and the tokens of the jobs */
+.usage { display: grid; gap: 4px; padding-top: 9px; border-top: 1px solid var(--rule); font-size: 0.88rem; color: var(--ink-2); }
+.usage p { margin: 0; overflow-wrap: anywhere; }
+.usage .uk { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 6px; }
+.usage b { color: var(--ink); font-weight: 500; }
+.usage .ok { color: var(--ok); }
+.usage .caution { color: var(--wait); }
+.usage .alert { color: var(--flag); font-weight: 500; }
+.foot { margin: 0; color: var(--ink-3); font-size: 0.82rem; max-width: 72ch; }
+.key { display: inline-block; width: 20px; height: 8px; border-radius: 4px; vertical-align: middle; margin: 0 4px 0 2px; }
+
+/* Reported tokens per hour over the board's whole span, and what the 5-hour and
+   7-day windows look like at that rate. One series, so one colour and no legend:
+   the heading names it. */
+.density { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 14px 16px; display: grid; gap: 12px; }
+.density h2 { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.dsub { margin: 4px 0 0; color: var(--ink-2); font-size: 0.88rem; }
+.dsub b { color: var(--ink); font-weight: 500; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+#density-range { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#density-range .lab { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 2px; }
+.dwin { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.win { border: 1px solid var(--rule-2); border-radius: 8px; padding: 10px 12px; display: grid; gap: 3px; background: var(--paper-3); }
+.win .wk { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.win .wv { font: 500 1.15rem/1.2 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.win .wl { color: var(--ink-2); font-size: 0.84rem; }
+.win .wl b { color: var(--ink); font-weight: 500; font-family: var(--mono); }
+.win .wstate { font-size: 0.84rem; }
+.win .wstate.ok { color: var(--ok); }
+.win .wstate.caution { color: var(--wait); }
+.win .wstate.alert { color: var(--flag); font-weight: 500; }
+.dplot { position: relative; }
+.dplot svg { display: block; width: 100%; height: auto; overflow: visible; }
+.dcap { margin: -2px 0 0; color: var(--ink-3); font: 400 0.78rem/1.4 var(--mono); }
+.dplot .grid { stroke: var(--rule-2); stroke-width: 1; }
+.dplot .axis { stroke: var(--rule); stroke-width: 1; }
+.dplot .ylab, .dplot .xlab { fill: var(--ink-3); font: 400 9px var(--mono); }
+.dplot .peak { fill: var(--ink-2); font: 500 9px var(--mono); }
+.dplot .band { fill: var(--accent-soft); opacity: 0.45; }
+.dplot .bandedge { stroke: var(--accent-soft); stroke-width: 1; }
+.dplot .bandlab { fill: var(--ink-3); font: 400 8.5px var(--sans); }
+.dplot .bar { fill: var(--accent); }
+.dplot .bar.on { fill: var(--ink-2); }
+.dtip { position: absolute; z-index: 2; pointer-events: none; background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; font: 400 0.8rem/1.35 var(--sans); box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; }
+.dtip b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+details.dtable summary { cursor: pointer; color: var(--ink-2); font-size: 0.86rem; }
+details.dtable table { border-collapse: collapse; margin-top: 8px; font-size: 0.82rem; }
+details.dtable th, details.dtable td { text-align: left; padding: 3px 12px 3px 0; border-bottom: 1px solid var(--rule-2); color: var(--ink-2); }
+details.dtable th { color: var(--ink-3); font: 500 0.68rem/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; }
+details.dtable td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* usage and velocity ------------------------------------------------- */
+:root { --cloud: #2b5d8a; --local: #6a5a8c; --spread: #c9d6e2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cloud: #86b4e0; --local: #b9a6e0; --spread: #2c4258; } }
+:root[data-theme="dark"] { --cloud: #86b4e0; --local: #b9a6e0; --spread: #2c4258; }
+.usebox { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 15px 18px; display: grid; gap: 14px; }
+.density-in { display: grid; gap: 12px; }
+.usebox h2, .sec-h { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.6rem, 1fr)); gap: 10px 14px; }
+.kpi { display: grid; gap: 3px; min-width: 0; }
+.kpi .v { font: 500 1.45rem/1.1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
+.kpi .k { font: 500 0.66rem/1.2 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); }
+.kpi .s { font-size: 0.8rem; color: var(--ink-3); }
+.chartwrap { display: grid; gap: 6px; }
+.charthead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.chart { width: 100%; height: auto; display: block; }
+.chart text { fill: var(--ink-3); font: 400 10px var(--mono); }
+.chart .grid { stroke: var(--rule-2); stroke-width: 1; }
+.chart .fine { fill: var(--accent); }
+.chart .coarse { fill: var(--spread); }
+.chart .now { fill: var(--ok); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--ink-3); }
+.ptable-wrap { overflow-x: auto; }
+table.ptable { width: 100%; border-collapse: collapse; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+.ptable th { text-align: left; font: 500 0.64rem/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); padding: 0 8px 6px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.ptable td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule-2); color: var(--ink-2); vertical-align: middle; white-space: nowrap; }
+.ptable td.pn { white-space: normal; color: var(--ink); font-weight: 500; min-width: 9rem; }
+.ptable td.r, .ptable th.r { text-align: right; }
+.ptable tr.dim td { color: var(--ink-3); }
+.share { display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--track); vertical-align: middle; overflow: hidden; }
+.share i { display: block; height: 100%; background: var(--accent); }
+.live-note { font-size: 0.82rem; color: var(--ink-3); }
+.live-note.warn { color: var(--wait); }
+
+/* scope toggle and where badges ------------------------------------ */
+button.scope { font: 600 0.8rem/1 var(--sans); color: var(--paper-2); background: var(--ink); border: 1px solid var(--ink); border-radius: 999px; padding: 7px 13px; cursor: pointer; }
+button.scope[aria-pressed="true"] { background: transparent; color: var(--ink); }
+button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.where { font: 600 0.62rem/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; border-radius: 4px; padding: 3px 6px; border: 1px solid currentColor; white-space: nowrap; }
+.where.cloud { color: var(--cloud); }
+.where.local { color: var(--local); }
+.where.both { color: var(--ink-2); }
+.pill { font: 500 0.62rem/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; border-radius: 999px; padding: 3px 7px; white-space: nowrap; }
+.pill.on { background: var(--ok); color: var(--paper-2); }
+.pill.off { border: 1px solid var(--rule); color: var(--ink-3); }
+.proj-card.inactive { background: var(--paper-3); }
+.proj-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.proj-links { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.82rem; }
+.proj-links a { color: var(--accent); overflow-wrap: anywhere; }
+.proj-use { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.84rem; color: var(--ink-2); }
+.proj-use b { color: var(--ink); font-weight: 500; }
+.hidden-note { font-size: 0.82rem; color: var(--ink-3); padding: 8px 0 6px; border-top: 1px solid var(--rule-2); }
+.hidden-note button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+</style>
+
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Across projects, sessions and surfaces</p>
+    <h1>Claude activity dashboard</h1>
+    <p class="sub">Every project, its sessions and jobs, and the tokens they use. Cloud and local work in one place.</p>
+  </header>
+
+  <section class="summary" aria-label="Everything on the board">
+    <div class="outlook" id="outlook" hidden></div>
+    <div class="tally" id="tally"></div>
+    <p class="line" id="headline">Waiting for the first report.</p>
+    <p class="line" id="clockline"></p>
+    <div class="usage" id="usage" hidden></div>
+    <p class="line note-line" id="board-note" hidden></p>
+  </section>
+
+  <section class="usebox" id="usebox" aria-label="Token usage">
+    <h2>Token usage and velocity</h2>
+    <div class="kpis" id="kpis"><p class="live-note">Loading session usage.</p></div>
+    <div class="density-in" id="density" hidden>
+      <div>
+        <h2 class="sec-h" id="density-h">Tokens per hour</h2>
+        <p class="dsub" id="density-sub"></p>
+      </div>
+      <div class="dwin" id="density-win"></div>
+      <div class="set" id="density-range" role="group" aria-label="Time range" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="lab">Range</span></div>
+      <div class="dplot" id="density-plot"></div>
+      <p class="dcap" id="density-cap"></p>
+      <details class="dtable"><summary>Table view</summary><div id="density-table"></div></details>
+    </div>
+    <div class="ptable-wrap"><table class="ptable" id="ptable" aria-label="Tokens by project"></table></div>
+    <p class="live-note" id="livenote"></p>
+  </section>
+
+  <section class="askband" id="askband" aria-label="Waiting on you" hidden></section>
+
+  <nav class="filters" aria-label="Filters">
+    <div class="set"><button type="button" class="scope" id="scope" data-key="scope" aria-pressed="false">Show all projects</button><span class="live-note" id="scope-note"></span></div>
+    <div class="set" id="f-where" role="group" aria-label="Where it runs"><span class="lab">Runs</span></div>
+    <div class="set" id="f-status" role="group" aria-label="Status"><span class="lab">Show</span></div>
+    <div class="set" id="f-project" role="group" aria-label="Project"><span class="lab">Project</span></div>
+  </nav>
+
+  <section id="projects">
+    <p class="empty" id="empty">Nothing on the board yet.</p>
+  </section>
+
+  <details class="howto">
+    <summary>Posting from another Claude session</summary>
+    <div class="body">
+      <p>Every Claude session that works on a project reports here through this artifact's database. The <b>claude-dashboard</b> skill holds the full procedure. Reuse a document id to update a record in place.</p>
+      <p><b>projects/&lt;slug&gt;</b>: one document per project. Fields: <span class="num">name</span>, <span class="num">aliases</span> (other names that job rows use), <span class="num">where</span> (cloud or local; derived when absent), <span class="num">surface</span>, <span class="num">sessions</span> (session ids), <span class="num">repos</span>, <span class="num">artifacts</span>, <span class="num">status</span> (active, paused or done), <span class="num">pinned</span>, <span class="num">note</span>, <span class="num">lastActivityAt</span> (set on each report; it keeps the project active for 72 h).</p>
+      <p><b>sessions/&lt;session id&gt;</b>: one document per session, rewritten as it runs. Fields: <span class="num">title</span>, <span class="num">project</span>, <span class="num">where</span>, <span class="num">surface</span>, <span class="num">status</span>, <span class="num">createdAt</span>, <span class="num">updatedAt</span>, <span class="num">tok</span> (input, cache reads, cache writes and output together), <span class="num">out</span>, <span class="num">usd</span>, <span class="num">src</span>, and <span class="num">partial</span> when the figure is a floor. When the Claude Code Remote connector answers, the board reads cloud sessions live and those figures replace the stored ones.</p>
+      <p><b>ticks/&lt;session id&gt;~&lt;15-min bucket&gt;</b>: a usage snapshot. Fields: <span class="num">sid</span>, <span class="num">project</span>, <span class="num">at</span>, <span class="num">tok</span>, <span class="num">out</span>, <span class="num">usd</span>, <span class="num">src</span>. Velocity and the chart come from these snapshots. This page also writes one when it reads a changed live total.</p>
+      <dl>
+        <dt>jobs: project, group</dt><dd>The project and a sub-heading inside it.</dd>
+        <dt>label, note</dt><dd>What the job is, in one line, and the latest detail.</dd>
+        <dt>surface</dt><dd>Where it runs: <span class="num">Claude Code · web</span> (cloud), <span class="num">Claude Code · CLI</span> or <span class="num">Cowork</span> (local).</dd>
+        <dt>status</dt><dd><span class="num">queued</span>, <span class="num">running</span>, <span class="num">waiting</span> (needs a person), <span class="num">done</span>, <span class="num">failed</span> or <span class="num">stopped</span>.</dd>
+        <dt>blocked</dt><dd>What the job waits on.</dd>
+        <dt>total, done, unit</dt><dd>Progress, for example 4320 of <span class="num">frames</span>.</dd>
+        <dt>rate, estSec</dt><dd>Units per second, and the expected length in seconds.</dd>
+        <dt>order, due, link</dt><dd>Sort key, a deadline as <span class="num">2026-10-15</span>, and an https address.</dd>
+        <dt>askedAt, answeredAt, answer</dt><dd>A question to a person, when they answered, and what they decided.</dd>
+        <dt>queuedAt</dt><dd>When the job joined the queue.</dd>
+        <dt>tok, tokOut, tokEst</dt><dd>Tokens used so far, the output tokens among them, and the expected total.</dd>
+        <dt>startedAt, updatedAt, finishedAt</dt><dd>Timestamps in UTC, as <span class="num">2026-10-01T06:21:41Z</span>. A running job with no report for 30 minutes is stale.</dd>
+      </dl>
+      <p><b>meta/board</b> holds a <span class="num">note</span> and <span class="num">updatedAt</span>. <b>meta/quota</b> holds the account limit as Claude Code reports it: <span class="num">status</span> (allowed, allowed_warning or rejected), <span class="num">type</span> (for example five_hour), <span class="num">resetsAt</span>, <span class="num">overage</span>, <span class="num">notice</span>, <span class="num">updatedAt</span>. Optionally <span class="num">pct</span> (the share of the current window used, 0 to 100), <span class="num">limitTok</span> (the window's token cap when a session knows it), <span class="num">weekResetsAt</span> and <span class="num">weekPct</span> for the 7-day window. The window tiles use each one when it is posted and say so while it is missing; they never guess a cap.</p>
+    </div>
+  </details>
+
+  <p class="foot">
+    A project is active when it has an open job, a running session, or any report in the last 72 hours. A project marked paused or done is inactive; a pinned project stays active. Token figures count every token the model reads or writes, cached context included; most are cache reads, which cost about a tenth of new input. Cost is at API list prices, as Claude Code reports it. Cloud sessions are read live from the Claude Code Remote connector every 10 minutes. Cowork and local CLI sessions appear only when they report, and a report marked partial is a floor. Velocity divides the tokens between two snapshots evenly over the time between them. Times are in your clock.
+  </p>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const STATUS = { queued: 'Queued', running: 'Running', waiting: 'Waiting', done: 'Done', failed: 'Failed', stopped: 'Stopped' };
+  const STALE_SEC = 1800;
+  const ARM_MS = 4000;                 // a Done tap waits this long for its confirming tap
+  const ACTIVE_SEC = 72 * 3600;        // a project with a report this recent counts as active
+  const FINE_SEC = 3 * 3600;           // snapshots closer than this count as measured
+  const TICK_MS = 15 * 60000;          // the board adds at most one snapshot per session per 15 min
+  const LIVE_MS = 10 * 60000;          // live session usage refreshes this often
+  const SERVER = 'Claude Code Remote';
+  let jobs = [], board = null, quota = null, sesDocs = [], projDocs = [], tickDocs = [], db = null;
+  let live = null, liveAt = 0, liveErr = 'wait';
+  let fStatus = 'all', fProject = 'all', fWhere = 'all', showAll = false;
+  let armed = null, armedAt = 0;       // the row whose Done waits for a second tap
+  const closing = new Set(), failed = new Set();
+  let aliasMap = new Map(), sidProject = new Map();
+  /** The registry name for a project name a job or session uses. */
+  function canon(n) { return aliasMap.get(n) || n; }
+
+  /* per-viewer convenience only; the board itself never depends on it */
+  const keep = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private window, blocked storage */ } };
+  const recall = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+
+  const t = (iso) => { const v = Date.parse(iso || ''); return Number.isFinite(v) ? v : 0; };
+  const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const day = (ms) => new Date(ms).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const sameDay = (ms) => new Date(ms).toDateString() === new Date().toDateString();
+  const when = (ms) => (sameDay(ms) ? clock(ms) : `${day(ms)} ${clock(ms)}`);
+  const dur = (s) => {
+    s = Math.max(0, Math.round(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    if (h) return m ? `${h} h ${m} min` : `${h} h`;
+    if (m) return x && m < 10 ? `${m} min ${x} s` : `${m} min`;
+    return `${x} s`;
+  };
+  const ago = (ms) => { const s = (Date.now() - ms) / 1000; return s < 45 ? 'just now' : s < 90 ? '1 min ago' : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+  const n0 = (v) => Math.round(v).toLocaleString();
+  /** Tokens, short: 640 k, 38 M, 1.39 B. */
+  const tk = (v) => (v >= 1e9 ? `${(v / 1e9).toFixed(2)} B` : v >= 1e6 ? `${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)} M` : v >= 1e3 ? `${Math.round(v / 1e3)} k` : `${Math.round(v)}`);
+  const num = (v) => (Number.isFinite(+v) && +v > 0 ? +v : 0);
+  /** Tokens a live job still needs: its estimate less what it has used. */
+  const tokLeft = (x) => (isLive(x) ? Math.max(0, num(x.j.tokEst) - num(x.j.tok)) : 0);
+  const LIMIT = { allowed: ['Allowed', 'ok'], allowed_warning: ['Near the limit', 'caution'], rejected: ['Limit reached', 'alert'] };
+  const WINDOW = { five_hour: '5-hour', seven_day: '7-day', seven_day_opus: '7-day Opus', seven_day_sonnet: '7-day Sonnet' };
+  const projectOf = (j) => canon(j.project || j.group || 'Unfiled');
+  const groupOf = (j) => (j.project ? (j.group || '') : '');
+  /* Waiting on a person only until they answer. answeredAt is what tells the
+     board the question is done, whatever the row's status still says. */
+  const unanswered = (x) => x.s.status === 'waiting' && !x.s.answered;
+  /* Live: work still moving or still waiting on someone. An answered question is
+     not live, even when its writer never moved the status on. */
+  const isLive = (x) => x.s.status === 'running' || x.s.status === 'queued' || unanswered(x);
+
+  /** A job as of now: reported and projected progress, rate, time left. */
+  function state(j, now) {
+    const total = Math.max(0, +j.total || 0);
+    const done = Math.min(total, Math.max(0, +j.done || 0));
+    const started = t(j.startedAt), updated = t(j.updatedAt), finished = t(j.finishedAt);
+    const status = STATUS[j.status] ? j.status : 'queued';
+    let rate = +j.rate > 0 ? +j.rate : 0;
+    if (!rate && done > 0 && started && updated > started) rate = done / ((updated - started) / 1000);
+    let proj = done;
+    /* never below the reported count, even when a report carries a later clock */
+    if (status === 'running' && rate > 0 && updated) proj = Math.min(total, Math.max(done, done + (rate * (now - updated)) / 1000));
+    if (status === 'done') proj = total;
+    const frac = total ? (status === 'done' ? 1 : done / total) : status === 'done' ? 1 : 0;
+    const pfrac = total ? proj / total : frac;
+    const est = +j.estSec > 0 ? +j.estSec : rate > 0 && total ? total / rate : 0;
+    let left = 0, known = true, over = false;
+    if (status === 'running') {
+      if (rate > 0 && total) left = (total - proj) / rate;
+      else if (est && started) { left = Math.max(0, est - (now - started) / 1000); over = left === 0; }
+      else known = false;
+    } else if (status === 'queued') { if (est) left = est; else known = false; }
+    else if (status === 'waiting') known = false;
+    const stale = status === 'running' && updated > 0 && (now - updated) / 1000 > STALE_SEC;
+    /* A question put to a person. askedAt is explicit; a waiting row without one
+       falls back to its last report, so the clock still runs. answeredAt freezes
+       it, which is how the board knows the question is done. */
+    const asked = t(j.askedAt) || (status === 'waiting' ? (updated || started) : 0);
+    const answered = t(j.answeredAt);
+    const waitSec = asked ? Math.max(0, ((answered || now) - asked) / 1000) : 0;
+    const queuedSince = t(j.queuedAt) || updated || 0;
+    return { total, done, proj, frac, pfrac, rate, started, updated, finished, est, left, known, over, status, stale,
+             asked, answered, waitSec, queuedSince };
+  }
+
+  function rollup(items) {
+    const act = items.filter(isLive);
+    const weigh = items.filter((x) => x.s.status !== 'failed' && x.s.status !== 'stopped');
+    const W = weigh.reduce((a, x) => a + (x.s.est || 1), 0);
+    const pfrac = W ? weigh.reduce((a, x) => a + (x.s.est || 1) * x.s.pfrac, 0) / W : 0;
+    const frac = W ? weigh.reduce((a, x) => a + (x.s.est || 1) * x.s.frac, 0) / W : 0;
+    const left = act.reduce((a, x) => a + x.s.left, 0);
+    const known = act.every((x) => x.s.known);
+    const settled = weigh.length > 0 && act.length === 0;
+    const end = settled ? Math.max(0, ...weigh.map((x) => x.s.finished || x.s.answered || x.s.updated)) : 0;
+    /* why the known time can run short: no estimate, a question to a person, past the estimate */
+    const asks = act.filter(unanswered).length;
+    const unknown = act.filter((x) => !x.s.known).length - asks;
+    const over = act.filter((x) => x.s.over).length;
+    return { pfrac, frac, left, known, settled, end, active: act.length, asks, unknown, over };
+  }
+
+  /** The reasons a project can end later than its known work says, or ''. */
+  function slack(r) {
+    const parts = [];
+    if (r.unknown) parts.push(`${r.unknown} ${r.unknown === 1 ? 'job has' : 'jobs have'} no estimate`);
+    if (r.over) parts.push(`${r.over} ${r.over === 1 ? 'job is past its' : 'jobs are past their'} estimate`);
+    if (r.asks) parts.push(`${r.asks} ${r.asks === 1 ? 'question waits' : 'questions wait'} on you`);
+    return parts.length ? `${parts.join(', ')}.` : '';
+  }
+  const strong = (text) => { const b = document.createElement('b'); b.className = 'num'; b.textContent = text; return b; };
+  /** One line of the top block: a key, a name (linked when https), a time line, a note. */
+  function olRow(host, key, name, timeLine, note, link, noteCls) {
+    const row = document.createElement('div'); row.className = 'ol-row';
+    const k = document.createElement('span'); k.className = 'ol-k'; k.textContent = key;
+    const v = document.createElement('div'); v.className = 'ol-v';
+    const nm = document.createElement('span'); nm.className = 'ol-name';
+    if (typeof link === 'string' && /^https:\/\//.test(link)) {
+      const a = document.createElement('a'); a.href = link; a.rel = 'noopener'; a.textContent = name; nm.append(a);
+    } else nm.textContent = name;
+    const w = document.createElement('span'); w.className = 'ol-when'; w.append(...timeLine);
+    v.append(nm, w);
+    if (note) { const n = document.createElement('span'); n.className = noteCls ? `ol-why ${noteCls}` : 'ol-why'; n.textContent = note; v.append(n); }
+    row.append(k, v);
+    host.append(row);
+  }
+
+  /* Done on a live row. The first tap arms it for ARM_MS; the second writes the
+     row closed. A question also gets answeredAt, which stops its clock and takes
+     it out of the band; the snapshot then moves the row to Done. */
+  function closer(j, s, where) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'close';
+    b.dataset.key = `close:${where}:${j.id}`;
+    const isArmed = armed === j.id && Date.now() - armedAt < ARM_MS;
+    if (closing.has(j.id)) { b.textContent = 'Saving'; b.disabled = true; }
+    else if (isArmed) { b.textContent = 'Confirm'; b.classList.add('arm'); }
+    else b.textContent = 'Done';
+    b.setAttribute('aria-label', `${isArmed ? 'Confirm done' : 'Mark done'}: ${j.label || j.id}`);
+    b.addEventListener('click', async () => {
+      if (!db || closing.has(j.id)) return;
+      if (!(armed === j.id && Date.now() - armedAt < ARM_MS)) { armed = j.id; armedAt = Date.now(); render(); return; }
+      armed = null;
+      closing.add(j.id); failed.delete(j.id); render();
+      const now = new Date().toISOString();
+      const patch = { status: 'done', finishedAt: now, updatedAt: now };
+      if (s.status === 'waiting' && !s.answered) { patch.answeredAt = now; patch.answer = 'Closed on the board'; }
+      try { await db.doc(`jobs/${j.id}`).update(patch); }
+      catch (e) { failed.add(j.id); }
+      closing.delete(j.id);
+      render();
+    });
+    return b;
+  }
+  function closeError(j) {
+    if (!failed.has(j.id)) return null;
+    const e = document.createElement('span'); e.className = 'close-err';
+    e.textContent = 'Not saved. This view cannot write to the board.';
+    return e;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Sessions, snapshots and velocity                                  *
+   * ---------------------------------------------------------------- */
+  const money = (v) => (v >= 100 ? `$${n0(v)}` : `$${v.toFixed(2)}`);
+  const iso = (ms) => new Date(ms).toISOString();
+  const dayKey = (ms) => iso(ms).slice(0, 10);
+  /** cloud, local or '' from a surface label. */
+  function whereOfSurface(s) {
+    const v = String(s || '').toLowerCase();
+    if (!v) return '';
+    if (/cowork|cli|local|desktop|terminal|ide/.test(v)) return 'local';
+    if (/web|cloud|remote|ios|android|mobile/.test(v)) return 'cloud';
+    return '';
+  }
+  /** One session from the Claude Code Remote list_sessions answer. */
+  function normRemote(s) {
+    const em = s.external_metadata || {}, u = em.usage || {};
+    const tok = num(u.input_tokens) + num(u.cache_read_tokens) + num(u.cache_write_tokens) + num(u.output_tokens);
+    const st = String(s.session_status || s.status || '').toLowerCase().replace('session_status_', '');
+    const repos = ((s.session_context || {}).sources || [])
+      .map((x) => ((x.git_repository || {}).url || '').replace(/^https:\/\/github\.com\//, '')).filter(Boolean);
+    return { id: s.id, title: s.title || s.id, status: st || 'idle', createdAt: t(s.created_at), updatedAt: t(s.updated_at),
+             tok, out: num(u.output_tokens), usd: num(u.cost_usd), repos, where: 'cloud', surface: 'Claude Code · cloud',
+             src: 'ccr', live: true, partial: false, project: '' };
+  }
+  /** Find the session array in a list_sessions payload, whatever its wrapper. */
+  function findSessions(p) {
+    if (typeof p === 'string') { const i = p.indexOf('{'); if (i < 0) return null; try { p = JSON.parse(p.slice(i)); } catch (e) { return null; } }
+    let found = null;
+    const walk = (v, d) => {
+      if (found || !v || d > 6 || typeof v !== 'object') return;
+      if (Array.isArray(v)) {
+        if (v.length && v.every((x) => x && typeof x.id === 'string' && x.id.startsWith('session_'))) { found = v; return; }
+        v.forEach((x) => walk(x, d + 1));
+      } else for (const k of Object.keys(v)) walk(v[k], d + 1);
+    };
+    walk(p, 0);
+    if (!found && p && typeof p === 'object') {
+      const d = (p.ccr && p.ccr.data) || p.data || p.sessions;
+      if (Array.isArray(d) && !d.length) return [];
+    }
+    return found;
+  }
+  /** Stored session reports, with the live cloud figures on top. */
+  function allSessions() {
+    const m = new Map();
+    for (const d of sesDocs) {
+      m.set(d.id, { id: d.id, title: d.title || d.label || d.id, status: d.status || '', createdAt: t(d.createdAt), updatedAt: t(d.updatedAt),
+                    tok: num(d.tok), out: num(d.out), usd: num(d.usd), repos: Array.isArray(d.repos) ? d.repos : [],
+                    where: d.where || whereOfSurface(d.surface) || (d.src === 'ccr' ? 'cloud' : ''), surface: d.surface || '',
+                    src: d.src || 'report', partial: !!d.partial, project: d.project || '', note: d.note || '', live: false });
+    }
+    if (live) for (const s of live) { const prev = m.get(s.id) || {}; m.set(s.id, { ...prev, ...s, project: prev.project || '' }); }
+    return [...m.values()];
+  }
+  const projectOfSession = (s) => sidProject.get(s.id) || (s.project ? canon(s.project) : '');
+  /** The snapshot points of one session, as [ms, cumulative tokens], non-decreasing. */
+  function pointsOf(s, byId) {
+    const pts = [];
+    if (s.src === 'ccr' && s.createdAt) pts.push([s.createdAt, 0]);
+    for (const d of byId.get(s.id) || []) for (const p of Array.isArray(d.pts) ? d.pts : []) {
+      if (Array.isArray(p) && p.length >= 2 && Number.isFinite(+p[0]) && Number.isFinite(+p[1])) pts.push([+p[0] * 1000, +p[1]]);
+    }
+    const end = s.live && s.status === 'running' ? liveAt : s.updatedAt;
+    if (end && s.tok) pts.push([end, s.tok]);
+    pts.sort((a, b) => a[0] - b[0]);
+    const out = []; let hi = 0;
+    for (const [at, v] of pts) {
+      hi = Math.max(hi, v);
+      if (out.length && out[out.length - 1][0] === at) out[out.length - 1][1] = hi; else out.push([at, hi]);
+    }
+    return out;
+  }
+  /** Tokens between a and b, split into measured and spread parts. */
+  function alloc(pts, a, b) {
+    let fine = 0, coarse = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [t0, v0] = pts[i - 1], [t1, v1] = pts[i];
+      if (t1 <= a || t0 >= b || t1 <= t0 || v1 <= v0) continue;
+      const part = ((v1 - v0) * (Math.min(b, t1) - Math.max(a, t0))) / (t1 - t0);
+      if ((t1 - t0) / 1000 <= FINE_SEC) fine += part; else coarse += part;
+    }
+    return { fine, coarse };
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Projects: the registry, job rows and sessions, merged             *
+   * ---------------------------------------------------------------- */
+  function buildProjects(all, sess, now) {
+    const P = new Map();
+    const get = (name) => {
+      if (!P.has(name)) P.set(name, { name, doc: null, items: [], sess: [], where: new Set(), lastAct: 0, repos: new Set(), artifacts: [], surfaces: new Set(), unreg: false });
+      return P.get(name);
+    };
+    for (const d of projDocs) {
+      const p = get(d.name || d.id); p.doc = d;
+      (Array.isArray(d.repos) ? d.repos : []).forEach((r) => p.repos.add(r));
+      p.artifacts = (Array.isArray(d.artifacts) ? d.artifacts : []).filter((a) => typeof a === 'string' && /^https:\/\//.test(a));
+      if (d.surface) p.surfaces.add(d.surface);
+      p.lastAct = Math.max(p.lastAct, t(d.lastActivityAt));   // set by a session that reports, never by a registry edit
+    }
+    for (const x of all) {
+      const p = get(projectOf(x.j)); p.items.push(x);
+      const w = whereOfSurface(x.j.surface); if (w) p.where.add(w);
+      if (x.j.surface) p.surfaces.add(x.j.surface);
+      p.lastAct = Math.max(p.lastAct, x.s.updated || 0, x.s.finished || 0);
+    }
+    for (const s of sess) {
+      const reg = projectOfSession(s);
+      const p = get(reg || s.title);
+      if (!reg && !p.doc) p.unreg = true;
+      p.sess.push(s);
+      if (s.where) p.where.add(s.where);
+      s.repos.forEach((r) => p.repos.add(r));
+      p.lastAct = Math.max(p.lastAct, s.live && s.status === 'running' ? liveAt : 0, s.updatedAt || 0);
+    }
+    const out = [];
+    for (const p of P.values()) {
+      p.r = rollup(p.items);
+      p.runSess = p.sess.filter((s) => s.status === 'running').length;
+      const st = p.doc && p.doc.status;
+      p.active = st === 'paused' || st === 'done' ? false
+        : (p.doc && p.doc.pinned) || p.r.active > 0 || p.runSess > 0 || (p.lastAct && (now - p.lastAct) / 1000 < ACTIVE_SEC);
+      const fixed = p.doc && (p.doc.where === 'cloud' || p.doc.where === 'local') ? p.doc.where : '';
+      p.whereKey = fixed || (p.where.has('cloud') && p.where.has('local') ? 'both' : p.where.has('cloud') ? 'cloud' : p.where.has('local') ? 'local' : '');
+      p.tok = p.sess.reduce((a, s) => a + s.tok, 0);
+      p.out = p.sess.reduce((a, s) => a + s.out, 0);
+      p.usd = p.sess.reduce((a, s) => a + s.usd, 0);
+      p.partial = p.sess.some((s) => s.partial);
+      out.push(p);
+    }
+    return out;
+  }
+  const WHERE_WORD = { cloud: 'Cloud', local: 'Local', both: 'Cloud + local' };
+  const whereMatch = (p) => fWhere === 'all' || p.whereKey === fWhere || (p.whereKey === 'both' && fWhere !== 'all');
+
+  /* ---------------------------------------------------------------- *
+   * Render                                                            *
+   * ---------------------------------------------------------------- */
+  function render() {
+    const now = Date.now();
+    if (armed && now - armedAt >= ARM_MS) armed = null;
+    /* the board rebuilds every second: keep keyboard focus on the same control */
+    const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
+    const all = jobs.map((j) => ({ j, s: state(j, now) }))
+      .sort((a, b) => (+a.j.order || 0) - (+b.j.order || 0));
+    const sess = allSessions();
+    const projects = buildProjects(all, sess, now);
+    const byName = new Map(projects.map((p) => [p.name, p]));
+
+    /* tally and headline read the whole board, never the filtered view */
+    const by = (st) => all.filter((x) => x.s.status === st).length;
+    const tally = $('tally');
+    tally.textContent = '';
+    const nActive = projects.filter((p) => p.active).length;
+    for (const [cls, k, v] of [
+      ['running', 'Running', by('running')], ['waiting', 'Waiting on you', all.filter(unanswered).length],
+      ['', 'Queued', by('queued')], ['done', 'Done', by('done')],
+      ['bad', 'Stopped', by('failed') + by('stopped')], ['', 'Active projects', nActive], ['', 'All projects', projects.length],
+    ]) {
+      if (!v && (cls === 'bad' || k === 'Waiting on you')) continue;
+      const el = document.createElement('span'); el.className = `tile ${cls}`;
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = v;
+      const l = document.createElement('span'); l.className = 'k'; l.textContent = k;
+      el.append(n, l); tally.append(el);
+    }
+
+    const head = $('headline');
+    const open = projects.filter((p) => p.r.active > 0);
+    if (!all.length && !projects.length) head.textContent = 'Nothing on the board yet.';
+    else if (!open.length) head.textContent = `No open jobs. ${nActive} of ${projects.length} projects active in the last 72 h.`;
+    else {
+      const moving = open.filter((p) => p.items.some((x) => x.s.status === 'running'));
+      head.textContent = `${open.length} ${open.length === 1 ? 'project has' : 'projects have'} open jobs, ${moving.length} running. ${nActive} of ${projects.length} projects active.`;
+    }
+
+    /* Top of the board: the project that ends last, and the job with the most work left. */
+    const ol = $('outlook');
+    ol.textContent = '';
+    if (open.length) {
+      const pr0 = [...open].sort((a, b) => b.r.left - a.r.left)[0];
+      const pr = pr0.r, why = slack(pr);
+      if (pr.left > 0) {
+        olRow(ol, 'Slowest project', pr0.name, why
+          ? ['Finishes after ', strong(when(now + pr.left * 1000)), `, in ${dur(pr.left)} or more`]
+          : ['Finishes about ', strong(when(now + pr.left * 1000)), `, in ${dur(pr.left)}`],
+        why, null, pr.asks ? 'waits' : '');
+      } else {
+        olRow(ol, 'Slowest project', 'No finish time yet',
+          [`No open project has an estimate: ${open.map((p) => p.name).join(', ')}.`], '', null, '');
+      }
+      const longest = all.filter((x) => isLive(x) && x.s.known && x.s.left > 0).sort((a, b) => b.s.left - a.s.left)[0];
+      if (longest) {
+        const { j, s } = longest;
+        const line = s.status === 'running'
+          ? ['Finishes about ', strong(when(now + s.left * 1000)), `, in ${dur(s.left)}`]
+          : [strong(dur(s.left)), ' of work, queued'];
+        if (s.total) line.push(` · ${n0(s.proj)} of ${n0(s.total)} ${j.unit || 'steps'}`);
+        olRow(ol, 'Longest job', j.label || j.id || 'Job', line, projectOf(j), j.link, '');
+      }
+      ol.hidden = false;
+    } else ol.hidden = true;
+
+    /* The board is live every second, so say so and show it moving. */
+    const cl = $('clockline');
+    cl.textContent = '';
+    const dot = document.createElement('span'); dot.className = 'livedot';
+    const lastBeat = Math.max(0, ...all.map((x) => x.s.updated || 0), board ? t(board.updatedAt) : 0, liveAt || 0);
+    if (lastBeat && (now - lastBeat) / 1000 > 3 * STALE_SEC) dot.className = 'livedot cold';
+    cl.append(dot, 'now ');
+    const c2 = document.createElement('b'); c2.className = 'num'; c2.textContent = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    cl.append(c2);
+    if (lastBeat) cl.append(` · last report ${ago(lastBeat)}`);
+
+    /* Anything waiting on a person, hoisted out of the list so it is not missed. */
+    const asks = all.filter(unanswered);
+    const ab = $('askband');
+    ab.textContent = '';
+    if (asks.length) {
+      const h = document.createElement('h2');
+      h.textContent = asks.length === 1 ? 'Waiting on you' : `Waiting on you — ${asks.length} questions`;
+      ab.append(h);
+      for (const { j, s } of asks.sort((a, b2) => b2.s.waitSec - a.s.waitSec)) {
+        const d = document.createElement('div'); d.className = 'ask';
+        const qrow = document.createElement('div'); qrow.className = 'qrow';
+        const q = document.createElement('div'); q.className = 'q'; q.textContent = j.label || j.id || 'Question';
+        qrow.append(q);
+        if (db) qrow.append(closer(j, s, 'band'));
+        const w = document.createElement('div'); w.className = 'w';
+        w.textContent = `${dur(s.waitSec)} so far` + (s.asked ? ` · asked ${when(s.asked)}` : '');
+        d.append(qrow, w);
+        if (j.blocked) { const pp = document.createElement('div'); pp.className = 'p'; pp.textContent = j.blocked; d.append(pp); }
+        const pr = document.createElement('div'); pr.className = 'p'; pr.textContent = projectOf(j);
+        d.append(pr);
+        const err = closeError(j);
+        if (err) d.append(err);
+        ab.append(d);
+      }
+      ab.hidden = false;
+    } else ab.hidden = true;
+
+    const bn = $('board-note');
+    bn.textContent = '';
+    if (board && board.note) {
+      const lead = document.createElement('span'); lead.className = 'lead';
+      lead.textContent = board.updatedAt ? `Latest report, ${ago(t(board.updatedAt))}` : 'Latest report';
+      bn.append(lead, board.note);
+      bn.hidden = false;
+    } else bn.hidden = true;
+
+    limitLines(now);
+    usagePanel(projects, sess, now, all);
+
+    /* filters */
+    const sc = $('scope');
+    sc.setAttribute('aria-pressed', String(showAll));
+    sc.textContent = showAll ? 'Show active only' : 'Show all projects';
+    const hiddenP = projects.filter((p) => !p.active).length;
+    $('scope-note').textContent = showAll ? `${projects.length} projects shown` : `${hiddenP} inactive ${hiddenP === 1 ? 'project' : 'projects'} and finished jobs hidden`;
+    const wc = (k) => projects.filter((p) => (showAll || p.active) && (p.whereKey === k || (k !== 'all' && p.whereKey === 'both'))).length;
+    chips('f-where', [['all', 'Cloud and local'], ['cloud', `Cloud (${wc('cloud')})`], ['local', `Local (${wc('local')})`]],
+      fWhere, (v) => { fWhere = v; keep('cad.where', v); render(); });
+    chips('f-status', [['all', 'Everything'], ['live', 'Live'], ['running', 'Running'], ['waiting', 'Waiting'], ['queued', 'Queued'], ['done', 'Done']],
+      fStatus, (v) => { fStatus = v; keep('cad.status', v); render(); });
+    const listed = projects.filter((p) => (showAll || p.active) && whereMatch(p));
+    chips('f-project', [['all', 'All projects'], ...listed.map((p) => [p.name, p.name])],
+      fProject, (v) => { fProject = v; keep('cad.project', v); render(); });
+
+    /* Active-only hides finished rows too. Answered-but-open rows stay so the writer sees to them. */
+    const keepRow = (x) => {
+      if (!showAll && !(isLive(x) || (x.s.status === 'waiting' && x.s.answered))) return false;
+      return fStatus === 'all' || (fStatus === 'live' ? isLive(x) : fStatus === 'waiting' ? unanswered(x) : x.s.status === fStatus);
+    };
+    const root = $('projects');
+    root.querySelectorAll('.proj-card').forEach((c) => c.remove());
+    let shown = 0;
+    const order = [...listed].sort((a, b) => (b.active - a.active) || (b.r.active - a.r.active) || (b.lastAct - a.lastAct));
+    for (const p of order) {
+      if (fProject !== 'all' && p.name !== fProject) continue;
+      const rows = p.items.filter(keepRow);
+      if (fStatus !== 'all' && !rows.length) continue;
+      shown += 1;
+      root.append(card(p, rows, now));
+    }
+    $('empty').hidden = shown > 0;
+    if (!shown) $('empty').textContent = projects.length ? 'No project matches these filters.' : 'Nothing on the board yet. Each project appears here when a session reports to it.';
+
+    if (focusKey) {
+      const el = [...document.querySelectorAll('[data-key]')].find((n) => n.dataset.key === focusKey);
+      if (el && el !== document.activeElement && !el.disabled) el.focus({ preventScroll: true });
+    }
+    void byName;
+  }
+
+  /** The account's limit as last reported. Claude Code reports a limit's state and reset time, not the share used. */
+  function limitLines(now) {
+    const us = $('usage');
+    us.textContent = '';
+    const line = (key, parts, cls) => {
+      const p = document.createElement('p'); if (cls) p.className = cls;
+      const k = document.createElement('span'); k.className = 'uk'; k.textContent = key;
+      p.append(k, ...parts); us.append(p);
+    };
+    if (quota && quota.status) {
+      const [word, cls] = LIMIT[quota.status] || [String(quota.status), 'caution'];
+      const win = WINDOW[quota.type] || (quota.type ? String(quota.type) : '');
+      const st = document.createElement('b'); st.className = cls; st.textContent = word;
+      const parts = [win ? `${win} window: ` : '', st];
+      const reset = t(quota.resetsAt);
+      if (reset) parts.push(reset > now ? ` · resets ${when(reset)}, in ${dur((reset - now) / 1000)}` : ` · reset due ${when(reset)}`);
+      if (quota.overage) parts.push(' · using overage');
+      if (quota.updatedAt) parts.push(` · reported ${ago(t(quota.updatedAt))}`);
+      line('Claude limit', parts);
+      if (quota.status !== 'allowed') line('Notice', [quota.status === 'rejected' ? 'Claude Code reports the limit reached. Work pauses until the reset.' : 'Claude Code reports usage near the limit. Long jobs can stop before the reset.'], quota.status === 'rejected' ? 'alert' : 'caution');
+      if (typeof quota.notice === 'string' && quota.notice) line(quota.status === 'allowed' ? 'Note' : 'Plan', [quota.notice], quota.status === 'allowed' ? '' : 'caution');
+    }
+    us.hidden = !us.childNodes.length;
+  }
+
+  /** Totals, velocity, the chart and the table by project. */
+  let srcWord = '';
+  function usagePanel(projects, sess, now, all) {
+    const byId = new Map();
+    for (const d of tickDocs) { const k = d.sid || String(d.id).split('~')[0]; if (!byId.has(k)) byId.set(k, []); byId.get(k).push(d); }
+    const pts = sess.map((s) => pointsOf(s, byId));
+    const win = (a, b) => pts.reduce((acc, p) => { const r = alloc(p, a, b); acc.fine += r.fine; acc.coarse += r.coarse; return acc; }, { fine: 0, coarse: 0 });
+    const H = 3600000;
+    const tot = sess.reduce((a, s) => a + s.tok, 0);
+    const usd = sess.reduce((a, s) => a + s.usd, 0);
+    const out = sess.reduce((a, s) => a + s.out, 0);
+    const part = sess.filter((s) => s.partial).length;
+    const w1 = win(now - H, now), w24 = win(now - 24 * H, now), w7 = win(now - 168 * H, now);
+    const spreadPct = (w) => { const s = w.fine + w.coarse; return s ? Math.round((100 * w.coarse) / s) : 0; };
+    const k = $('kpis');
+    k.textContent = '';
+    const kpi = (label, value, sub) => {
+      const d = document.createElement('div'); d.className = 'kpi';
+      const v = document.createElement('span'); v.className = 'v'; v.textContent = value;
+      const l = document.createElement('span'); l.className = 'k'; l.textContent = label;
+      d.append(l, v);
+      if (sub) { const s = document.createElement('span'); s.className = 's'; s.textContent = sub; d.append(s); }
+      k.append(d);
+    };
+    if (!sess.length) {
+      const p = document.createElement('p'); p.className = 'live-note';
+      p.textContent = 'No session usage yet. Cloud sessions appear when Claude Code Remote answers; Cowork and CLI sessions appear when they report.';
+      k.append(p);
+    } else {
+      kpi('All tokens', tk(tot), `${sess.length} sessions${part ? ` · ${part} partial` : ''}`);
+      kpi('Cost, API prices', money(usd), `output ${tk(out)}`);
+      kpi('Last hour', `${tk(w1.fine + w1.coarse)}/h`, spreadPct(w1) ? `${spreadPct(w1)}% spread` : 'measured');
+      kpi('Last 24 h', tk(w24.fine + w24.coarse), `${tk((w24.fine + w24.coarse) / 24)}/h average${spreadPct(w24) ? ` · ${spreadPct(w24)}% spread` : ''}`);
+      kpi('Last 7 days', tk(w7.fine + w7.coarse), `${tk((w7.fine + w7.coarse) / 7)}/day average`);
+    }
+
+    /* Tokens per hour and the limit windows. Session snapshots are the source when
+       any exist; otherwise the job rows that carry tokens. Each span is spread evenly. */
+    let sp = [];
+    pts.forEach((p) => { for (let i = 1; i < p.length; i++) if (p[i][1] > p[i - 1][1]) sp.push({ a: p[i - 1][0], b: p[i][0], tok: p[i][1] - p[i - 1][1], coarse: (p[i][0] - p[i - 1][0]) / 1000 > FINE_SEC }); });
+    srcWord = 'Session snapshots: the tokens between two snapshots are spread evenly over the time between them.';
+    if (!sp.length) { sp = spans(all); srcWord = 'Job rows only, each job spread evenly across its own run.'; }
+    const spreadPart = (a, b) => { const c = inRange(sp.filter((x) => x.coarse), a, b), f = inRange(sp, a, b); return f ? Math.round((100 * c) / f) : 0; };
+    density(sp, now, spreadPart);
+
+    /* table by project */
+    const tbl = $('ptable');
+    tbl.textContent = '';
+    const thead = document.createElement('tr');
+    for (const [txt, r] of [['Project', 0], ['Runs', 0], ['Tokens', 1], ['Share', 0], ['Cost', 1], ['24 h', 1], ['Sessions', 1], ['Last activity', 0]]) {
+      const th = document.createElement('th'); th.textContent = txt; if (r) th.className = 'r'; thead.append(th);
+    }
+    tbl.append(thead);
+    const pv = new Map();
+    sess.forEach((s, i) => { const name = projectOfSession(s) || s.title; const w = alloc(pts[i], now - 24 * H, now); pv.set(name, (pv.get(name) || 0) + w.fine + w.coarse); });
+    const list = projects.filter(whereMatch).sort((a, b) => b.tok - a.tok || b.lastAct - a.lastAct);
+    let hidTok = 0, hidN = 0;
+    for (const p of list) {
+      if (!showAll && !p.active) { hidTok += p.tok; hidN += 1; continue; }
+      const tr = document.createElement('tr'); if (!p.active) tr.className = 'dim';
+      const td = (txt, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; if (txt instanceof Node) c.append(txt); else c.textContent = txt; tr.append(c); return c; };
+      td(p.name + (p.unreg ? ' (not in the registry)' : ''), 'pn');
+      const wb = document.createElement('span');
+      if (p.whereKey) { wb.className = `where ${p.whereKey === 'both' ? 'both' : p.whereKey}`; wb.textContent = WHERE_WORD[p.whereKey]; }
+      td(wb);
+      td(p.sess.length ? `${tk(p.tok)}${p.partial ? '+' : ''}` : '—', 'r');
+      const sh = document.createElement('span'); sh.className = 'share';
+      const si = document.createElement('i'); si.style.width = `${tot ? ((100 * p.tok) / tot).toFixed(1) : 0}%`; sh.append(si);
+      td(sh);
+      td(p.usd ? money(p.usd) : '—', 'r');
+      td(pv.get(p.name) ? tk(pv.get(p.name)) : '—', 'r');
+      td(p.sess.length ? `${p.sess.length}${p.runSess ? ` (${p.runSess} running)` : ''}` : 'none reported', 'r');
+      td(p.lastAct ? ago(p.lastAct) : '—');
+      tbl.append(tr);
+    }
+    if (hidN) {
+      const tr = document.createElement('tr'); tr.className = 'dim';
+      const c = document.createElement('td'); c.className = 'pn'; c.colSpan = 2; c.textContent = `${hidN} inactive ${hidN === 1 ? 'project' : 'projects'}`;
+      const c2 = document.createElement('td'); c2.className = 'r'; c2.textContent = tk(hidTok);
+      const c3 = document.createElement('td'); c3.colSpan = 5; c3.textContent = 'hidden; Show all projects lists them';
+      tr.append(c, c2, c3); tbl.append(tr);
+    }
+
+    /* where the session figures come from */
+    const ln = $('livenote');
+    ln.className = 'live-note';
+    const MSG = {
+      wait: 'Reading cloud sessions from Claude Code Remote.',
+      none: 'Live cloud usage needs the Claude Code Remote connector in this view. The figures come from the last stored reports.',
+      needs_reauth: 'Reconnect Claude Code Remote in claude.ai Settings → Connectors. The figures come from the last stored reports.',
+      server_not_connected: 'Add Claude Code Remote in claude.ai Settings → Connectors for live cloud usage. The figures come from the last stored reports.',
+      selection_required: 'Choose which Claude Code Remote connector this page uses. The figures come from the last stored reports.',
+      not_in_manifest: 'Live cloud usage is turned off for this page. The figures come from the last stored reports.',
+      blocked_by_policy: 'Your organization blocks live cloud usage here. The figures come from the last stored reports.',
+      approval_required: 'Your organization requires approval for live cloud usage. The figures come from the last stored reports.',
+      shape: 'Claude Code Remote answered in a form this page does not read. The figures come from the last stored reports.',
+    };
+    if (!liveErr && live) ln.textContent = `Cloud sessions read live from Claude Code Remote ${ago(liveAt)}; next read in about ${Math.max(1, Math.round((liveAt + LIVE_MS - now) / 60000))} min. Snapshots on file: ${tickDocs.length} session-days.`;
+    else {
+      ln.textContent = MSG[liveErr] || `Live cloud usage did not load (${liveErr}). The figures come from the last stored reports; the board tries again in 10 minutes.`;
+      if (liveErr !== 'wait') ln.className = 'live-note warn';
+    }
+  }
+
+  /* ---- Reported token density ------------------------------------------
+     One series: tokens per hour across the board's whole span, from each
+     reported job's own tokens and its own run. The 5-hour and 7-day tiles read
+     the same spans, so the chart and the windows can never disagree. */
+  const HOUR = 3600000;
+  const STEPS = [1, 2, 3, 6, 12, 24, 48, 72];
+  const RANGES = [['12', '12 h', 12], ['48', '48 h', 48], ['168', '7 d', 168], ['all', 'All', 0]];
+  let dsig = '', dbars = [], dstep = 1, don = -1, dRange = '48';
+
+  /** Each reported job as a span of time carrying its tokens. A job with no
+      start puts its tokens at its last report, so none are spread across time
+      the job did not run. */
+  function spans(all) {
+    const out = [];
+    for (const { j, s } of all) {
+      const tok = num(j.tok);
+      if (!tok) continue;
+      const b = s.finished || s.updated || s.started;
+      if (!b) continue;
+      out.push({ a: s.started && s.started < b ? s.started : b, b, tok });
+    }
+    return out;
+  }
+  /** Tokens inside [from, to), each span spread evenly over its own run. */
+  function inRange(sp, from, to) {
+    let sum = 0;
+    for (const x of sp) {
+      if (x.b <= x.a) { if (x.b >= from && x.b < to) sum += x.tok; continue; }
+      const a = Math.max(x.a, from), b = Math.min(x.b, to);
+      if (b > a) sum += (x.tok * (b - a)) / (x.b - x.a);
+    }
+    return sum;
+  }
+  /** Equal buckets over [from, to), sized so the bars stay readable. */
+  function bins(sp, from, to, maxBars) {
+    const hrs = (to - from) / HOUR;
+    const step = STEPS.find((h) => hrs / h <= maxBars) || Math.ceil(hrs / maxBars);
+    const ms = step * HOUR;
+    const first = Math.floor(from / ms) * ms;
+    const bars = [];
+    for (let t0 = first; t0 < to; t0 += ms) {
+      const tok = inRange(sp, t0, t0 + ms);
+      bars.push({ t0, t1: t0 + ms, tok, rate: tok / step });
+    }
+    return { step, bars };
+  }
+  /** A y-axis top one step above the peak, on a 1/2/5 ladder. */
+  function nice(v) {
+    if (v <= 0) return 1;
+    const e = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const m of [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 10]) if (v <= m * e) return m * e;
+    return 10 * e;
+  }
+  const svgEl = (n, attrs) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', n);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  };
+  /** A bar anchored to the baseline with only its top corners rounded. */
+  function barPath(x, y, w, h, r) {
+    const rr = Math.max(0, Math.min(r, w / 2, h));
+    return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
+  }
+
+  function density(sp, now, spreadPart) {
+    const host = $('density');
+    if (!sp.length) { host.hidden = true; return; }
+    host.hidden = false;
+    const first = Math.min(...sp.map((x) => x.a));
+    const to = Math.max(now, ...sp.map((x) => x.b));
+    /* The work is bunched, so the default view is the last two days and the whole
+       span is one tap away. The two window tiles never follow this: a 5-hour and
+       a 7-day window are what they are. */
+    chips('density-range', RANGES.map(([v, t2]) => [v, t2]), dRange,
+      (v) => { dRange = v; keep('cad.range', v); dsig = ''; render(); });
+    const span = RANGES.find(([v]) => v === dRange);
+    const from = span && span[2] ? Math.max(first, to - span[2] * HOUR) : first;
+    const plot = $('density-plot');
+    const w = Math.max(280, plot.clientWidth || 560);
+    const maxBars = Math.max(14, Math.min(110, Math.floor((w - 48) / 8)));
+
+    /* the plot is rebuilt only when its own inputs move, so a tooltip survives
+       the board's once-a-second refresh */
+    const reset5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
+    const sig = JSON.stringify([sp.map((x) => [x.a, x.b, x.tok]), Math.round(w / 8), dRange, reset5, Math.floor(to / HOUR)]);
+    if (sig !== dsig) {
+      dsig = sig;
+      const b = bins(sp, from, to, maxBars);
+      dstep = b.step; dbars = b.bars;
+      drawPlot(plot, dbars, dstep, w);
+    }
+    windows(sp, now, first, to);
+
+    const total = inRange(sp, from, to);
+    const hrs = (to - from) / HOUR;
+    const peak = dbars.reduce((a, x) => Math.max(a, x.rate), 0);
+    const sub = $('density-sub');
+    sub.textContent = '';
+    const spread = spreadPart(from, to);
+    sub.append(srcWord, spread ? ` ${spread}% of this range comes from gaps longer than 3 h between snapshots. ` : ' ',
+      dRange === 'all' ? '' : 'In this range, ');
+    const b1 = document.createElement('b'); b1.textContent = tk(total);
+    const b2 = document.createElement('b'); b2.textContent = tk(total / hrs);
+    const b3 = document.createElement('b'); b3.textContent = tk(peak);
+    sub.append(b1, ' over ', dur(hrs * 3600), ' — mean ', b2, '/h, peak ', b3, '/h in a ',
+      dstep === 1 ? '1-hour' : `${dstep}-hour`, ' bucket.');
+  }
+
+  function drawPlot(plot, bars, step, w) {
+    plot.textContent = '';
+    const H = 110, AX = 16, L = 46, R = 6, T = 10;
+    const pw = w - L - R, ph = H - T - AX;
+    const top = nice(bars.reduce((a, x) => Math.max(a, x.rate), 0));
+    const svg = svgEl('svg', { viewBox: `0 0 ${w} ${H}`, role: 'img',
+      'aria-label': `Reported tokens per hour, ${step}-hour buckets, peak ${tk(top)} per hour` });
+    /* hairline grid, solid, one shade off the surface */
+    for (let i = 0; i <= 2; i++) {
+      const v = (top * i) / 2, y = T + ph - (ph * i) / 2;
+      svg.append(svgEl('line', { class: i ? 'grid' : 'axis', x1: L, y1: y, x2: L + pw, y2: y }));
+      const lab = svgEl('text', { class: 'ylab', x: L - 6, y: y + 3, 'text-anchor': 'end' });
+      lab.textContent = i ? tk(v) : '0';
+      svg.append(lab);
+    }
+    const x = (t) => L + (pw * (t - bars[0].t0)) / (bars[bars.length - 1].t1 - bars[0].t0);
+    /* the current 5-hour window as a receding band, named in words beside it */
+    let shaded = false;
+    const q5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
+    if (q5) {
+      const a = Math.max(bars[0].t0, q5 - 5 * HOUR), b = Math.min(bars[bars.length - 1].t1, q5);
+      if (b > a) {
+        const bx = x(a), bw2 = Math.max(2, x(b) - bx);
+        svg.append(svgEl('rect', { class: 'band', x: bx, y: T, width: bw2, height: ph }));
+        svg.append(svgEl('line', { class: 'bandedge', x1: bx, y1: T, x2: bx, y2: T + ph }));
+        shaded = true;
+      }
+    }
+    const slot = pw / bars.length;
+    /* thin marks: a 2px gap when narrow, a capped bar when the slots are wide */
+    const bw = Math.max(1, Math.min(slot - 2, 30));
+    const pad = (slot - bw) / 2;
+    const peakI = bars.reduce((a, b2, i) => (b2.rate > bars[a].rate ? i : a), 0);
+    bars.forEach((b2, i) => {
+      if (b2.rate <= 0) return;
+      const h = Math.max(1.5, (ph * b2.rate) / top);
+      const bx = L + slot * i + pad;
+      svg.append(svgEl('path', { class: 'bar', d: barPath(bx, T + ph - h, bw, h, 4), 'data-i': i }));
+    });
+    /* one direct label, on the extreme only */
+    if (bars[peakI] && bars[peakI].rate > 0) {
+      const h = Math.max(1.5, (ph * bars[peakI].rate) / top);
+      const cx = L + slot * peakI + pad + bw / 2;
+      /* keep the one direct label inside the plot instead of letting it hang off */
+      const near = cx > L + pw - 28 ? 'end' : cx < L + 28 ? 'start' : 'middle';
+      const lab = svgEl('text', { class: 'peak', x: near === 'end' ? L + pw : near === 'start' ? L : cx,
+        y: T + ph - h - 4, 'text-anchor': near });
+      lab.textContent = `${tk(bars[peakI].rate)}/h`;
+      svg.append(lab);
+    }
+    svg.append(svgEl('line', { class: 'axis', x1: L, y1: T, x2: L, y2: T + ph }));
+    /* x labels: first, middle, last bucket start */
+    const ticks = w < 440 ? [0, bars.length - 1] : [0, Math.floor(bars.length / 2), bars.length - 1];
+    for (const i of [...new Set(ticks)]) {
+      const lab = svgEl('text', { class: 'xlab', x: L + (pw * (i + 0.5)) / bars.length,
+        y: T + ph + 13, 'text-anchor': i === 0 ? 'start' : i === bars.length - 1 ? 'end' : 'middle' });
+      lab.textContent = `${day(bars[i].t0)} ${clock(bars[i].t0)}`;
+      svg.append(lab);
+    }
+    $('density-cap').textContent = `tokens per hour · ${step === 1 ? '1-hour' : `${step}-hour`} buckets`
+      + (shaded ? ' · shaded: the current 5-hour window' : '') + ' · times in your clock';
+    plot.append(svg);
+
+    /* a tooltip on the bar under the pointer, and a table view underneath */
+    const tip = document.createElement('div'); tip.className = 'dtip'; tip.hidden = true;
+    plot.append(tip);
+    const marks = [...svg.querySelectorAll('.bar')];
+    const pick = (ev) => {
+      const r = plot.getBoundingClientRect();
+      const i = Math.floor((((ev.clientX - r.left) / r.width) * w - L) / slot);
+      if (!(i >= 0 && i < bars.length)) { leave(); return; }
+      if (i !== don) {
+        marks.forEach((m) => m.classList.toggle('on', +m.dataset.i === i));
+        don = i;
+      }
+      const b2 = bars[i];
+      tip.textContent = '';
+      const s1 = document.createElement('div');
+      s1.append(`${day(b2.t0)} ${clock(b2.t0)}–${clock(b2.t1)}`);
+      const s2 = document.createElement('div');
+      const n1 = document.createElement('b'); n1.textContent = `${tk(b2.rate)}/h`;
+      const n2 = document.createElement('b'); n2.textContent = tk(b2.tok);
+      s2.append(n1, ' · ', n2, ' in the bucket');
+      tip.append(s1, s2);
+      tip.hidden = false;
+      const tw = tip.offsetWidth || 160;
+      tip.style.left = `${Math.max(0, Math.min(r.width - tw, ev.clientX - r.left - tw / 2))}px`;
+      tip.style.top = '0px';
+    };
+    const leave = () => { tip.hidden = true; if (don >= 0) { marks.forEach((m) => m.classList.remove('on')); don = -1; } };
+    /* on the svg, not the host: a rebuild drops the svg and its listeners with it */
+    svg.addEventListener('pointermove', pick);
+    svg.addEventListener('pointerleave', leave);
+
+    const tb = $('density-table');
+    tb.textContent = '';
+    const table = document.createElement('table');
+    const hr = document.createElement('tr');
+    for (const h2 of ['Bucket', 'Tokens per hour', 'Tokens']) { const th = document.createElement('th'); th.textContent = h2; hr.append(th); }
+    table.append(hr);
+    for (const b2 of bars) {
+      if (b2.tok <= 0) continue;
+      const tr = document.createElement('tr');
+      const c0 = document.createElement('td'); c0.textContent = `${day(b2.t0)} ${clock(b2.t0)}`;
+      const c1 = document.createElement('td'); c1.className = 'n'; c1.textContent = n0(b2.rate);
+      const c2 = document.createElement('td'); c2.className = 'n'; c2.textContent = n0(b2.tok);
+      tr.append(c0, c1, c2); table.append(tr);
+    }
+    tb.append(table);
+  }
+
+  /** The 5-hour and 7-day windows: what the reported rows put in each one, the
+      rate, where that rate lands by the reset, and what the limit state and any
+      reported share allow us to say about the cap. */
+  function windows(sp, now, first, to) {
+    const host = $('density-win');
+    host.textContent = '';
+    const tile = (key, value, lines) => {
+      const el = document.createElement('div'); el.className = 'win';
+      const k = document.createElement('div'); k.className = 'wk'; k.textContent = key;
+      const v = document.createElement('div'); v.className = 'wv'; v.textContent = value;
+      el.append(k, v);
+      for (const [text, cls] of lines) {
+        if (!text) continue;
+        const p = document.createElement('div'); p.className = cls || 'wl'; p.textContent = text;
+        el.append(p);
+      }
+      host.append(el);
+    };
+    const [word, cls] = quota && quota.status ? LIMIT[quota.status] || [String(quota.status), 'caution'] : ['', ''];
+
+    /* 5-hour: anchored on the reported reset when there is one */
+    const r5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
+    const a5 = r5 ? r5 - 5 * HOUR : now - 5 * HOUR;
+    const used5 = inRange(sp, a5, now);
+    const el5 = Math.max(1 / 60, (Math.min(now, r5 || now) - a5) / HOUR);
+    const rate5 = used5 / el5;
+    const left5 = r5 && r5 > now ? (r5 - now) / HOUR : 0;
+    const l5 = [[`${tk(rate5)}/h over ${dur(el5 * 3600)} of the 5 h`]];
+    if (r5) l5.push([left5
+      ? `resets ${when(r5)}, in ${dur(left5 * 3600)} — ${tk(used5 + rate5 * left5)} by then at this rate`
+      : `reset due ${when(r5)}`]);
+    const pct = quota && +quota.pct > 0 ? +quota.pct : 0;
+    if (pct) {
+      const pr = pct / el5;
+      l5.push([`share ${pct.toFixed(0)}% reported${left5 ? `, about ${Math.min(100, pct + pr * left5).toFixed(0)}% by the reset` : ''} · ${pr.toFixed(1)}%/h`]);
+      l5.push([`implies a cap of at least ${tk(used5 / (pct / 100))}`]);
+    } else if (num(quota && quota.limitTok)) {
+      l5.push([`cap ${tk(num(quota.limitTok))} reported — ${((used5 / num(quota.limitTok)) * 100).toFixed(0)}% of it from these rows`]);
+    } else {
+      l5.push(['share of the cap not reported — post quota.pct or quota.limitTok']);
+    }
+    if (word && quota.type === 'five_hour') l5.push([`${word} at this level, so the cap is above what these rows report`, `wstate ${cls}`]);
+    tile('5-hour window', `${tk(used5)} reported`, l5);
+
+    /* 7 days: a trailing week, projected to a reported week reset when given */
+    const a7 = now - 168 * HOUR;
+    const used7 = inRange(sp, a7, now);
+    const el7 = Math.min(168, Math.max(1 / 60, (now - Math.max(a7, first)) / HOUR));
+    const rate7 = used7 / el7;
+    const reset7 = quota ? t(quota.weekResetsAt) : 0;
+    const left7 = reset7 && reset7 > now ? (reset7 - now) / HOUR : 0;
+    const l7 = [[`${tk(rate7)}/h mean across the trailing ${dur(el7 * 3600)}`]];
+    if (reset7) l7.push([left7
+      ? `resets ${when(reset7)}, in ${dur(left7 * 3600)} — ${tk(used7 + rate7 * left7)} by then at this rate`
+      : `reset due ${when(reset7)}`]);
+    else l7.push(['week reset not reported — post quota.weekResetsAt']);
+    const wp = quota && +quota.weekPct > 0 ? +quota.weekPct : 0;
+    if (wp) l7.push([`share ${wp.toFixed(0)}% reported · implies a cap of at least ${tk(used7 / (wp / 100))}`]);
+    else l7.push(['share of the cap not reported — post quota.weekPct']);
+    if (word && quota.type && String(quota.type).indexOf('seven_day') === 0) l7.push([`${word} at this level`, `wstate ${cls}`]);
+    tile('7-day window', `${tk(used7)} reported`, l7);
+  }
+
+  function chips(id, opts, cur, pick) {
+    const host = $(id);
+    host.querySelectorAll('button').forEach((b) => b.remove());
+    if (!opts.some(([v]) => v === cur)) cur = 'all';
+    for (const [v, text] of opts) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'f';
+      b.dataset.key = `${id}:${v}`;
+      b.textContent = text; b.setAttribute('aria-pressed', String(v === cur));
+      b.addEventListener('click', () => pick(v));
+      host.append(b);
+    }
+  }
+
+  function card(p, rows, now) {
+    const r = p.r;
+    const el = document.createElement('section'); el.className = `proj-card${p.active ? '' : ' inactive'}`;
+    const head = document.createElement('div'); head.className = 'proj-head';
+    const top = document.createElement('div'); top.className = 'proj-top';
+    const h = document.createElement('h2'); h.className = 'proj-name'; h.textContent = p.name;
+    const tags = document.createElement('div'); tags.className = 'proj-tags';
+    if (p.whereKey) { const w = document.createElement('span'); w.className = `where ${p.whereKey}`; w.textContent = WHERE_WORD[p.whereKey]; tags.append(w); }
+    const pill = document.createElement('span'); pill.className = `pill ${p.active ? 'on' : 'off'}`;
+    pill.textContent = p.active ? 'Active' : (p.doc && p.doc.status === 'done' ? 'Done' : p.doc && p.doc.status === 'paused' ? 'Paused' : 'Inactive');
+    tags.append(pill);
+    if (p.items.length) { const pct = document.createElement('span'); pct.className = 'proj-pct'; pct.textContent = `${Math.floor(r.pfrac * 100)}%`; tags.append(pct); }
+    top.append(h, tags);
+    head.append(top);
+    if (p.items.length) {
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
+      const pi = document.createElement('i'); pi.className = 'proj'; pi.style.width = `${(r.pfrac * 100).toFixed(2)}%`;
+      const d = document.createElement('i'); d.className = 'done'; d.style.width = `${(r.frac * 100).toFixed(2)}%`;
+      bar.append(pi, d);
+      head.append(bar);
+    }
+    const meta = document.createElement('div'); meta.className = 'proj-meta';
+    for (const s of p.surfaces) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = s; meta.append(b); }
+    const say = document.createElement('span');
+    if (!p.items.length) say.textContent = 'No job rows';
+    else if (r.settled && r.end) say.textContent = `Jobs finished ${when(r.end)}`;
+    else if (!r.active) say.textContent = 'No open jobs';
+    else if (!r.known) say.textContent = `${r.active} open, no finish time yet`;
+    else say.textContent = `Finishes about ${clock(now + r.left * 1000)}, in ${dur(r.left)}`;
+    meta.append(say);
+    if (p.lastAct) { const la = document.createElement('span'); la.textContent = `Last activity ${ago(p.lastAct)}`; meta.append(la); }
+    head.append(meta);
+
+    const use = document.createElement('div'); use.className = 'proj-use';
+    const bit = (k, v) => { const s = document.createElement('span'); s.append(`${k} `); const b = document.createElement('b'); b.className = 'num'; b.textContent = v; s.append(b); use.append(s); };
+    if (p.sess.length) {
+      bit('Tokens', `${tk(p.tok)}${p.partial ? ' or more' : ''}`);
+      if (p.usd) bit('Cost', money(p.usd));
+      if (p.out) bit('Output', tk(p.out));
+      bit('Sessions', `${p.sess.length}${p.runSess ? `, ${p.runSess} running` : ''}`);
+    } else {
+      const s = document.createElement('span'); s.textContent = 'No session usage reported'; use.append(s);
+    }
+    const jt = p.items.reduce((a, x) => a + num(x.j.tok), 0);
+    if (jt) bit('Job rows', `${tk(jt)} on ${p.items.filter((x) => num(x.j.tok) > 0).length} of ${p.items.length}`);
+    head.append(use);
+
+    const links = document.createElement('div'); links.className = 'proj-links';
+    const link = (href, text) => { const a = document.createElement('a'); a.href = href; a.rel = 'noopener'; a.textContent = text; links.append(a); };
+    for (const rp of p.repos) if (/^[\w.-]+\/[\w.-]+$/.test(rp)) link(`https://github.com/${rp}`, rp);
+    p.artifacts.forEach((a, i) => link(a, p.artifacts.length === 1 ? 'Artifact' : `Artifact ${i + 1}`));
+    if (p.doc && typeof p.doc.link === 'string' && /^https:\/\//.test(p.doc.link)) link(p.doc.link, 'Link');
+    if (links.childNodes.length) head.append(links);
+    if (p.doc && typeof p.doc.note === 'string' && p.doc.note) { const n = document.createElement('p'); n.className = 'note'; n.style.margin = '0'; n.textContent = p.doc.note; head.append(n); }
+    el.append(head);
+
+    const groups = new Map();
+    for (const x of rows) { const g = groupOf(x.j); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(x); }
+    for (const [gname, items] of groups) {
+      const sec = document.createElement('div'); sec.className = 'group';
+      if (gname) { const h3 = document.createElement('h3'); h3.textContent = gname; sec.append(h3); }
+      for (const x of items) sec.append(row(x, now));
+      el.append(sec);
+    }
+    const hid = p.items.length - rows.length;
+    if (hid > 0 && !showAll) {
+      const hn = document.createElement('p'); hn.className = 'hidden-note';
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.key = `more:${p.name}`; b.textContent = 'Show all';
+      b.addEventListener('click', () => { showAll = true; keep('cad.all', '1'); render(); });
+      hn.append(`${hid} finished ${hid === 1 ? 'job' : 'jobs'} hidden. `, b);
+      el.append(hn);
+    }
+    return el;
+  }
+
+  function row(x, now) {
+    const { j, s } = x;
+    const el = document.createElement('article'); el.className = `row is-${s.status}`;
+    const head = document.createElement('div'); head.className = 'head';
+    const chip = document.createElement('span');
+    /* A row still marked waiting but carrying an answer is a half-updated row.
+       Say "Answered" so the state reads true and the writer can see to move it. */
+    const answeredOpen = s.status === 'waiting' && s.answered;
+    chip.className = `chip ${answeredOpen ? 'answered' : s.status}`;
+    chip.textContent = answeredOpen ? 'Answered' : STATUS[s.status];
+    const label = document.createElement('span'); label.className = 'label';
+    const text = j.label || j.id || 'Job';
+    if (typeof j.link === 'string' && /^https:\/\//.test(j.link)) {
+      const a = document.createElement('a'); a.href = j.link; a.textContent = text; a.rel = 'noopener'; label.append(a);
+    } else label.textContent = text;
+    head.append(chip, label);
+    if (j.surface && !j.project) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = j.surface; head.append(b); }
+    if (db && (isLive(x) || answeredOpen)) head.append(closer(j, s, 'row'));
+    if (j.note) { const n = document.createElement('span'); n.className = 'note'; n.textContent = j.note; head.append(n); }
+    if (j.blocked && !s.answered && (s.status === 'waiting' || s.status === 'queued')) {
+      const n = document.createElement('span'); n.className = 'blocked'; n.textContent = `Waits on: ${j.blocked}`; head.append(n);
+    }
+    const err = closeError(j);
+    if (err) head.append(err);
+
+    const stats = document.createElement('div'); stats.className = 'stats';
+    const add = (k, v, cls) => { const span = document.createElement('span'); if (cls) span.className = cls; if (k) span.append(`${k} `); const b = document.createElement('b'); b.className = 'num'; b.textContent = v; span.append(b); stats.append(span); };
+    const unit = j.unit || 'steps';
+    if (s.total) {
+      add('', `${Math.floor(s.pfrac * 100)}%`);
+      add('', `${n0(s.status === 'running' ? s.proj : s.done)} / ${n0(s.total)} ${unit}`);
+    }
+    if (s.status === 'running') {
+      if (s.started) add('Elapsed', dur((now - s.started) / 1000));
+      if (s.known) add('Finishes', `${clock(now + s.left * 1000)} (in ${dur(s.left)})`);
+      if (s.updated) add('Report', ago(s.updated), s.stale ? 'warn' : '');
+    } else if (s.status === 'done') {
+      if (s.started && s.finished) add('Took', dur((s.finished - s.started) / 1000));
+      if (s.finished) add('Finished', when(s.finished));
+    } else if (s.status === 'queued') {
+      if (s.queuedSince) add('Queued', dur((now - s.queuedSince) / 1000));
+      if (s.est) add('Expected', dur(s.est));
+    } else if (s.status === 'waiting') {
+      if (!s.answered) add('Waiting', dur(s.waitSec), s.waitSec > 14400 ? 'late' : s.waitSec > 3600 ? 'warn' : '');
+      if (s.asked) add('Asked', when(s.asked));
+    } else if (s.updated) add('Stopped', when(s.finished || s.updated));
+
+    const tUsed = num(j.tok), tEst = num(j.tokEst);
+    if (tUsed) add('Tokens', num(j.tokOut) ? `${tk(tUsed)} (output ${tk(num(j.tokOut))})` : tk(tUsed));
+    if (tEst && s.status !== 'done' && s.status !== 'failed' && s.status !== 'stopped') add(s.status === 'queued' ? 'Est. tokens' : 'Est. at end', tk(Math.max(tEst, tUsed)), tUsed > tEst ? 'warn' : '');
+
+    /* However the row ended up, if a person answered it, say how long they took. */
+    if (s.answered) {
+      add('Answered after', dur(s.waitSec));
+      if (typeof j.answer === 'string' && j.answer) {
+        const span = document.createElement('span'); span.textContent = `“${j.answer}”`; stats.append(span);
+      }
+    }
+
+    const due = Date.parse(typeof j.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.due) ? `${j.due}T00:00:00Z` : '');
+    if (Number.isFinite(due) && s.status !== 'done') {
+      const days = Math.round((due - Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')) / 86400000);
+      const word = days < 0 ? `${day(due)}, ${-days} ${-days === 1 ? 'day' : 'days'} late` : days === 0 ? `${day(due)}, today` : `${day(due)}, in ${days} ${days === 1 ? 'day' : 'days'}`;
+      add('Due', word, days < 0 ? 'late' : days <= 2 ? 'warn' : '');
+    }
+
+    const bar = document.createElement('div'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
+    const p = document.createElement('i'); p.className = 'proj'; p.style.width = `${(s.pfrac * 100).toFixed(2)}%`;
+    const d = document.createElement('i'); d.className = 'done'; d.style.width = `${(s.frac * 100).toFixed(2)}%`;
+    bar.append(p, d);
+
+    el.append(head, bar, stats);
+    return el;
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Snapshots the board writes from live reads                       *
+   * ---------------------------------------------------------------- */
+  const written = new Set();
+  /** One document per session per UTC day; pts holds [epoch seconds, cumulative tokens]. */
+  async function writeTicks() {
+    if (!db || !live || !liveAt) return;
+    const at = Math.floor(liveAt / 1000), dk = dayKey(liveAt), slot = Math.floor(liveAt / TICK_MS);
+    for (const s of live) {
+      if (!s.tok || s.status !== 'running') continue;   // an idle total is final at its updatedAt
+      const key = `${s.id}~${slot}`;
+      if (written.has(key)) continue;
+      const docs = tickDocs.filter((d) => (d.sid || String(d.id).split('~')[0]) === s.id);
+      let last = null;
+      for (const d of docs) for (const p of Array.isArray(d.pts) ? d.pts : []) if (!last || p[0] > last[0]) last = p;
+      if (last && +last[1] === s.tok) continue;
+      if (last && (at - last[0]) * 1000 < TICK_MS) continue;
+      written.add(key);
+      const id = `${s.id}~${dk}`;
+      const cur = tickDocs.find((d) => d.id === id);
+      const pts = (cur && Array.isArray(cur.pts) ? cur.pts : []).concat([[at, s.tok]]).slice(-200);
+      const proj = projectOfSession(s) || s.title;
+      try { await db.doc(`ticks/${id}`).set({ sid: s.id, project: proj, day: dk, pts, out: s.out, usd: s.usd, src: 'board', updatedAt: iso(liveAt) }); }
+      catch (e) { break; }      // a view that cannot write leaves snapshots to the reporting sessions
+    }
+  }
+
+  function applyRegistry() {
+    aliasMap = new Map(); sidProject = new Map();
+    for (const d of projDocs) {
+      const name = d.name || d.id;
+      for (const a of Array.isArray(d.aliases) ? d.aliases : []) if (typeof a === 'string') aliasMap.set(a, name);
+      for (const s of Array.isArray(d.sessions) ? d.sessions : []) if (typeof s === 'string') sidProject.set(s, name);
+    }
+  }
+
+  fStatus = recall('cad.status', 'all');
+  fProject = recall('cad.project', 'all');
+  fWhere = recall('cad.where', 'all');
+  dRange = recall('cad.range', '48');
+  showAll = recall('cad.all', '') === '1';
+  $('scope').addEventListener('click', () => { showAll = !showAll; keep('cad.all', showAll ? '1' : ''); render(); });
+  render();
+  /* Hold the once-a-second rebuild while a pointer is down, so a tap lands on the button it started on. */
+  let holding = false;
+  document.addEventListener('pointerdown', () => { holding = true; }, true);
+  for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { holding = false; }, true);
+  setInterval(() => { if (!holding) render(); }, 1000);
+
+  (async () => {
+    db = window.claude ? await window.claude.use('db') : null;
+    if (!db) { $('headline').textContent = 'The live board is not available in this view.'; return; }
+    db.collection('jobs').onSnapshot((snap) => { jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); },
+      () => { $('headline').textContent = 'The board stopped updating. Reload to reconnect.'; });
+    db.doc('meta/board').onSnapshot((snap) => { board = snap.exists ? snap.data() : null; render(); }, () => {});
+    db.doc('meta/quota').onSnapshot((snap) => { quota = snap.exists ? snap.data() : null; render(); }, () => {});
+    db.collection('sessions').onSnapshot((snap) => { sesDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
+    db.collection('projects').onSnapshot((snap) => { projDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); applyRegistry(); render(); }, () => {});
+    db.collection('ticks').where('day', '>=', dayKey(Date.now() - 15 * 86400000))
+      .onSnapshot((snap) => { tickDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
+  })();
+
+  (async () => {
+    const mcp = window.claude ? await window.claude.use('mcp') : null;
+    if (!mcp) { liveErr = 'none'; render(); return; }
+    try {
+      mcp.watchTool(SERVER, 'list_sessions', { limit: 100 }, (ev) => {
+        if (ev.type === 'data') {
+          const arr = findSessions(ev.result && ev.result.payload !== undefined ? ev.result.payload : ev.result);
+          if (!arr) { liveErr = 'shape'; render(); return; }
+          live = arr.map(normRemote);
+          liveAt = (ev.result.cache && ev.result.cache.storedAt) || Date.now();
+          liveErr = null;
+          writeTicks();
+          render();
+        } else {
+          const c = (ev.error && ev.error.code) || 'upstream_error';
+          /* authorization failures retract live data; transient ones keep the last good read */
+          if (['needs_reauth', 'server_not_connected', 'blocked_by_policy', 'approval_required', 'not_in_manifest', 'selection_required', 'not_granted', 'capability_disabled'].includes(c)) live = null;
+          liveErr = c === 'not_granted' || c === 'capability_disabled' ? 'none' : c;
+          render();
+        }
+      }, { refetchInterval: LIVE_MS, cache: { staleTime: 300000 } });
+    } catch (e) { liveErr = 'none'; render(); }
+  })();
+})();
+</script>
