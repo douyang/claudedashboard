@@ -1,5 +1,5 @@
 {
-  "_comment": "Project registry for the dashboard's projects collection. Keys are document ids. Session ids, repos and artifact links come from list_sessions, list_repos and the artifact gallery on 2026-10-03. 'Gmail update' takes its name from the session title.",
+  "_comment": "Project registry for the dashboard's projects collection. Keys are document ids. Session ids, repos and artifact links come from list_sessions, list_repos and the artifact gallery on 2026-10-03. 'Gmail update' takes its name from the session title. 'color' is a fixed colour slot 1-8 on the board; projects without one draw in the neutral Other colour.",
   "heart-by-ultrasound": {
     "name": "The Heart by Ultrasound",
     "where": "cloud",
@@ -19,7 +19,8 @@
       "https://claude.ai/artifact/NAo2uQQ2sU1vsWcUTb9jmx"
     ],
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 1
   },
   "amyloid-heart": {
     "name": "The Amyloid Heart",
@@ -39,7 +40,8 @@
       "https://claude.ai/artifact/VXhGbNztZJHpb7Xp18LKfj",
       "https://claude.ai/artifact/CAMC4wZPJ2y1NGoT6umvte"
     ],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 3
   },
   "imvaria-film": {
     "name": "IMVARIA Labs film",
@@ -71,7 +73,8 @@
     "repos": [],
     "artifacts": [],
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 4
   },
   "gmail-update": {
     "name": "Gmail update",
@@ -86,7 +89,8 @@
     "artifacts": [],
     "note": "Name from the session title.",
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 7
   },
   "cardiology-practices": {
     "name": "Cardiology Practice Tracker",
@@ -105,7 +109,8 @@
       "https://claude.ai/artifact/1TY5qqmsRnhz6aTZRzYz5b"
     ],
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 2
   },
   "business-tracker": {
     "name": "InVision Business Tracker",
@@ -123,7 +128,8 @@
       "https://claude.ai/artifact/Xg5XXkQRJVQzAdEXvtiDTw"
     ],
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 5
   },
   "ntap-hospitals": {
     "name": "NTAP hospital data",
@@ -185,7 +191,8 @@
     ],
     "artifacts": [],
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 8
   },
   "cpacs": {
     "name": "Cardiology PACS",
@@ -260,6 +267,7 @@
       "https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4"
     ],
     "aliases": [],
-    "updatedAt": "2026-10-03T23:30:00Z"
+    "updatedAt": "2026-10-03T23:30:00Z",
+    "color": 6
   }
 }

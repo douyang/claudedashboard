@@ -11,13 +11,14 @@ The dashboard shows every Claude project, cloud and local. For each project it s
 | `dashboard/index.html` | The artifact page. Publish this file to the artifact URL. |
 | `data/projects.json` | The project registry seed for the `projects` collection. |
 | `scripts/ccr_to_docs.py` | Converts a `list_sessions` answer into `sessions` and `ticks` documents. |
+| `scripts/ccr_sync_doc.py` | Converts a `list_sessions` answer into one `syncs` document. The hourly routine runs it. |
 | `skills/claude-dashboard/` | The skill that makes every Cowork and Claude Code session report to the board. |
 | `skills/david-dev-style/` | The dev house style, with section 9 for dashboard reports. |
 | `docs/DATA.md` | The database collections and how the page computes its figures. |
 
 ## Data sources
 
-1. **Claude Code cloud sessions.** The page reads `list_sessions` live through the Claude Code Remote connector every 10 minutes. Each session carries its own token totals and cost.
+1. **Claude Code cloud sessions.** An hourly routine writes `list_sessions` totals to `syncs/<epoch>`. Where the viewer's connector allows it, the page also reads `list_sessions` live every 10 minutes. Each session carries its own token totals and cost.
 2. **Session reports.** Sessions write `sessions/<id>` and `ticks/<id>~<UTC day>`. This is the only record for Cowork and local CLI sessions.
 3. **Job rows.** Sessions write `jobs/<id>` for each task, with progress, estimates and token figures.
 4. **The project registry.** `projects/<slug>` maps sessions and job names to a project, and records cloud or local.
