@@ -32,6 +32,7 @@ Write with the `ArtifactData` tool on that URL. Load it with ToolSearch (`select
 | `repos` | `owner/repo` strings, if any. |
 | `artifacts` | `https://claude.ai/artifact/...` links, if any. |
 | `status` | `active`. Use `paused` or `done` only when David says so. |
+| `color` | Leave it out. David assigns the colour slots (1 to 8). |
 | `lastActivityAt` | Now. |
 
 4. If the project exists, `update` it: add your session id to `sessions` if absent, and set `lastActivityAt` to now.
@@ -88,7 +89,7 @@ Close each row when its work ends: `status: done` and `finishedAt`. A row left `
 
 If it exists, `update` with `pts` = the old array plus `[epoch seconds, tok]`, pinned with `if_version`. Skip the snapshot if `tok` did not change. Keep at most one snapshot per 15 minutes.
 
-The board also reads every cloud session live through the Claude Code Remote connector and writes snapshots when it is open. Your own snapshots make the velocity correct when nobody has the board open.
+An hourly routine also writes every cloud session's totals to `syncs/<epoch seconds>`, and the board reads cloud sessions live where the connector allows it. Your own snapshots add finer detail between the hourly syncs.
 
 ### Cowork or a local CLI session
 

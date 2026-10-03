@@ -201,9 +201,13 @@ details.dtable th { color: var(--ink-3); font: 500 0.68rem/1 var(--sans); letter
 details.dtable td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 
 /* usage and velocity ------------------------------------------------- */
-:root { --cloud: #2b5d8a; --local: #6a5a8c; --spread: #c9d6e2; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cloud: #86b4e0; --local: #b9a6e0; --spread: #2c4258; } }
-:root[data-theme="dark"] { --cloud: #86b4e0; --local: #b9a6e0; --spread: #2c4258; }
+:root { --cloud: #2b5d8a; --local: #6a5a8c; --spread: #c9d6e2;
+  /* project colours: a fixed slot per project (projects.color), never by rank */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948; --s-other: #9aa3a8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cloud: #86b4e0; --local: #b9a6e0; --spread: #2c4258;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --s-other: #5d6870; } }
+:root[data-theme="dark"] { --cloud: #86b4e0; --local: #b9a6e0; --spread: #2c4258;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --s-other: #5d6870; }
 .usebox { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 15px 18px; display: grid; gap: 14px; }
 .density-in { display: grid; gap: 12px; }
 .usebox h2, .sec-h { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
@@ -251,6 +255,20 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
 .proj-use { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.84rem; color: var(--ink-2); }
 .proj-use b { color: var(--ink); font-weight: 500; }
 .hidden-note { font-size: 0.82rem; color: var(--ink-3); padding: 8px 0 6px; border-top: 1px solid var(--rule-2); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; vertical-align: baseline; margin-right: 6px; }
+.proj-card { border-top-width: 4px; }
+.proj-title { display: flex; align-items: baseline; gap: 0; min-width: 0; }
+.dplot .seg { stroke: var(--paper-2); stroke-width: 1; }
+.dplot .seg.on { opacity: 0.72; }
+.dlegend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--ink-2); }
+.dlegend span { display: inline-flex; align-items: center; }
+.dtip .tr { display: flex; align-items: center; gap: 0; }
+.proj-proj { font-size: 0.84rem; color: var(--ink-2); }
+.proj-proj b { color: var(--ink); font-weight: 500; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.sumline { margin: 0; }
+.sumline b { color: var(--ink); font-weight: 500; }
+details.fullnote summary { cursor: pointer; color: var(--ink-3); font-size: 0.82rem; }
+details.fullnote p { margin: 6px 0 0; color: var(--ink-3); font-size: 0.86rem; }
 .hidden-note button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 </style>
 
@@ -267,7 +285,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     <p class="line" id="headline">Waiting for the first report.</p>
     <p class="line" id="clockline"></p>
     <div class="usage" id="usage" hidden></div>
-    <p class="line note-line" id="board-note" hidden></p>
+    <div class="line note-line" id="board-note" hidden></div>
   </section>
 
   <section class="usebox" id="usebox" aria-label="Token usage">
@@ -281,6 +299,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       <div class="dwin" id="density-win"></div>
       <div class="set" id="density-range" role="group" aria-label="Time range" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><span class="lab">Range</span></div>
       <div class="dplot" id="density-plot"></div>
+      <div class="dlegend" id="density-legend" aria-label="Project colours"></div>
       <p class="dcap" id="density-cap"></p>
       <details class="dtable"><summary>Table view</summary><div id="density-table"></div></details>
     </div>
@@ -305,9 +324,10 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     <summary>Posting from another Claude session</summary>
     <div class="body">
       <p>Every Claude session that works on a project reports here through this artifact's database. The <b>claude-dashboard</b> skill holds the full procedure. Reuse a document id to update a record in place.</p>
-      <p><b>projects/&lt;slug&gt;</b>: one document per project. Fields: <span class="num">name</span>, <span class="num">aliases</span> (other names that job rows use), <span class="num">where</span> (cloud or local; derived when absent), <span class="num">surface</span>, <span class="num">sessions</span> (session ids), <span class="num">repos</span>, <span class="num">artifacts</span>, <span class="num">status</span> (active, paused or done), <span class="num">pinned</span>, <span class="num">note</span>, <span class="num">lastActivityAt</span> (set on each report; it keeps the project active for 72 h).</p>
+      <p><b>projects/&lt;slug&gt;</b>: one document per project. Fields: <span class="num">name</span>, <span class="num">aliases</span> (other names that job rows use), <span class="num">where</span> (cloud or local; derived when absent), <span class="num">surface</span>, <span class="num">sessions</span> (session ids), <span class="num">repos</span>, <span class="num">artifacts</span>, <span class="num">status</span> (active, paused or done), <span class="num">pinned</span>, <span class="num">note</span>, <span class="num">color</span> (a fixed colour slot, 1 to 8; without one the project draws in grey as Other), <span class="num">lastActivityAt</span> (set on each report; it keeps the project active for 72 h).</p>
       <p><b>sessions/&lt;session id&gt;</b>: one document per session, rewritten as it runs. Fields: <span class="num">title</span>, <span class="num">project</span>, <span class="num">where</span>, <span class="num">surface</span>, <span class="num">status</span>, <span class="num">createdAt</span>, <span class="num">updatedAt</span>, <span class="num">tok</span> (input, cache reads, cache writes and output together), <span class="num">out</span>, <span class="num">usd</span>, <span class="num">src</span>, and <span class="num">partial</span> when the figure is a floor. When the Claude Code Remote connector answers, the board reads cloud sessions live and those figures replace the stored ones.</p>
-      <p><b>ticks/&lt;session id&gt;~&lt;15-min bucket&gt;</b>: a usage snapshot. Fields: <span class="num">sid</span>, <span class="num">project</span>, <span class="num">at</span>, <span class="num">tok</span>, <span class="num">out</span>, <span class="num">usd</span>, <span class="num">src</span>. Velocity and the chart come from these snapshots. This page also writes one when it reads a changed live total.</p>
+      <p><b>syncs/&lt;epoch seconds&gt;</b>: one document per hourly sync, written by a scheduled routine from <span class="num">list_sessions</span>. Fields: <span class="num">at</span>, <span class="num">sessions</span> (id, title, status, createdAt, updatedAt, tok, out, usd, repos), <span class="num">quota</span>. It keeps cloud figures current when the page cannot read Claude Code Remote itself.</p>
+      <p><b>ticks/&lt;session id&gt;~&lt;UTC day&gt;</b>: usage snapshots from a session or from this page, <span class="num">pts</span> as [epoch seconds, tokens]. Fields: <span class="num">sid</span>, <span class="num">project</span>, <span class="num">at</span>, <span class="num">tok</span>, <span class="num">out</span>, <span class="num">usd</span>, <span class="num">src</span>. Velocity and the chart come from these snapshots. This page also writes one when it reads a changed live total.</p>
       <dl>
         <dt>jobs: project, group</dt><dd>The project and a sub-heading inside it.</dd>
         <dt>label, note</dt><dd>What the job is, in one line, and the latest detail.</dd>
@@ -327,7 +347,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
   </details>
 
   <p class="foot">
-    A project is active when it has an open job, a running session, or any report in the last 72 hours. A project marked paused or done is inactive; a pinned project stays active. Token figures count every token the model reads or writes, cached context included; most are cache reads, which cost about a tenth of new input. Cost is at API list prices, as Claude Code reports it. Cloud sessions are read live from the Claude Code Remote connector every 10 minutes. Cowork and local CLI sessions appear only when they report, and a report marked partial is a floor. Velocity divides the tokens between two snapshots evenly over the time between them. Times are in your clock.
+    A project is active when it has an open job, a running session, or any report in the last 72 hours. A project marked paused or done is inactive; a pinned project stays active. Token figures count every token the model reads or writes, cached context included; most are cache reads, which cost about a tenth of new input. Cost is at API list prices, as Claude Code reports it, rounded to whole dollars. The figure at the end of the open jobs adds each open job's tokEst less its tokens so far; a job with a time estimate and no tokEst runs at the project's current rate; a job with neither is not counted and the line says so. Its cost uses the project's own dollars per token. Cloud sessions come from an hourly sync and, where the page may use the Claude Code Remote connector, from a live read every 10 minutes. Cowork and local CLI sessions appear only when they report, and a report marked partial is a floor. Velocity divides the tokens between two snapshots evenly over the time between them. Times are in your clock.
   </p>
 </main>
 
@@ -342,7 +362,9 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
   const TICK_MS = 15 * 60000;          // the board adds at most one snapshot per session per 15 min
   const LIVE_MS = 10 * 60000;          // live session usage refreshes this often
   const SERVER = 'Claude Code Remote';
-  let jobs = [], board = null, quota = null, sesDocs = [], projDocs = [], tickDocs = [], db = null;
+  let jobs = [], board = null, quota = null, sesDocs = [], projDocs = [], tickDocs = [], syncDocs = [], db = null;
+  let quotaDoc = null;               // meta/quota as sessions wrote it
+  let projSlot = new Map();          // project name -> colour slot 1-8, 0 for Other
   let live = null, liveAt = 0, liveErr = 'wait';
   let fStatus = 'all', fProject = 'all', fWhere = 'all', showAll = false;
   let armed = null, armedAt = 0;       // the row whose Done waits for a second tap
@@ -498,7 +520,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
   /* ---------------------------------------------------------------- *
    * Sessions, snapshots and velocity                                  *
    * ---------------------------------------------------------------- */
-  const money = (v) => (v >= 100 ? `$${n0(v)}` : `$${v.toFixed(2)}`);
+  const money = (v) => `$${n0(v)}`;   // whole dollars: these are estimates at list prices
   const iso = (ms) => new Date(ms).toISOString();
   const dayKey = (ms) => iso(ms).slice(0, 10);
   /** cloud, local or '' from a surface label. */
@@ -547,14 +569,41 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
                     where: d.where || whereOfSurface(d.surface) || (d.src === 'ccr' ? 'cloud' : ''), surface: d.surface || '',
                     src: d.src || 'report', partial: !!d.partial, project: d.project || '', note: d.note || '', live: false });
     }
+    const ls = latestSync();
+    if (ls) for (const x of ls.sessions) {
+      const s = normSync(x, false), prev = m.get(s.id);
+      if (!prev || s.tok >= prev.tok) m.set(s.id, { ...(prev || {}), ...s, project: (prev && prev.project) || '', live: false });
+    }
     if (live) for (const s of live) { const prev = m.get(s.id) || {}; m.set(s.id, { ...prev, ...s, project: prev.project || '' }); }
     return [...m.values()];
   }
+  /** The newest hourly sync document, or null. */
+  function latestSync() {
+    let best = null;
+    for (const d of syncDocs) if (Array.isArray(d.sessions) && (!best || t(d.at) > t(best.at))) best = d;
+    return best;
+  }
+  /** One session as the hourly sync stores it. */
+  function normSync(x) {
+    return { id: String(x.id), title: x.title || x.id, status: x.status || 'idle', createdAt: t(x.createdAt), updatedAt: t(x.updatedAt),
+             tok: num(x.tok), out: num(x.out), usd: num(x.usd), repos: Array.isArray(x.repos) ? x.repos : [], where: 'cloud',
+             surface: 'Claude Code · cloud', src: 'ccr', partial: false };
+  }
+  /** Sync snapshots per session: [ms, tokens]. */
+  function syncPoints() {
+    const m = new Map();
+    for (const d of syncDocs) {
+      const at = t(d.at); if (!at || !Array.isArray(d.sessions)) continue;
+      for (const x of d.sessions) { if (!num(x.tok)) continue; if (!m.has(x.id)) m.set(x.id, []); m.get(x.id).push([at, num(x.tok)]); }
+    }
+    return m;
+  }
   const projectOfSession = (s) => sidProject.get(s.id) || (s.project ? canon(s.project) : '');
   /** The snapshot points of one session, as [ms, cumulative tokens], non-decreasing. */
-  function pointsOf(s, byId) {
+  function pointsOf(s, byId, sync) {
     const pts = [];
     if (s.src === 'ccr' && s.createdAt) pts.push([s.createdAt, 0]);
+    for (const p of (sync && sync.get(s.id)) || []) pts.push(p);
     for (const d of byId.get(s.id) || []) for (const p of Array.isArray(d.pts) ? d.pts : []) {
       if (Array.isArray(p) && p.length >= 2 && Number.isFinite(+p[0]) && Number.isFinite(+p[1])) pts.push([+p[0] * 1000, +p[1]]);
     }
@@ -624,6 +673,9 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       p.out = p.sess.reduce((a, s) => a + s.out, 0);
       p.usd = p.sess.reduce((a, s) => a + s.usd, 0);
       p.partial = p.sess.some((s) => s.partial);
+      const c = p.doc ? Math.round(+p.doc.color) : 0;
+      p.slot = c >= 1 && c <= 8 ? c : 0;
+      p.color = `var(--s${p.slot || '-other'})`;
       out.push(p);
     }
     return out;
@@ -634,8 +686,18 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
   /* ---------------------------------------------------------------- *
    * Render                                                            *
    * ---------------------------------------------------------------- */
+  /** The limit state: meta/quota, or the hourly sync's newer reading of the same fields. */
+  function effQuota() {
+    const ls = latestSync(), q = ls && ls.quota;
+    if (q && q.status && (!quotaDoc || t(q.asOf) > t(quotaDoc.updatedAt))) {
+      return { ...(quotaDoc || {}), status: q.status, type: q.type, resetsAt: q.resetsAt, overage: q.overage, updatedAt: q.asOf };
+    }
+    return quotaDoc;
+  }
+
   function render() {
     const now = Date.now();
+    quota = effQuota();
     if (armed && now - armedAt >= ARM_MS) armed = null;
     /* the board rebuilds every second: keep keyboard focus on the same control */
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
@@ -644,6 +706,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     const sess = allSessions();
     const projects = buildProjects(all, sess, now);
     const byName = new Map(projects.map((p) => [p.name, p]));
+    projSlot = new Map(projects.map((p) => [p.name, p.slot]));
 
     /* tally and headline read the whole board, never the filtered view */
     const by = (st) => all.filter((x) => x.s.status === st).length;
@@ -736,17 +799,9 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       ab.hidden = false;
     } else ab.hidden = true;
 
-    const bn = $('board-note');
-    bn.textContent = '';
-    if (board && board.note) {
-      const lead = document.createElement('span'); lead.className = 'lead';
-      lead.textContent = board.updatedAt ? `Latest report, ${ago(t(board.updatedAt))}` : 'Latest report';
-      bn.append(lead, board.note);
-      bn.hidden = false;
-    } else bn.hidden = true;
-
     limitLines(now);
-    usagePanel(projects, sess, now, all);
+    const u = usagePanel(projects, sess, now, all);
+    summary(projects, sess, all, u);
 
     /* filters */
     const sc = $('scope');
@@ -809,25 +864,62 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       if (quota.updatedAt) parts.push(` · reported ${ago(t(quota.updatedAt))}`);
       line('Claude limit', parts);
       if (quota.status !== 'allowed') line('Notice', [quota.status === 'rejected' ? 'Claude Code reports the limit reached. Work pauses until the reset.' : 'Claude Code reports usage near the limit. Long jobs can stop before the reset.'], quota.status === 'rejected' ? 'alert' : 'caution');
-      if (typeof quota.notice === 'string' && quota.notice) line(quota.status === 'allowed' ? 'Note' : 'Plan', [quota.notice], quota.status === 'allowed' ? '' : 'caution');
     }
     us.hidden = !us.childNodes.length;
   }
 
-  /** Totals, velocity, the chart and the table by project. */
+  /** Totals, velocity, projections, the chart and the table by project. Returns the figures the summary line uses. */
   let srcWord = '';
   function usagePanel(projects, sess, now, all) {
     const byId = new Map();
     for (const d of tickDocs) { const k = d.sid || String(d.id).split('~')[0]; if (!byId.has(k)) byId.set(k, []); byId.get(k).push(d); }
-    const pts = sess.map((s) => pointsOf(s, byId));
+    const sync = syncPoints();
+    const pts = sess.map((s) => pointsOf(s, byId, sync));
     const win = (a, b) => pts.reduce((acc, p) => { const r = alloc(p, a, b); acc.fine += r.fine; acc.coarse += r.coarse; return acc; }, { fine: 0, coarse: 0 });
     const H = 3600000;
     const tot = sess.reduce((a, s) => a + s.tok, 0);
     const usd = sess.reduce((a, s) => a + s.usd, 0);
     const out = sess.reduce((a, s) => a + s.out, 0);
     const part = sess.filter((s) => s.partial).length;
+    const acctRate = tot > 0 && usd > 0 ? usd / tot : 0;            // dollars per token, whole account
     const w1 = win(now - H, now), w24 = win(now - 24 * H, now), w7 = win(now - 168 * H, now);
     const spreadPct = (w) => { const s = w.fine + w.coarse; return s ? Math.round((100 * w.coarse) / s) : 0; };
+
+    /* per project: tokens in the last hour and the last 24 h */
+    const nameOf = (s) => projectOfSession(s) || s.title;
+    const pv1 = new Map(), pv24 = new Map();
+    sess.forEach((s, i) => {
+      const n = nameOf(s);
+      const a = alloc(pts[i], now - H, now), b = alloc(pts[i], now - 24 * H, now);
+      pv1.set(n, (pv1.get(n) || 0) + a.fine + a.coarse);
+      pv24.set(n, (pv24.get(n) || 0) + b.fine + b.coarse);
+    });
+
+    /* Projection at the end of the open jobs. A job's tokEst counts first. A job
+       with a known time left and no tokEst runs at the project's current rate
+       (last hour, else the 24-h average). Cost follows the project's own dollars
+       per token, else the account's. */
+    let moreAll = 0, moreUsd = 0, openAll = 0;
+    for (const p of projects) {
+      const rate = (pv1.get(p.name) || 0) || (pv24.get(p.name) || 0) / 24;   // tokens per hour
+      let more = 0, open = 0, noEst = 0;
+      for (const x of p.items) {
+        if (x.s.status !== 'running' && x.s.status !== 'queued') continue;
+        open += 1;
+        const est = num(x.j.tokEst);
+        if (est) more += Math.max(0, est - num(x.j.tok));
+        else if (x.s.known && x.s.left > 0 && rate > 0) more += (rate * x.s.left) / 3600;
+        else noEst += 1;
+      }
+      const perTok = p.tok > 0 && p.usd > 0 ? p.usd / p.tok : acctRate;
+      /* a project whose sessions report tokens but no cost (Cowork) gets the account's dollars per token */
+      p.costEst = !p.usd && p.tok > 0 && acctRate > 0;
+      p.cost = p.usd || (p.costEst ? p.tok * acctRate : 0);
+      p.v1 = pv1.get(p.name) || 0; p.v24 = pv24.get(p.name) || 0;
+      p.est = { open, noEst, more, tok: p.tok + more, usd: p.cost + more * perTok, moreUsd: more * perTok };
+      moreAll += more; moreUsd += more * perTok; openAll += open;
+    }
+
     const k = $('kpis');
     k.textContent = '';
     const kpi = (label, value, sub) => {
@@ -840,83 +932,125 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     };
     if (!sess.length) {
       const p = document.createElement('p'); p.className = 'live-note';
-      p.textContent = 'No session usage yet. Cloud sessions appear when Claude Code Remote answers; Cowork and CLI sessions appear when they report.';
+      p.textContent = 'No session usage yet. Cloud sessions appear after the hourly sync or a live read; Cowork and CLI sessions appear when they report.';
       k.append(p);
     } else {
       kpi('All tokens', tk(tot), `${sess.length} sessions${part ? ` · ${part} partial` : ''}`);
       kpi('Cost, API prices', money(usd), `output ${tk(out)}`);
       kpi('Last hour', `${tk(w1.fine + w1.coarse)}/h`, spreadPct(w1) ? `${spreadPct(w1)}% spread` : 'measured');
-      kpi('Last 24 h', tk(w24.fine + w24.coarse), `${tk((w24.fine + w24.coarse) / 24)}/h average${spreadPct(w24) ? ` · ${spreadPct(w24)}% spread` : ''}`);
-      kpi('Last 7 days', tk(w7.fine + w7.coarse), `${tk((w7.fine + w7.coarse) / 7)}/day average`);
+      kpi('Last 24 h', tk(w24.fine + w24.coarse), `${money((w24.fine + w24.coarse) * acctRate)} · ${tk((w24.fine + w24.coarse) / 24)}/h${spreadPct(w24) ? ` · ${spreadPct(w24)}% spread` : ''}`);
+      kpi('Last 7 days', tk(w7.fine + w7.coarse), `${money((w7.fine + w7.coarse) * acctRate)} · ${tk((w7.fine + w7.coarse) / 7)}/day`);
+      kpi('At end of open jobs', openAll ? `${tk(tot + moreAll)}` : '—', openAll ? `+${tk(moreAll)} · ${money(usd + moreUsd)} est.` : 'no open jobs');
     }
 
     /* Tokens per hour and the limit windows. Session snapshots are the source when
-       any exist; otherwise the job rows that carry tokens. Each span is spread evenly. */
+       any exist; otherwise the job rows that carry tokens. Each span is spread evenly
+       and carries its project, so the bars stack by project. */
     let sp = [];
-    pts.forEach((p) => { for (let i = 1; i < p.length; i++) if (p[i][1] > p[i - 1][1]) sp.push({ a: p[i - 1][0], b: p[i][0], tok: p[i][1] - p[i - 1][1], coarse: (p[i][0] - p[i - 1][0]) / 1000 > FINE_SEC }); });
+    pts.forEach((p, si) => {
+      const key = nameOf(sess[si]);
+      for (let i = 1; i < p.length; i++) if (p[i][1] > p[i - 1][1]) sp.push({ a: p[i - 1][0], b: p[i][0], tok: p[i][1] - p[i - 1][1], coarse: (p[i][0] - p[i - 1][0]) / 1000 > FINE_SEC, key });
+    });
     srcWord = 'Session snapshots: the tokens between two snapshots are spread evenly over the time between them.';
     if (!sp.length) { sp = spans(all); srcWord = 'Job rows only, each job spread evenly across its own run.'; }
     const spreadPart = (a, b) => { const c = inRange(sp.filter((x) => x.coarse), a, b), f = inRange(sp, a, b); return f ? Math.round((100 * c) / f) : 0; };
     density(sp, now, spreadPart);
 
-    /* table by project */
+    /* table by project: every project, inactive ones dimmed, whatever the filters below say */
     const tbl = $('ptable');
     tbl.textContent = '';
     const thead = document.createElement('tr');
-    for (const [txt, r] of [['Project', 0], ['Runs', 0], ['Tokens', 1], ['Share', 0], ['Cost', 1], ['24 h', 1], ['Sessions', 1], ['Last activity', 0]]) {
+    for (const [txt, r] of [['Project', 0], ['Runs', 0], ['Tokens', 1], ['Share', 0], ['Cost', 1], ['Last hour', 1], ['24 h', 1], ['At end of open jobs', 1], ['Sessions', 1], ['Last activity', 0]]) {
       const th = document.createElement('th'); th.textContent = txt; if (r) th.className = 'r'; thead.append(th);
     }
     tbl.append(thead);
-    const pv = new Map();
-    sess.forEach((s, i) => { const name = projectOfSession(s) || s.title; const w = alloc(pts[i], now - 24 * H, now); pv.set(name, (pv.get(name) || 0) + w.fine + w.coarse); });
-    const list = projects.filter(whereMatch).sort((a, b) => b.tok - a.tok || b.lastAct - a.lastAct);
-    let hidTok = 0, hidN = 0;
+    const list = [...projects].sort((a, b) => (b.active - a.active) || b.tok - a.tok || b.lastAct - a.lastAct);
     for (const p of list) {
-      if (!showAll && !p.active) { hidTok += p.tok; hidN += 1; continue; }
       const tr = document.createElement('tr'); if (!p.active) tr.className = 'dim';
       const td = (txt, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; if (txt instanceof Node) c.append(txt); else c.textContent = txt; tr.append(c); return c; };
-      td(p.name + (p.unreg ? ' (not in the registry)' : ''), 'pn');
+      const nm = document.createElement('span');
+      const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = p.color;
+      nm.append(sw, p.name + (p.unreg ? ' (not in the registry)' : '') + (p.active ? '' : ' · inactive'));
+      td(nm, 'pn');
       const wb = document.createElement('span');
       if (p.whereKey) { wb.className = `where ${p.whereKey === 'both' ? 'both' : p.whereKey}`; wb.textContent = WHERE_WORD[p.whereKey]; }
       td(wb);
       td(p.sess.length ? `${tk(p.tok)}${p.partial ? '+' : ''}` : '—', 'r');
       const sh = document.createElement('span'); sh.className = 'share';
-      const si = document.createElement('i'); si.style.width = `${tot ? ((100 * p.tok) / tot).toFixed(1) : 0}%`; sh.append(si);
+      const si = document.createElement('i'); si.style.width = `${tot ? ((100 * p.tok) / tot).toFixed(1) : 0}%`; si.style.background = p.color; sh.append(si);
       td(sh);
-      td(p.usd ? money(p.usd) : '—', 'r');
-      td(pv.get(p.name) ? tk(pv.get(p.name)) : '—', 'r');
+      td(p.cost ? `${p.costEst ? '≈' : ''}${money(p.cost)}` : '—', 'r');
+      td(p.v1 ? tk(p.v1) : '—', 'r');
+      td(p.v24 ? tk(p.v24) : '—', 'r');
+      td(!p.est.open ? '—' : p.est.more > 0 ? `${tk(p.est.tok)} · ${money(p.est.usd)}${p.est.noEst ? ` (+${p.est.noEst} unestimated)` : ''}` : `no estimate (${p.est.open} ${p.est.open === 1 ? 'job' : 'jobs'})`, 'r');
       td(p.sess.length ? `${p.sess.length}${p.runSess ? ` (${p.runSess} running)` : ''}` : 'none reported', 'r');
       td(p.lastAct ? ago(p.lastAct) : '—');
       tbl.append(tr);
-    }
-    if (hidN) {
-      const tr = document.createElement('tr'); tr.className = 'dim';
-      const c = document.createElement('td'); c.className = 'pn'; c.colSpan = 2; c.textContent = `${hidN} inactive ${hidN === 1 ? 'project' : 'projects'}`;
-      const c2 = document.createElement('td'); c2.className = 'r'; c2.textContent = tk(hidTok);
-      const c3 = document.createElement('td'); c3.colSpan = 5; c3.textContent = 'hidden; Show all projects lists them';
-      tr.append(c, c2, c3); tbl.append(tr);
     }
 
     /* where the session figures come from */
     const ln = $('livenote');
     ln.className = 'live-note';
+    const ls = latestSync();
+    const from = ls ? `The figures come from the hourly sync of ${when(t(ls.at))} (${ls.sessions.length} cloud sessions) and from session reports.`
+      : 'The figures come from session reports.';
     const MSG = {
       wait: 'Reading cloud sessions from Claude Code Remote.',
-      none: 'Live cloud usage needs the Claude Code Remote connector in this view. The figures come from the last stored reports.',
-      needs_reauth: 'Reconnect Claude Code Remote in claude.ai Settings → Connectors. The figures come from the last stored reports.',
-      server_not_connected: 'Add Claude Code Remote in claude.ai Settings → Connectors for live cloud usage. The figures come from the last stored reports.',
-      selection_required: 'Choose which Claude Code Remote connector this page uses. The figures come from the last stored reports.',
-      not_in_manifest: 'Live cloud usage is turned off for this page. The figures come from the last stored reports.',
-      blocked_by_policy: 'Your organization blocks live cloud usage here. The figures come from the last stored reports.',
-      approval_required: 'Your organization requires approval for live cloud usage. The figures come from the last stored reports.',
-      shape: 'Claude Code Remote answered in a form this page does not read. The figures come from the last stored reports.',
+      none: 'This view cannot use the Claude Code Remote connector.',
+      needs_reauth: 'Claude Code Remote needs to be reconnected in claude.ai Settings → Connectors.',
+      server_not_connected: 'Claude Code Remote is not connected for this viewer (claude.ai Settings → Connectors).',
+      selection_required: 'Choose which Claude Code Remote connector this page uses.',
+      not_in_manifest: 'Claude Code Remote is turned off for this page.',
+      blocked_by_policy: 'Claude Code Remote refused the live read from this page (code blocked_by_policy).',
+      approval_required: 'Claude Code Remote asks for per-call approval, which pages cannot give (code approval_required).',
+      shape: 'Claude Code Remote answered in a form this page does not read.',
     };
-    if (!liveErr && live) ln.textContent = `Cloud sessions read live from Claude Code Remote ${ago(liveAt)}; next read in about ${Math.max(1, Math.round((liveAt + LIVE_MS - now) / 60000))} min. Snapshots on file: ${tickDocs.length} session-days.`;
+    if (!liveErr && live) ln.textContent = `Cloud sessions read live from Claude Code Remote ${ago(liveAt)}; next read in about ${Math.max(1, Math.round((liveAt + LIVE_MS - now) / 60000))} min.${ls ? ` Hourly sync last ran ${ago(t(ls.at))}.` : ''}`;
     else {
-      ln.textContent = MSG[liveErr] || `Live cloud usage did not load (${liveErr}). The figures come from the last stored reports; the board tries again in 10 minutes.`;
+      ln.textContent = `${MSG[liveErr] || `The live read from Claude Code Remote failed (code ${liveErr}).`} ${from}`;
       if (liveErr !== 'wait') ln.className = 'live-note warn';
     }
+    return { tot, usd, acctRate, openAll };
   }
+
+  /** The line under the summary: the top token users in the last 24 h, and what is moving now. */
+  function summary(projects, sess, all, u) {
+    const bn = $('board-note');
+    bn.textContent = '';
+    const top = projects.filter((p) => p.v24 > 0).sort((a, b) => b.v24 - a.v24).slice(0, 3);
+    const l1 = document.createElement('p'); l1.className = 'sumline';
+    const lead = document.createElement('span'); lead.className = 'lead'; lead.textContent = 'Last 24 h';
+    l1.append(lead);
+    if (top.length) top.forEach((p, i) => {
+      const perTok = p.tok > 0 && p.usd > 0 ? p.usd / p.tok : u.acctRate;   // dollars per token
+      const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = p.color;
+      const b = document.createElement('b'); b.textContent = p.name;
+      l1.append(i ? ' · ' : '', sw, b, ` ${tk(p.v24)}${perTok ? `, ${money(p.v24 * perTok)}` : ''}`);
+    });
+    else l1.append('No measured usage yet.');
+    const run = sess.filter((s) => s.status === 'running');
+    const runP = new Set(run.map((s) => projectOfSession(s) || s.title));
+    const by = (st) => all.filter((x) => x.s.status === st).length;
+    const asks = all.filter(unanswered).length;
+    const l2 = document.createElement('p'); l2.className = 'sumline';
+    const lead2 = document.createElement('span'); lead2.className = 'lead'; lead2.textContent = 'Now';
+    l2.append(lead2, `${run.length} ${run.length === 1 ? 'session' : 'sessions'} running in ${runP.size} ${runP.size === 1 ? 'project' : 'projects'} · ${by('running')} jobs running, ${by('queued')} queued · ${asks} ${asks === 1 ? 'question' : 'questions'} for you`);
+    bn.append(l1, l2);
+    const qn = quota && typeof quota.notice === 'string' ? quota.notice : '';
+    if ((board && board.note) || qn) {
+      const d = document.createElement('details'); d.className = 'fullnote';
+      if (fullOpen) d.open = true;
+      d.addEventListener('toggle', () => { fullOpen = d.open; });
+      const sm = document.createElement('summary'); sm.dataset.key = 'fullnote';
+      sm.textContent = board && board.updatedAt ? `Latest session notes, ${ago(t(board.updatedAt))}` : 'Latest session notes';
+      d.append(sm);
+      if (board && board.note) { const p = document.createElement('p'); p.textContent = board.note; d.append(p); }
+      if (qn) { const p = document.createElement('p'); p.textContent = `Limit note: ${qn}`; d.append(p); }
+      bn.append(d);
+    }
+    bn.hidden = false;
+  }
+  let fullOpen = false;
 
   /* ---- Reported token density ------------------------------------------
      One series: tokens per hour across the board's whole span, from each
@@ -957,10 +1091,16 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     const step = STEPS.find((h) => hrs / h <= maxBars) || Math.ceil(hrs / maxBars);
     const ms = step * HOUR;
     const first = Math.floor(from / ms) * ms;
+    const groups = new Map();
+    for (const x of sp) { const k = x.key || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
+    /* stack order follows the colour slot, so a project keeps its place in every bar */
+    const keys = [...groups.keys()].sort((a, b) => ((projSlot.get(a) || 99) - (projSlot.get(b) || 99)) || a.localeCompare(b));
     const bars = [];
     for (let t0 = first; t0 < to; t0 += ms) {
-      const tok = inRange(sp, t0, t0 + ms);
-      bars.push({ t0, t1: t0 + ms, tok, rate: tok / step });
+      const parts = [];
+      for (const k of keys) { const v = inRange(groups.get(k), t0, t0 + ms); if (v > 0) parts.push({ key: k, tok: v, slot: projSlot.get(k) || 0 }); }
+      const tok = parts.reduce((a, x) => a + x.tok, 0);
+      bars.push({ t0, t1: t0 + ms, tok, rate: tok / step, parts });
     }
     return { step, bars };
   }
@@ -1002,7 +1142,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     /* the plot is rebuilt only when its own inputs move, so a tooltip survives
        the board's once-a-second refresh */
     const reset5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
-    const sig = JSON.stringify([sp.map((x) => [x.a, x.b, x.tok]), Math.round(w / 8), dRange, reset5, Math.floor(to / HOUR)]);
+    const sig = JSON.stringify([sp.map((x) => [x.a, x.b, x.tok, x.key]), [...projSlot], Math.round(w / 8), dRange, reset5, Math.floor(to / HOUR)]);
     if (sig !== dsig) {
       dsig = sig;
       const b = bins(sp, from, to, maxBars);
@@ -1061,9 +1201,18 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     const peakI = bars.reduce((a, b2, i) => (b2.rate > bars[a].rate ? i : a), 0);
     bars.forEach((b2, i) => {
       if (b2.rate <= 0) return;
-      const h = Math.max(1.5, (ph * b2.rate) / top);
       const bx = L + slot * i + pad;
-      svg.append(svgEl('path', { class: 'bar', d: barPath(bx, T + ph - h, bw, h, 4), 'data-i': i }));
+      let y0 = T + ph;
+      b2.parts.forEach((pt, j) => {
+        const h = (ph * (pt.tok / step)) / top;
+        if (h <= 0) return;
+        const last = j === b2.parts.length - 1;
+        const d = last ? barPath(bx, y0 - Math.max(1.5, h), bw, Math.max(1.5, h), 4) : `M${bx},${y0}V${y0 - h}H${bx + bw}V${y0}Z`;
+        const seg = svgEl('path', { class: 'seg', d, 'data-i': i });
+        seg.style.fill = `var(--s${pt.slot || '-other'})`;
+        svg.append(seg);
+        y0 -= h;
+      });
     });
     /* one direct label, on the extreme only */
     if (bars[peakI] && bars[peakI].rate > 0) {
@@ -1085,6 +1234,17 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       lab.textContent = `${day(bars[i].t0)} ${clock(bars[i].t0)}`;
       svg.append(lab);
     }
+    const lg = $('density-legend');
+    lg.textContent = '';
+    const seen = new Map();
+    for (const b2 of bars) for (const pt of b2.parts) seen.set(pt.key, (seen.get(pt.key) || 0) + pt.tok);
+    const shownKeys = [...seen.keys()].sort((a, c) => ((projSlot.get(a) || 99) - (projSlot.get(c) || 99)) || seen.get(c) - seen.get(a));
+    for (const k2 of shownKeys) {
+      const it = document.createElement('span');
+      const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = `var(--s${projSlot.get(k2) || '-other'})`;
+      it.append(sw, k2);
+      lg.append(it);
+    }
     $('density-cap').textContent = `tokens per hour · ${step === 1 ? '1-hour' : `${step}-hour`} buckets`
       + (shaded ? ' · shaded: the current 5-hour window' : '') + ' · times in your clock';
     plot.append(svg);
@@ -1092,7 +1252,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     /* a tooltip on the bar under the pointer, and a table view underneath */
     const tip = document.createElement('div'); tip.className = 'dtip'; tip.hidden = true;
     plot.append(tip);
-    const marks = [...svg.querySelectorAll('.bar')];
+    const marks = [...svg.querySelectorAll('.seg')];
     const pick = (ev) => {
       const r = plot.getBoundingClientRect();
       const i = Math.floor((((ev.clientX - r.left) / r.width) * w - L) / slot);
@@ -1110,6 +1270,13 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       const n2 = document.createElement('b'); n2.textContent = tk(b2.tok);
       s2.append(n1, ' · ', n2, ' in the bucket');
       tip.append(s1, s2);
+      for (const pt of [...b2.parts].sort((a, c) => c.tok - a.tok).slice(0, 5)) {
+        const r2 = document.createElement('div'); r2.className = 'tr';
+        const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = `var(--s${pt.slot || '-other'})`;
+        const nb = document.createElement('b'); nb.textContent = tk(pt.tok / step);
+        r2.append(sw, `${pt.key} `, nb, '/h');
+        tip.append(r2);
+      }
       tip.hidden = false;
       const tw = tip.offsetWidth || 160;
       tip.style.left = `${Math.max(0, Math.min(r.width - tw, ev.clientX - r.left - tw / 2))}px`;
@@ -1124,7 +1291,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     tb.textContent = '';
     const table = document.createElement('table');
     const hr = document.createElement('tr');
-    for (const h2 of ['Bucket', 'Tokens per hour', 'Tokens']) { const th = document.createElement('th'); th.textContent = h2; hr.append(th); }
+    for (const h2 of ['Bucket', 'Tokens per hour', 'Tokens', 'Largest project']) { const th = document.createElement('th'); th.textContent = h2; hr.append(th); }
     table.append(hr);
     for (const b2 of bars) {
       if (b2.tok <= 0) continue;
@@ -1132,7 +1299,9 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       const c0 = document.createElement('td'); c0.textContent = `${day(b2.t0)} ${clock(b2.t0)}`;
       const c1 = document.createElement('td'); c1.className = 'n'; c1.textContent = n0(b2.rate);
       const c2 = document.createElement('td'); c2.className = 'n'; c2.textContent = n0(b2.tok);
-      tr.append(c0, c1, c2); table.append(tr);
+      const big = [...b2.parts].sort((a, c) => c.tok - a.tok)[0];
+      const c3 = document.createElement('td'); c3.textContent = big ? `${big.key} (${Math.round((100 * big.tok) / b2.tok)}%)` : '';
+      tr.append(c0, c1, c2, c3); table.append(tr);
     }
     tb.append(table);
   }
@@ -1216,9 +1385,12 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
   function card(p, rows, now) {
     const r = p.r;
     const el = document.createElement('section'); el.className = `proj-card${p.active ? '' : ' inactive'}`;
+    el.style.borderTopColor = p.color;
     const head = document.createElement('div'); head.className = 'proj-head';
     const top = document.createElement('div'); top.className = 'proj-top';
-    const h = document.createElement('h2'); h.className = 'proj-name'; h.textContent = p.name;
+    const h = document.createElement('h2'); h.className = 'proj-name proj-title';
+    const hsw = document.createElement('span'); hsw.className = 'sw'; hsw.style.background = p.color;
+    h.append(hsw, p.name);
     const tags = document.createElement('div'); tags.className = 'proj-tags';
     if (p.whereKey) { const w = document.createElement('span'); w.className = `where ${p.whereKey}`; w.textContent = WHERE_WORD[p.whereKey]; tags.append(w); }
     const pill = document.createElement('span'); pill.className = `pill ${p.active ? 'on' : 'off'}`;
@@ -1231,6 +1403,7 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
       const bar = document.createElement('div'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
       const pi = document.createElement('i'); pi.className = 'proj'; pi.style.width = `${(r.pfrac * 100).toFixed(2)}%`;
       const d = document.createElement('i'); d.className = 'done'; d.style.width = `${(r.frac * 100).toFixed(2)}%`;
+      d.style.background = p.color;
       bar.append(pi, d);
       head.append(bar);
     }
@@ -1250,8 +1423,9 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     const bit = (k, v) => { const s = document.createElement('span'); s.append(`${k} `); const b = document.createElement('b'); b.className = 'num'; b.textContent = v; s.append(b); use.append(s); };
     if (p.sess.length) {
       bit('Tokens', `${tk(p.tok)}${p.partial ? ' or more' : ''}`);
-      if (p.usd) bit('Cost', money(p.usd));
-      if (p.out) bit('Output', tk(p.out));
+      if (p.cost) bit(p.costEst ? 'Cost, estimated' : 'Cost', `${p.costEst ? '≈' : ''}${money(p.cost)}`);
+      if (p.v1) bit('Last hour', `${tk(p.v1)}/h`);
+      if (p.v24) bit('24 h', tk(p.v24));
       bit('Sessions', `${p.sess.length}${p.runSess ? `, ${p.runSess} running` : ''}`);
     } else {
       const s = document.createElement('span'); s.textContent = 'No session usage reported'; use.append(s);
@@ -1259,6 +1433,18 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     const jt = p.items.reduce((a, x) => a + num(x.j.tok), 0);
     if (jt) bit('Job rows', `${tk(jt)} on ${p.items.filter((x) => num(x.j.tok) > 0).length} of ${p.items.length}`);
     head.append(use);
+    if (p.est && p.est.open && p.est.more > 0) {
+      const pe = document.createElement('div'); pe.className = 'proj-proj';
+      const b1 = document.createElement('b'); b1.textContent = tk(p.est.tok);
+      const b2 = document.createElement('b'); b2.textContent = money(p.est.usd);
+      pe.append('At the end of the open jobs, about ', b1, ' tokens and ', b2,
+        ` (${p.est.open} open ${p.est.open === 1 ? 'job' : 'jobs'}, +${tk(p.est.more)}${p.est.noEst ? `; ${p.est.noEst} without an estimate, not counted` : ''}).`);
+      head.append(pe);
+    } else if (p.est && p.est.open) {
+      const pe = document.createElement('div'); pe.className = 'proj-proj';
+      pe.textContent = `${p.est.open} open ${p.est.open === 1 ? 'job' : 'jobs'} without a token or time estimate, so no projection.`;
+      head.append(pe);
+    }
 
     const links = document.createElement('div'); links.className = 'proj-links';
     const link = (href, text) => { const a = document.createElement('a'); a.href = href; a.rel = 'noopener'; a.textContent = text; links.append(a); };
@@ -1418,9 +1604,11 @@ button.f:focus-visible, button.scope:focus-visible, button.close:focus-visible {
     db.collection('jobs').onSnapshot((snap) => { jobs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); },
       () => { $('headline').textContent = 'The board stopped updating. Reload to reconnect.'; });
     db.doc('meta/board').onSnapshot((snap) => { board = snap.exists ? snap.data() : null; render(); }, () => {});
-    db.doc('meta/quota').onSnapshot((snap) => { quota = snap.exists ? snap.data() : null; render(); }, () => {});
+    db.doc('meta/quota').onSnapshot((snap) => { quotaDoc = snap.exists ? snap.data() : null; render(); }, () => {});
     db.collection('sessions').onSnapshot((snap) => { sesDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     db.collection('projects').onSnapshot((snap) => { projDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); applyRegistry(); render(); }, () => {});
+    db.collection('syncs').where('at', '>=', iso(Date.now() - 8 * 86400000))
+      .onSnapshot((snap) => { syncDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     db.collection('ticks').where('day', '>=', dayKey(Date.now() - 15 * 86400000))
       .onSnapshot((snap) => { tickDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
   })();
