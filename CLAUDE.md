@@ -16,6 +16,10 @@ A routine sends the message `sync` to the usage-sync session every hour (UTC min
 
 Do not edit code, open pull requests, publish the artifact, or write other documents during a sync. Do not read task summaries. Read session events only as `docs/SYNC.md` says: the script takes token counts and times from them and deletes the pages, and no text leaves them. The board stores counts, titles and links only.
 
+## Missed syncs
+
+A routine message that arrives while this session works on another turn can be lost. The sync of 06:26 UTC on 4 Oct was lost this way. At the end of every turn that is not a sync, read the newest `syncs` document. If its `at` is more than 70 minutes old, run the sync before the reply, and add its line to the reply.
+
 ## Rules for changes
 
 - `docs/INVITE.md`, `docs/SYNC.md`, `scripts/ccr_sync_doc.py` and `skills/claude-dashboard/SKILL.md` are the source of the text that the page gives to other people. After you edit one, run `python3 scripts/embed_assets.py`.

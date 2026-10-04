@@ -278,15 +278,15 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
     const s = await open({ db, now: NOW, viewer: 'owner', width: 1100 });
     await s.page.click('button[data-key="f-person:david"]');
     await s.page.waitForTimeout(300);
-    const out = await s.page.evaluate(() => ({ body: document.body.innerText, wins: [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText) }));
+    const out = await s.page.evaluate(() => ({ body: document.body.innerText, kpis: document.getElementById('kpis').innerText, wins: [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText) }));
     await s.close();
     return out;
   };
   const rate = '[\\d.]+(?: [kMB])?\\/h';
   const a = await tiles(DB);
-  const h5 = a.wins.find((x) => /^5-hour/i.test(x)) || '', d7 = a.wins.find((x) => /^7-day/i.test(x)) || '';
-  check('windows: the 5-hour tile says how much of the window the readings measured, the rate, and the cost', new RegExp(`1 h 57 min measured · ${rate} · ≈\\$\\d[\\d,]*`).test(h5), JSON.stringify(h5));
-  check('windows: the 7-day rate is per hour of reading, and says so', new RegExp(`1 h 57 min measured · ${rate}`).test(d7) && /Readings since/.test(d7) && !/mean across/.test(d7), JSON.stringify(d7));
+  const h5 = a.wins.find((x) => /^5-h limit/i.test(x)) || '', d7 = a.wins.find((x) => /^7-day/i.test(x)) || '';
+  check('windows: the 5-hour tile says how much of the window the readings measured, the rate, and the cost', new RegExp(`1 h 57 min of 5 h measured · ${rate} · ≈\\$\\d[\\d,]*`).test(h5), JSON.stringify(h5));
+  check('windows: no 7-day limit tile repeats the Last 7 d figure when Claude Code reports no weekly limit', !d7 && /LAST 7 D\n[\d.]+ [kMB]/.test(a.kpis) && /LAST 5 H\n[\d.]+ [kMB]/.test(a.kpis), JSON.stringify([d7, a.kpis.slice(0, 300)]));
   check('windows: no hint asks for a field that Claude Code does not report', !/post quota/.test(a.body), (a.body.match(/.*post quota.*/) || [''])[0]);
   /* a new window that no reading reaches yet, and a snapshot after the newest reading */
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-win-'));
@@ -295,10 +295,24 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   fs.mkdirSync(path.join(dir, 'ticks'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'ticks', 'session_01ATLAS01~2026-10-04.json'), JSON.stringify({ sid: 'session_01ATLAS01', day: '2026-10-04', pts: [[Date.parse('2026-10-04T00:24:30Z') / 1000, 405_000_000]], src: 'ccr' }));
   const b = await tiles(dir);
-  const g5 = b.wins.find((x) => /^5-hour/i.test(x)) || '';
-  check('windows: a window that no reading reaches yet says so, instead of tokens at a rate of zero', /No reading yet/.test(g5) && /Next reading about/.test(g5) && !/ 0\/h|0 s measured/.test(g5), JSON.stringify(g5));
-  check('windows: it then shows the 5 h before it', /Prior 5 h: [\d.]+(?: [kMB])? · ≈\$[\d,]+ · 1 h 57 min measured/.test(g5), JSON.stringify(g5));
+  const g5 = b.wins.find((x) => /^5-h limit/i.test(x)) || '';
+  check('windows: a limit window that no reading reaches yet says so, instead of tokens at a rate of zero', /\n—\n/.test(g5) && /No reading since it began · next about/.test(g5) && !/ 0\/h|0 s measured/.test(g5), JSON.stringify(g5));
+  check('windows: the trailing 5 hours still show a figure then', /LAST 5 H\n[\d.]+ [kMB]/.test(b.kpis), b.kpis.slice(0, 300));
   fs.rmSync(dir, { recursive: true, force: true });
+  /* Claude Code reports only the limit that applies: the newest reading names the 7-day limit, near its cap */
+  const wdir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-week-'));
+  fs.cpSync(DB, wdir, { recursive: true });
+  const wf = path.join(wdir, 'syncs', '1791073380.json');
+  const wd = JSON.parse(fs.readFileSync(wf, 'utf8'));
+  wd.quota = { status: 'allowed_warning', type: 'seven_day', resetsAt: '2026-10-09T05:00:00Z', overage: false, asOf: '2026-10-04T00:23:30Z' };
+  fs.writeFileSync(wf, JSON.stringify(wd));
+  const w = await tiles(wdir);
+  const wk = w.wins.find((x) => /^7-day limit/i.test(x)) || '', w5 = w.wins.find((x) => /^5-h limit/i.test(x)) || '';
+  check('limits: a 7-day report near the cap shows as an amber pill and a line that names the window and the reset',
+    /Near the limit/i.test(w.body) && /Near the 7-day limit\. Long jobs can stop before the reset, Oct 9/.test(w.body), (w.body.match(/.*limit.*/gi) || []).slice(0, 4).join(' | '));
+  check('limits: the 7-day tile counts from its reset less 7 days and says how little of the week the readings measured', /resets Oct 9/.test(wk) && /of 7 d measured/.test(wk) && /Near the limit/.test(wk), JSON.stringify(wk));
+  check('limits: the 5-hour window stays from its last report while its reset is ahead', /of 5 h measured/.test(w5) && /\(last report\)/.test(w5), JSON.stringify(w5));
+  fs.rmSync(wdir, { recursive: true, force: true });
 }
 
 /* ---- only the ledger: the range buttons stay, and 30 d reads the ledger ---- */

@@ -491,11 +491,13 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   const SERVER = 'Claude Code Remote';
   const BOARD_URL = 'https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4';
   const DEFAULT_OWNER = 'david';       // the board owner's own collections; every other person is their user id
-  const SYNC_LATE_SEC = 150 * 60;      // an hourly sync later than this counts as missed
+  const SYNC_LATE_SEC = 150 * 60;      // a person's hourly sync later than this needs the setup again
+  const SYNC_MISSED_SEC = 80 * 60;     // an hourly sync later than this missed at least one run
   const DAILY_GAP_SEC = 26 * 3600;     // two ledger readings this close place the tokens between them in a day
   const DAY_MS = 86400000;
   let jobs = [], board = null, quota = null, sesDocs = [], projDocs = [], tickDocs = [], syncDocs = [], dailyDocs = [], peopleDocs = [], db = null;
   let quotaDoc = null;               // meta/quota as sessions wrote it
+  let limitTypes = {};               // the latest report of each limit window, by type
   let projSlot = new Map();          // project name -> colour slot 1-8, 0 for Other
   let live = null, liveAt = 0, liveErr = 'wait';
   let fStatus = 'all', fProject = 'all', fWhere = 'all', fPerson = 'all', showAll = false;
@@ -557,6 +559,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   const dur = (s) => {
     s = Math.max(0, Math.round(s));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    if (h >= 48) return h % 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${Math.floor(h / 24)} d`;
     if (h) return m ? `${h} h ${m} min` : `${h} h`;
     if (m) return x && m < 10 ? `${m} min ${x} s` : `${m} min`;
     return `${x} s`;
@@ -1061,6 +1064,17 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     }
     return base;
   }
+  /** The latest report of each limit window of one person, by type. Claude Code reports only the window that
+      applies at the time, so a 5-hour report stays valid until its reset after a 7-day report replaces it. */
+  function limitsFor(owner) {
+    const out = {};
+    const put = (q, at) => { if (!q || !q.status || !q.type || !at) return; const cur = out[q.type]; if (!cur || at > cur.at) out[q.type] = { ...q, at }; };
+    const pd = profiles.get(owner);
+    const base = owner === DEFAULT_OWNER ? quotaDoc : (pd && pd.quota && pd.quota.status ? pd.quota : null);
+    if (base) put(base, t(base.updatedAt));
+    for (const d of syncDocs) if (ownerOf(d) === owner && d.quota) put(d.quota, t(d.quota.asOf) || t(d.at));
+    return out;
+  }
   /** Every person on the viewer's board: the owner sees all, a person sees only themselves. */
   function peopleIds(sessAll) {
     const ids = new Set([homeOwner()]);
@@ -1086,7 +1100,9 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     /* the person filter scopes the whole board: the tally, the usage, the cards. A limit belongs to one account. */
     const accounts = ids.filter((o) => sessAll.some((x) => x.owner === o) || quotaFor(o));
     soloQuota = fPerson !== 'all' || accounts.length <= 1;
-    quota = soloQuota ? quotaFor(fPerson !== 'all' ? fPerson : (accounts[0] || DEFAULT_OWNER)) : null;
+    const quotaOwner = fPerson !== 'all' ? fPerson : (accounts[0] || DEFAULT_OWNER);
+    quota = soloQuota ? quotaFor(quotaOwner) : null;
+    limitTypes = soloQuota ? limitsFor(quotaOwner) : {};
     const all = jobs.filter((j) => inScope(ownerOf(j))).map((j) => ({ j, s: state(j, now) }))
       .sort((a, b) => (+a.j.order || 0) - (+b.j.order || 0));
     const sess = sessAll.filter((x) => inScope(x.owner));
@@ -1278,7 +1294,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     for (const [owner, q] of lines) {
       if (q.status === 'allowed') continue;
       const p = document.createElement('p'); p.className = q.status === 'rejected' ? 'alert' : 'caution';
-      p.textContent = `${multi ? `${ownerName(owner)}: ` : ''}${q.status === 'rejected' ? 'Limit reached. Work pauses until the reset.' : 'Near the limit. Long jobs can stop before the reset.'}`;
+      const win = WINDOW[q.type] || (q.type ? String(q.type) : ''), reset = t(q.resetsAt);
+      p.textContent = `${multi ? `${ownerName(owner)}: ` : ''}${q.status === 'rejected' ? `${win} limit reached. Work pauses until the reset` : `Near the ${win} limit. Long jobs can stop before the reset`}${reset > now ? `, ${when(reset)}` : ''}.`;
       us.append(p);
     }
     us.hidden = !us.childNodes.length;
@@ -1314,13 +1331,14 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     const out = sess.reduce((a, s) => a + s.out, 0);
     const part = sess.filter((s) => s.partial).length;
     const acctRate = tot > 0 && usd > 0 ? usd / tot : 0;            // dollars per token, whole account
-    const w1 = win(T - H, T), w24 = win(T - 24 * H, T), w7 = win(T - 168 * H, T);
-    const c1 = covered(ranges, T - H, T), c24 = covered(ranges, T - 24 * H, T), c7 = covered(ranges, T - 168 * H, T);
+    const w1 = win(T - H, T), w5 = win(T - 5 * H, T), w24 = win(T - 24 * H, T), w7 = win(T - 168 * H, T);
+    const c1 = covered(ranges, T - H, T), c5 = covered(ranges, T - 5 * H, T), c24 = covered(ranges, T - 24 * H, T), c7 = covered(ranges, T - 168 * H, T);
     const w30 = winLong(T - 720 * H, T), c30 = covered(rangesLong, T - 720 * H, T);
     covFn = (a, b) => covered(ranges, a, b);
     readEnd = T;
     const hourly = syncDocs.filter((d) => Array.isArray(d.sessions) && owners.includes(ownerOf(d))).map((d) => t(d.at)).filter(Boolean);
     readFirst = hourly.length ? Math.min(...hourly) : 0;
+    if (readFirst) noteDyn.set('measured', `${NOTES.measured} Hourly readings start ${when(readFirst)}.`);
 
     /* per project: tokens in the last hour and the last 24 h */
     const nameOf = sessionProject;
@@ -1391,6 +1409,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       const rate = (w, c) => (c > 0 ? `${tk(w / (c / H))}/h` : '');
       const meas = (c, span) => [`${pct(c, span)} measured`, fn('measured')];
       kpi('Last hour', c1 > 0 ? tk(w1) : '—', c1 > 0 ? [`to ${clock(T)}`, c1 < 0.9 * H ? meas(c1, H) : ''] : ['no reading pair yet'], c1 > 0 ? [c1, H] : null);
+      kpi('Last 5 h', c5 > 0 ? tk(w5) : '—', c5 > 0 ? [[usdLine(winUsd(T - 5 * H, T)), ` · ${rate(w5, c5)}`], c5 < 0.9 * 5 * H ? meas(c5, 5 * H) : ''] : ['not measured yet'], c5 > 0 ? [c5, 5 * H] : null);
       kpi('Last 24 h', c24 > 0 ? tk(w24) : '—', c24 > 0 ? [[usdLine(winUsd(T - 24 * H, T)), ` · ${rate(w24, c24)}`], meas(c24, 24 * H)] : ['not measured yet'], c24 > 0 ? [c24, 24 * H] : null);
       kpi('Last 7 d', c7 > 0 ? tk(w7) : '—', c7 > 0 ? [usdLine(winUsd(T - 168 * H, T)), meas(c7, 168 * H)] : ['not measured yet'], c7 > 0 ? [c7, 168 * H] : null);
       kpi('Last 30 d', c30 > 0 ? tk(w30) : '—', c30 > 0 ? [[usdLine(winUsd(T - 720 * H, T, DAILY_GAP_SEC)), fn('ledger')], meas(c30, 720 * H)] : ['no ledger pair yet'], c30 > 0 ? [c30, 720 * H] : null);
@@ -1506,8 +1525,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     let late = false;
     const bits = syncs.sort((a, b) => ownerOf(a) === DEFAULT_OWNER ? -1 : ownerOf(b) === DEFAULT_OWNER ? 1 : 0).map((d) => {
       const age = (now - t(d.at)) / 1000, o = ownerOf(d);
-      if (age > SYNC_LATE_SEC) late = true;
-      return `${multi ? `${ownerName(o)} ` : ''}${ago(t(d.at))} · ${d.sessions.length} ${d.sessions.length === 1 ? 'session' : 'sessions'}${age > SYNC_LATE_SEC ? ' · late' : ''}`;
+      if (age > SYNC_MISSED_SEC) late = true;
+      return `${multi ? `${ownerName(o)} ` : ''}${ago(t(d.at))} · ${d.sessions.length} ${d.sessions.length === 1 ? 'session' : 'sessions'}${age > SYNC_MISSED_SEC ? ' · late: the figures end at this reading' : ''}`;
     });
     if (!liveErr && live) ln.append(`Live read ${ago(liveAt)} · next in ${Math.max(1, Math.round((liveAt + LIVE_MS - now) / 60000))} min · `);
     ln.append(bits.length ? `Sync ${bits.join('; ')}` : 'No hourly sync yet');
@@ -1927,6 +1946,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   function windows(sp, now) {
     const host = $('density-win');
     host.textContent = '';
+    host.hidden = false;
     if (!soloQuota) {
       const p = document.createElement('p'); p.className = 'live-note'; p.style.margin = '0';
       p.textContent = 'A usage limit belongs to one account. Pick a person to see the 5-hour and 7-day windows.';
@@ -1954,48 +1974,49 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       const some = sp.some((x) => !x.r && x.tok > 0 && x.b > a && x.a < b);
       return v >= 0.5 ? `≈${money(v)}${some ? '+' : ''}` : '';
     };
-    const measured = (a, b) => {
+    const measured = (a, b, span) => {
       const c = covFn(a, b), u = usdIn(a, b);
-      return [`${dur(c / 1000)} measured · ${tk(perHour(a, b))}/h${u ? ` · ${u}` : ''}`, fn('measured')];
+      return [`${dur(c / 1000)}${span ? ` of ${span}` : ''} measured · ${tk(perHour(a, b))}/h${u ? ` · ${u}` : ''}`, fn('measured')];
     };
-    const [word, cls] = quota && quota.status ? LIMIT[quota.status] || [String(quota.status), 'caution'] : ['', ''];
 
-    /* 5 hours: the window that Claude Code reports, from its reset less 5 h; else the 5 h to the newest reading */
-    const r5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
-    const open5 = r5 > now;
-    const a5 = open5 ? r5 - 5 * HOUR : end - 5 * HOUR;
-    const b5 = Math.max(a5, Math.min(end, open5 ? r5 : end));
-    const cov5 = covFn(a5, b5), used5 = inRange(sp, a5, b5);
-    const l5 = [[open5 ? `${when(a5)}–${when(r5)} · resets in ${dur((r5 - now) / 1000)}`
-      : r5 ? `Reported window ended ${when(r5)}. Shown: the 5 h to the newest reading.` : 'The 5 h to the newest reading']];
-    if (cov5 > 0) {
-      l5.push([measured(a5, b5)]);
-      if (open5 && cov5 >= HOUR) l5.push([`about ${tk(used5 + perHour(a5, b5) * ((r5 - b5) / HOUR))} by the reset at this rate`]);
-    } else {
-      const next = end + HOUR;
-      l5.push([next > now ? `Next reading about ${clock(next)}` : 'No reading in this window yet']);
+    /* the 5-hour limit window, from its latest report: from its reset less 5 h, while the reset is ahead */
+    const q5 = limitTypes.five_hour || null;
+    const r5 = q5 && t(q5.resetsAt) > now ? t(q5.resetsAt) : 0;
+    if (r5) {
+      const open5 = r5 > now;
+      const a5 = r5 - 5 * HOUR, b5 = Math.max(a5, Math.min(end, r5));
+      const cov5 = covFn(a5, b5), used5 = inRange(sp, a5, b5);
+      const l5 = [[open5 ? `${when(a5)}–${when(r5)} · resets in ${dur((r5 - now) / 1000)}` : `Ended ${when(r5)}. The next reading reports the new window.`]];
+      if (cov5 > 0) {
+        l5.push([measured(a5, b5, '5 h')]);
+        if (open5 && cov5 >= HOUR) l5.push([`about ${tk(used5 + perHour(a5, b5) * ((r5 - b5) / HOUR))} by the reset at this rate`]);
+      } else if (open5) {
+        const next = end + HOUR;
+        l5.push([`No reading since it began${next > now ? ` · next about ${clock(next)}` : ' · the hourly sync is late'}`, next > now ? '' : 'wstate caution']);
+      }
+      const share = +q5.pct > 0 ? +q5.pct : 0, cap = num(q5.limitTok);
+      if (share) l5.push([`${share.toFixed(0)}% of the limit used, as reported`]);
+      else if (cap) l5.push([`cap ${tk(cap)} reported · ${((used5 / cap) * 100).toFixed(0)}% measured here`]);
+      if (quota && quota.type !== 'five_hour') { const [w5, c5] = LIMIT[q5.status] || [String(q5.status), 'caution']; l5.push([`${w5} at ${clock(q5.at)} (last report)`, `wstate ${c5}`]); }
+      tile(['5-h limit window', fn('limit')], cov5 > 0 ? tk(used5) : '—', l5);
     }
-    if (open5) {
-      const pa = a5 - 5 * HOUR, pb = Math.min(a5, end), covP = pb > pa ? covFn(pa, pb) : 0;
-      const uP = usdIn(pa, pb);
-      if (covP > 0) l5.push([`Prior 5 h: ${tk(inRange(sp, pa, pb))}${uP ? ` · ${uP}` : ''} · ${dur(covP / 1000)} measured`]);
-    }
-    const share = quota && +quota.pct > 0 ? +quota.pct : 0, cap = num(quota && quota.limitTok);
-    if (share) l5.push([`${share.toFixed(0)}% of the limit used, as reported`]);
-    else if (cap) l5.push([`cap ${tk(cap)} reported · ${((used5 / cap) * 100).toFixed(0)}% measured here`]);
-    tile(['5-hour window', fn('limit')], cov5 > 0 ? tk(used5) : 'No reading yet', l5);
 
-    /* 7 days: the trailing week to the newest reading */
-    const a7 = end - 168 * HOUR;
-    const cov7 = covFn(a7, end), used7 = inRange(sp, a7, end);
-    const l7 = [[cov7 > 0 ? measured(a7, end) : 'No two readings at most 3 h apart in 7 days']];
-    if (readFirst > a7) l7.push([`Readings since ${when(readFirst)}`]);
-    const reset7 = quota ? t(quota.weekResetsAt) : 0;
-    if (reset7) l7.push([reset7 > now ? `resets ${when(reset7)} (${dur((reset7 - now) / 1000)})` : `reset due ${when(reset7)}`]);
+    /* a 7-day limit only when Claude Code reports one: the trailing 7 days are a KPI tile */
+    const wkType = Object.keys(limitTypes).filter((k) => k.indexOf('seven_day') === 0).sort((a, b) => limitTypes[b].at - limitTypes[a].at)[0];
+    const q7 = wkType ? limitTypes[wkType] : null;
+    const reset7 = q7 ? t(q7.resetsAt) : quota ? t(quota.weekResetsAt) : 0;
     const wp = quota && +quota.weekPct > 0 ? +quota.weekPct : 0;
-    if (wp) l7.push([`${wp.toFixed(0)}% of the limit used, as reported`]);
-    if (word && quota.type && String(quota.type).indexOf('seven_day') === 0) l7.push([word, `wstate ${cls}`]);
-    tile('7-day window', cov7 > 0 ? tk(used7) : 'No readings yet', l7);
+    if (reset7 || wp || q7) {
+      const a7 = reset7 ? reset7 - 168 * HOUR : end - 168 * HOUR, b7 = Math.max(a7, Math.min(end, reset7 || end));
+      const cov7 = covFn(a7, b7), used7 = inRange(sp, a7, b7);
+      const l7 = [];
+      if (reset7) l7.push([reset7 > now ? `resets ${when(reset7)} (${dur((reset7 - now) / 1000)})` : `reset due ${when(reset7)}`]);
+      if (cov7 > 0) l7.push([measured(a7, b7, '7 d')]);
+      if (wp) l7.push([`${wp.toFixed(0)}% of the limit used, as reported`]);
+      if (q7) { const [w7, c7] = LIMIT[q7.status] || [String(q7.status), 'caution']; l7.push([`${w7} · reported ${ago(q7.at)}`, `wstate ${c7}`]); }
+      tile([`${(q7 && WINDOW[q7.type]) || '7-day'} limit window`, fn('limit')], cov7 > 0 ? tk(used7) : '—', l7);
+    }
+    host.hidden = !host.childNodes.length;
   }
 
   /** A long list of choices as one dropdown. The options rebuild only when they change, so an open list stays open. */
