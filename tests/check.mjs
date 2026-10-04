@@ -86,7 +86,7 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('invite: no placeholder is left in the text', !/\{\{|\}\}/.test(text), text.match(/\{\{[A-Z_]+\}\}/)?.[0]);
   check('invite: the text names the person and the private path', /Sam/.test(text) && text.includes('data/users/me/profile/syncs'));
   check('invite: the text carries the sync script and the hourly routine', text.includes('def main') && text.includes('cron_expression: "0 * * * *"'));
-  check('invite: the text is a size a person can paste', text.length > 3000 && text.length < 20000, String(text.length));
+  check('invite: the text is a size a person can paste', text.length > 3000 && text.length < 30000, String(text.length));   // about 6,000 tokens at most
   await p.click('#inv-copy');
   await p.waitForTimeout(200);
   const clip = await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
@@ -175,6 +175,66 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   const run = (env) => { execFileSync('python3', [new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname, answer, path.join(dir, 'out.json'), '--at', '2026-10-04T00:15:00Z'], { env: { PATH: process.env.PATH, ...env } }); return JSON.parse(fs.readFileSync(path.join(dir, 'out.json'), 'utf8')); };
   check('script: the reading names the session that took it, from the cloud environment', run({ CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01TESTABC' }).by === 'session_01TESTABC');
   check('script: without the environment variable the reading names no session', !('by' in run({})));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync script reads running turns from event pages: counts and times only, then deletes the pages ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-ev-'));
+  const S = new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname;
+  const py = (...a) => JSON.parse(execFileSync('python3', [S, ...a]).toString().trim().split('\n').pop());
+  const ev = (at, mid, cr) => ({ created_at: at, assistant: { internal_anthropic_catchall: { message: { id: mid, content: [{ type: 'text', text: 'PRIVATE WORDS' }],
+    usage: { input_tokens: 2, cache_read_input_tokens: cr, cache_creation_input_tokens: 10, output_tokens: 5 } } } } });
+  const page = (f, data, more, first) => fs.writeFileSync(path.join(dir, f), `<other-session nonce="n">\n${JSON.stringify({ ccr: { data, has_more: more, first_id: first, last_id: 'z' } })}\n</other-session>`);
+  const sync = { at: '2026-10-04T05:30:00Z', src: 'routine', by: 'session_R', sessions: [
+    { id: 'session_A', title: 'A', status: 'running', tok: 1000, repos: [] }, { id: 'session_R', title: 'R', status: 'running', tok: 7, repos: [] }] };
+  fs.writeFileSync(path.join(dir, 'sync.json'), JSON.stringify(sync));
+  const plan = py('turns-plan', path.join(dir, 'sync.json'));
+  check('events: the plan reads running sessions and skips the session that reads', JSON.stringify(plan.sessions) === '["session_A"]', JSON.stringify(plan));
+  page('p1.txt', [ev('2026-10-04T05:20:00Z', 'm3', 100), ev('2026-10-04T05:20:01Z', 'm3', 100), ev('2026-10-04T05:28:00Z', 'm4', 200)], true, 'cur1');
+  const a1 = py('turns-add', 'session_A', path.join(dir, 'p1.txt'));
+  page('p2.txt', [ev('2026-10-04T04:50:00Z', 'm1', 999), { created_at: '2026-10-04T04:55:00Z', result: {} }, ev('2026-10-04T05:05:00Z', 'm2', 50)], true, 'cur2');
+  const a2 = py('turns-add', 'session_A', path.join(dir, 'p2.txt'));
+  check('events: paging goes on until the end of the previous turn', a1.more === true && a1.before_id === 'cur1' && a2.more === false, JSON.stringify([a1, a2]));
+  check('events: each page is deleted after the script reads it', !fs.existsSync(path.join(dir, 'p1.txt')) && !fs.existsSync(path.join(dir, 'p2.txt')));
+  const m = py('turns-merge', path.join(dir, 'sync.json'));
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const turn = out.sessions[0].turn;
+  check('events: the turn counts each model call once, and only calls after the previous turn ended', m.turn_tok === 3 * 17 + 50 + 100 + 200 && turn.calls === 3 && turn.since === '2026-10-04T05:05:00Z', JSON.stringify(turn));
+  check('events: no text from the events reaches the sync document', !/PRIVATE/.test(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')) && !('turn' in out.sessions[1]));
+  /* the next reading: the same turn still runs, so it continues from the last counted call */
+  fs.writeFileSync(path.join(dir, 'prev.json'), JSON.stringify(out));
+  fs.writeFileSync(path.join(dir, 'next.json'), JSON.stringify({ ...sync, at: '2026-10-04T06:30:00Z', sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'next.json'), '--prev', path.join(dir, 'prev.json'));
+  page('q1.txt', [ev('2026-10-04T05:28:01Z', 'm4', 200), ev('2026-10-04T06:00:00Z', 'm5', 300)], true, 'c9');
+  const q = py('turns-add', 'session_A', path.join(dir, 'q1.txt'));
+  py('turns-merge', path.join(dir, 'next.json'));
+  const t2 = JSON.parse(fs.readFileSync(path.join(dir, 'next.json'), 'utf8')).sessions[0].turn;
+  check('events: the next reading continues the turn without counting a call twice', q.more === false && t2.tok === turn.tok + 317 && t2.calls === 4 && t2.since === turn.since, JSON.stringify([q, t2.tok, t2.calls]));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the page draws a running turn from its event counts ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-turnpts-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const f = path.join(dir, 'syncs', '1791073380.json');                       // the 00:23 reading
+  const d = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const sec = (iso) => Date.parse(iso) / 1000;
+  d.sessions.find((x) => x.id === 'session_01PEND001').turn = { since: '2026-10-03T23:30:00Z', tok: 60_000_000, out: 0, calls: 40, lastAt: '2026-10-04T00:20:00Z', lastMsg: 'm',
+    pts: [[sec('2026-10-03T23:30:00Z'), 5_000_000], [sec('2026-10-03T23:50:00Z'), 30_000_000], [sec('2026-10-04T00:20:00Z'), 60_000_000]] };
+  fs.writeFileSync(f, JSON.stringify(d));
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const heads = await s.page.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].innerText.split('\t').map((x) => x.trim()));
+  const c = (n) => heads.indexOf(n);
+  const r = (await rows(s.page))['owner/pending-turn'];
+  const notes = await s.page.evaluate(() => ({ turns: (document.getElementById('turns-note') || {}).innerText || '', pend: (document.getElementById('pending-note') || {}).innerText || '' }));
+  check('events: the running turn adds its tokens to the session', !!r && r[c('TOKENS')] === '140 M', JSON.stringify(r));
+  check('events: the turn places its tokens in the hours they were used', !!r && /^5\d M$/.test(r[c('LAST HOUR')]), JSON.stringify(r));
+  check('events: the figures name the turn read from events, and not as not counted', /Includes 60 M/.test(notes.turns) && /owner\/pending-turn/.test(notes.turns) && !/owner\/pending-turn/.test(notes.pend), JSON.stringify(notes));
+  const row = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
+  check('events: its session row says how much the turn used so far', /60 M so far, from its events/.test(row), row.slice(0, 200));
+  await s.close();
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

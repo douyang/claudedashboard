@@ -15,7 +15,8 @@ or --by). A session that reads the board is running because it reads, so the boa
 or its updates as work. The script leaves `by` out when it cannot tell which session it runs in.
 `tok` counts input, cache reads, cache writes and output. `quota` is the limit
 state of the most recently updated session. The script does not read the
-session transcripts or the task summaries: the board stores no message text.
+task summaries, and from session events it keeps only token counts and times:
+the board stores no message text.
 
 With --daily the script also writes the day's ledger entry for the board's
 `daily` collection: {day, at, cols, rows}, one row per session with the totals
@@ -29,7 +30,21 @@ The script prints one JSON line: doc_id (the read time in epoch seconds),
 day (the UTC day of the read), sessions, tok, and `more`. When `more` is true, the last page was full: call list_sessions
 again with `after_id` set to `after_id` and add that answer to the list.
 A new document per sync needs no if_version, so a scheduled run writes it
-with one ArtifactData `set`. The collection decides whose sync it is: the
+with one ArtifactData `set`.
+
+Claude Code reports a running session's tokens only when a turn ends. Three
+subcommands add the tokens of the turn that runs now, from the session's events
+(list_events, kinds assistant and result). An event page holds message text;
+turns-add reads only ids, times and token counts from it, then deletes it. The
+board stores no text.
+  turns-plan SYNC.json [--prev PREV.json]   list the running sessions to read
+  turns-add SESSION_ID PAGE_FILE            add one page, newest first; print more and before_id
+  turns-merge SYNC.json                     write `turn` into each running session of SYNC.json
+`turn` is {since, tok, out, calls, lastAt, lastMsg, pts, partial}: the turn's
+tokens so far (output is a floor until the turn ends) and [epoch seconds,
+tokens so far] points, one per 10 minutes. PREV.json, the newest sync document
+already on the board, lets a turn that still runs continue from where the last
+reading stopped. The collection decides whose sync it is: the
 board owner writes `syncs`; every other person writes
 `data/users/me/profile/syncs`, which only that person and the owner can read.
 """
@@ -59,6 +74,106 @@ def self_id():
     """The id of the session that runs this script: "cse_..." in the cloud environment, "session_..." in the listing."""
     v = os.environ.get('CLAUDE_CODE_REMOTE_SESSION_ID', '')
     return 'session_' + v[4:] if v.startswith('cse_') else v if v.startswith('session_') else ''
+
+
+TURN_CAP = 30       # event pages per session per sync; a longer turn is a floor until the next sync
+BUCKET = 600        # seconds; turn points keep the last total in each 10-minute bucket
+STATE = '/tmp/turns.json'
+
+
+def load_page(path):
+    """One list_events answer: (events, has_more, first_id)."""
+    txt = open(path).read()
+    i = txt.find('{"ccr"')
+    d, _ = json.JSONDecoder().raw_decode(txt[i if i >= 0 else txt.find('{'):])
+    c = d.get('ccr') or d
+    return c.get('data') or [], bool(c.get('has_more')), c.get('first_id')
+
+
+def turns_plan(sync_path, prev_path):
+    sync = json.load(open(sync_path))
+    prev = {}
+    if prev_path and os.path.exists(prev_path):
+        p = json.load(open(prev_path))
+        p = p.get('data', p) if isinstance(p.get('data'), dict) else p
+        prev = {r['id']: r for r in p.get('sessions', []) if isinstance(r, dict) and r.get('id')}
+    state = {}
+    for r in sync['sessions']:
+        if r['status'] != 'running' or r['id'] == sync.get('by'):
+            continue
+        o = prev.get(r['id']) or {}
+        # the same reported total means no turn ended since the last reading: the turn read then still runs
+        keep = o.get('turn') if o.get('status') == 'running' and o.get('tok') == r['tok'] else None
+        state[r['id']] = {'prev': keep, 'calls': {}, 'pages': 0, 'ended': False, 'partial': False}
+    json.dump(state, open(STATE, 'w'))
+    print(json.dumps({'sessions': list(state)}))
+
+
+def turns_add(sid, page_path):
+    state = json.load(open(STATE))
+    st = state[sid]
+    events, more, first = load_page(page_path)
+    os.remove(page_path)
+    st['pages'] += 1
+    prev = st['prev'] or {}
+    stop = False
+    for e in sorted(events, key=lambda x: x.get('created_at') or '', reverse=True):
+        at = e.get('created_at') or ''
+        if 'result' in e:                       # the end of the turn before this one
+            st['ended'] = bool(prev)
+            stop = True
+            break
+        if prev.get('lastAt') and at <= prev['lastAt']:
+            stop = True
+            break
+        m = ((e.get('assistant') or {}).get('internal_anthropic_catchall') or {}).get('message') or {}
+        mid, u = m.get('id'), m.get('usage') or {}
+        if mid and mid == prev.get('lastMsg'):    # the newest call that the last reading counted
+            stop = True
+            break
+        if not mid:
+            continue
+        tok = sum(int(u.get(k) or 0) for k in ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens'))
+        old = st['calls'].get(mid)
+        st['calls'][mid] = [min(at, old[0]) if old else at, max(tok, old[1] if old else 0), max(int(u.get('output_tokens') or 0), old[2] if old else 0)]
+    go = more and not stop and st['pages'] < TURN_CAP
+    if more and not stop and not go:
+        st['partial'] = True
+    json.dump(state, open(STATE, 'w'))
+    print(json.dumps({'more': go, 'before_id': first if go else None}))
+
+
+def turns_merge(sync_path):
+    sync = json.load(open(sync_path))
+    state = json.load(open(STATE)) if os.path.exists(STATE) else {}
+    rows = {r['id']: r for r in sync['sessions']}
+    told = 0
+    for sid, st in state.items():
+        prev = None if st['ended'] else st['prev']
+        calls = sorted(st['calls'].items(), key=lambda kv: kv[1][0])
+        if not calls and not prev:
+            continue
+        tok, out, pts = (prev or {}).get('tok', 0), (prev or {}).get('out', 0), [list(p) for p in (prev or {}).get('pts', [])]
+        for mid, (at, t, o) in calls:
+            tok += t
+            out += o
+            sec = int(dt.datetime.fromisoformat(at.replace('Z', '+00:00')).timestamp())
+            if pts and pts[-1][0] // BUCKET == sec // BUCKET:
+                pts[-1] = [sec, tok]
+            else:
+                pts.append([sec, tok])
+        turn = {'since': (prev or {}).get('since') or (calls[0][1][0][:19] + 'Z'), 'tok': tok, 'out': out,
+                'calls': (prev or {}).get('calls', 0) + len(calls),
+                'lastAt': calls[-1][1][0] if calls else prev['lastAt'], 'lastMsg': calls[-1][0] if calls else prev['lastMsg'], 'pts': pts}
+        if st['partial'] or (prev or {}).get('partial'):
+            turn['partial'] = True
+        if sid in rows:
+            rows[sid]['turn'] = turn
+            told += tok
+    json.dump(sync, open(sync_path, 'w'), ensure_ascii=False)
+    if os.path.exists(STATE):
+        os.remove(STATE)
+    print(json.dumps({'sessions': len([r for r in sync['sessions'] if 'turn' in r]), 'turn_tok': told}))
 
 
 def iso(epoch):
@@ -92,6 +207,15 @@ def row(s):
 
 
 def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ''
+    if cmd == 'turns-plan':
+        args = sys.argv[2:]
+        prev = args[args.index('--prev') + 1] if '--prev' in args else None
+        return turns_plan(args[0], prev)
+    if cmd == 'turns-add':
+        return turns_add(sys.argv[2], sys.argv[3])
+    if cmd == 'turns-merge':
+        return turns_merge(sys.argv[2])
     ap = argparse.ArgumentParser()
     ap.add_argument('paths', nargs='+', help='one or more list_sessions answer files, then the output file')
     ap.add_argument('--at', help='UTC time of the list_sessions read; default now')

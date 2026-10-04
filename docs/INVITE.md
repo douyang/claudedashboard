@@ -17,11 +17,12 @@
 - For each Claude Code cloud session of this account: id, title, status, model, start and update times, repositories, token counts, and the cost at API list prices.
 - The usage-limit state of the account: status, window and reset time.
 - The same totals once a day, as a ledger entry. The ledger keeps usage after a session leaves the listing.
-- Nothing else. No messages, no transcripts, no task summaries, no file contents.
+- For each session that runs a turn: the token counts and times of that turn so far. Claude Code reports a turn's tokens only when it ends, so the sync reads them from the session's events. A script takes the counts from each event page and deletes the page.
+- Nothing else. No message text, no task summaries, no file contents.
 
 ## Before you start
 
-- You need the tools ArtifactData and list_sessions (server claude-code-remote). If they are deferred, load them: ToolSearch "select:ArtifactData,mcp__claude-code-remote__list_sessions".
+- You need the tools ArtifactData, list_sessions and list_events (server claude-code-remote). If they are deferred, load them: ToolSearch "select:ArtifactData,mcp__claude-code-remote__list_sessions,mcp__claude-code-remote__list_events".
 - {{BOARD_OWNER}} must share the board with {{NAME}} with edit access (Contributor). If a write fails with "not found" or "not allowed", stop and tell {{NAME}} to ask {{BOARD_OWNER}} for edit access.
 - If ArtifactData says that resolving "me" needs the db and user capabilities, stop. Tell {{NAME}} to ask {{BOARD_OWNER}} to republish the board.
 - If a tool is missing, name the tool and the step that needs it. Then stop.

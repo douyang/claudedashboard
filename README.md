@@ -70,8 +70,9 @@ The board names a project after its repository: `owner/repo` of the first reposi
 - Tokens used before the first reading, or between readings further apart, count in All tokens and cost. They count in no hour.
 - A window ends at the newest reading and says how much of it the readings cover.
 - Claude Code reports a running session's tokens only when a turn ends. Readings inside a turn show the same total. The board does not count them as zero: when the total grows, it spreads the growth over the turn, back to the last reading that saw the session idle or saw its total change.
-- A turn that still runs shows as a hatched band on the chart and in a "Not counted yet" line under the figures.
-- Cowork sessions do not appear in `list_sessions`, and a session without the Claude Code Remote tools cannot read its own usage. Such a session shows its tokens as "or more", or not at all.
+- The hourly sync reads the turn that runs now from each running session's events: the token counts and times of each model call so far. A script takes the counts from each event page and deletes the page, so no text reaches the board. The board then draws the turn's real hours. Output tokens arrive when the turn ends; the events give only a floor for them.
+- A turn that runs but has no event counts (a read that failed) shows as a hatched band on the chart and in a "Not counted yet" line under the figures.
+- Cowork sessions do not appear in `list_sessions`. Their events refuse a request that does not come from the owner's trusted device, and a cloud session has no such proof. A Cowork session has no Claude Code Remote tools, so it cannot read its own usage either. Such a session shows its tokens as "or more", or not at all.
 - A project is **working now** when a session runs or a running job reported in the last 30 minutes. The session that takes the hourly reading does not count: it runs because it reads. Job rows show its real work. It is **active** when it is working, has an open job, or had any report in the last 72 hours. An active project that is not working reads **Idle**.
 - **Last token use** is the end of the last interval in which a session's total grew.
 
@@ -91,7 +92,7 @@ The text makes the person's Claude do these steps once:
 3. Create a routine that runs every hour with the same sync as its prompt. The routine wakes the session that made it, so that session must stay alive.
 4. Report what it did.
 
-The text sends session ids, titles, status, model, times, repositories, token counts and cost. It sends no messages, transcripts, task summaries or file contents.
+The text sends session ids, titles, status, model, times, repositories, token counts and cost. For a session that runs a turn, it also sends the token counts and times of that turn, read from the session's events. It sends no message text, task summaries or file contents.
 
 Cowork and local CLI sessions do not appear in `list_sessions`. They report through the skill. **Save skill file** builds a zip of the skill for the person. They upload it in claude.ai under Settings, Capabilities, Skills.
 
@@ -107,16 +108,9 @@ A routine sends `sync` to the usage-sync session at minute 26 of every hour. The
 
 ## If the live read is blocked
 
-The page asks the Claude Code Remote connector for `list_sessions` every 10 minutes. The connector answers `blocked_by_policy` when the organization blocks that tool for pages. A page cannot change that.
+The page asks Claude Code Remote for `list_sessions` every 10 minutes. It answers `blocked_by_policy` when the organization blocks that tool for pages. A page cannot change that, and Claude Code Remote does not appear in the owner's list at claude.ai/customize/connectors, so the board gives no steps to turn it on.
 
-To turn the live read on:
-
-1. Open https://claude.ai/customize/connectors and select Claude Code Remote.
-2. Under tool permissions, set `list_sessions` to allowed.
-3. If allowed is not offered, an organization admin capped the tool. Ask the admin.
-4. Reload the board.
-
-Until then the board runs on the hourly syncs and states how old they are. Only the board owner calls the connector. Other people never see a connector prompt.
+The board runs on the hourly syncs, states how old they are, and reads the running turns from the sessions' events. A live read would add nothing that the events do not give, except a reading every 10 minutes instead of every hour. Only the board owner calls the connector. Other people never see a connector prompt.
 
 ## Publish
 

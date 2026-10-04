@@ -120,6 +120,8 @@ If it exists, `update` with `pts` = the old array plus `[epoch seconds, tok]`, p
 
 An hourly routine also writes the totals of every cloud session of the account to `syncs/<epoch seconds>`, and the first reading of each UTC day to `daily/<UTC day>`. The daily ledger keeps usage for good. Your own snapshots add finer detail between the hourly syncs. Do not run that sync yourself unless the user asks.
 
+`get_session` reports a session's tokens only when a turn ends, so a long turn reads as zero until then. The hourly routine covers this: for each running session it reads the events of the current turn and keeps only the token counts and times of each model call. A script takes the counts from each event page and deletes the page. The board stores no text. Do not read events yourself for a report.
+
 ### Cowork or a local CLI session
 
 These sessions do not appear in `list_sessions`, so their report is the only record.
@@ -127,7 +129,8 @@ These sessions do not appear in `list_sessions`, so their report is the only rec
 - If the session can read its own usage (for example `/cost` in the CLI), write `sessions/<your id>` with `tok`, `out`, `usd` and `src: "report"`, and append snapshots as above.
 - If it cannot, write `sessions/<your id>` with what you can measure, for example subagent token counts, plus `partial: true` and a `note` that says what the figure counts. Do not estimate the rest.
 - Set `where: "local"` and `surface: "Cowork"` or `"Claude Code · CLI"`.
-- Write `repos` when the session has a repository. Write `folder` (the folder name) when it has none.
+- Write `repos` when the session has a repository. Write `folder` (the folder name) when it has none. A Cowork session writes the name of the first folder the user selected for it.
+- A Cowork session cannot read its own token counts: it has no `get_session`, and its events refuse requests from the cloud. Write what you can measure with `partial: true`, or no token figure.
 
 ## 4. The account limit
 
