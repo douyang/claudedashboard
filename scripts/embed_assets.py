@@ -8,8 +8,8 @@ markers <!-- assets:start --> and <!-- assets:end -->:
   invite  docs/INVITE.md                 the paste-once setup text
   sync    docs/SYNC.md                   the hourly sync procedure
   script  scripts/ccr_sync_doc.py        the script that the sync procedure runs
-  skill   skills/claude-dashboard/SKILL.md
-  localUsage  skills/claude-dashboard/scripts/local_usage.py   the script that local sessions run
+  skill   skills/token-dashboard/SKILL.md
+  localUsage  skills/token-dashboard/scripts/local_usage.py   the script that local sessions run
 
 The files are the source of truth. Do not edit the block by hand.
 
@@ -25,8 +25,8 @@ SOURCES = {
     'invite': 'docs/INVITE.md',
     'sync': 'docs/SYNC.md',
     'script': 'scripts/ccr_sync_doc.py',
-    'skill': 'skills/claude-dashboard/SKILL.md',
-    'localUsage': 'skills/claude-dashboard/scripts/local_usage.py',
+    'skill': 'skills/token-dashboard/SKILL.md',
+    'localUsage': 'skills/token-dashboard/scripts/local_usage.py',
 }
 START, END = '<!-- assets:start -->', '<!-- assets:end -->'
 

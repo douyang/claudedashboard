@@ -116,13 +116,13 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   await p.click('#inv-skill');
   await p.waitForTimeout(300);
   const saved = await p.evaluate(() => window.__saved);
-  check('invite: the skill file is saved as one zip', saved.length === 1 && saved[0].filename === 'claude-dashboard.zip');
+  check('invite: the skill file is saved as one zip', saved.length === 1 && saved[0].filename === 'token-dashboard.zip');
   if (saved[0]) {
     const f = path.join(os.tmpdir(), 'check-skill.zip');
     fs.writeFileSync(f, Buffer.from(saved[0].b64, 'base64'));
-    const lu = new URL('../skills/claude-dashboard/scripts/local_usage.py', import.meta.url).pathname;
-    const out = execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile('${f}');assert z.testzip() is None;t=z.read('claude-dashboard/SKILL.md').decode();print(z.namelist()[0]);print('Person: Sam' in t);n='claude-dashboard/scripts/local_usage.py';print(n in z.namelist() and z.read(n)==open('${lu}','rb').read())`]).toString().trim().split('\n');
-    check('invite: the zip is valid, holds the skill and the local usage script, and names the person', out[0] === 'claude-dashboard/SKILL.md' && out[1] === 'True' && out[2] === 'True', out.join(' | '));
+    const lu = new URL('../skills/token-dashboard/scripts/local_usage.py', import.meta.url).pathname;
+    const out = execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile('${f}');assert z.testzip() is None;t=z.read('token-dashboard/SKILL.md').decode();print(z.namelist()[0]);print('Person: Sam' in t);n='token-dashboard/scripts/local_usage.py';print(n in z.namelist() and z.read(n)==open('${lu}','rb').read())`]).toString().trim().split('\n');
+    check('invite: the zip is valid, holds the skill and the local usage script, and names the person', out[0] === 'token-dashboard/SKILL.md' && out[1] === 'True' && out[2] === 'True', out.join(' | '));
   }
 
   /* ---- history: the ledger, sessions that left the listing, long ranges, CSV ---- */
@@ -336,7 +336,7 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
 /* ---- the local usage script: counts and times from the session's own transcript, never text ---- */
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-lu-'));
-  const S = new URL('../skills/claude-dashboard/scripts/local_usage.py', import.meta.url).pathname;
+  const S = new URL('../skills/token-dashboard/scripts/local_usage.py', import.meta.url).pathname;
   const proj = path.join(dir, 'projects', '-work-grant');
   fs.mkdirSync(path.join(proj, 'sid-1', 'subagents'), { recursive: true });
   const a = (ts, id, cr, o) => JSON.stringify({ type: 'assistant', timestamp: ts, message: { id, content: [{ type: 'text', text: 'PRIVATE WORDS' }], usage: { input_tokens: 10, cache_read_input_tokens: cr, cache_creation_input_tokens: 100, output_tokens: o } } });

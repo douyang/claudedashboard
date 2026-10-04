@@ -192,7 +192,7 @@ Required rules:
 
 ## 9. Report every project to the Claude dashboard
 
-David tracks all his Claude work on one board: https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4. Every repo, app, and dev task reports there. Follow the `claude-dashboard` skill for the fields and the procedure.
+David tracks all his Claude work on one board: https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4. Every repo, app, and dev task reports there. Follow the `token-dashboard` skill for the fields and the procedure.
 
 - **At the start**, register the project in the `projects` collection, with `where`, `repos`, `artifacts`, and your session id. Open a `jobs` row for each task that takes more than a few minutes.
 - **While you work**, update the job rows at each milestone, and at least every 30 minutes. Give each job a `tokEst`, so that the board can project the tokens and cost of the project.

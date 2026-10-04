@@ -1,5 +1,5 @@
 ---
-name: "claude-dashboard"
+name: "token-dashboard"
 description: "Report every project to the shared Claude activity dashboard (https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4): the project, its jobs, the session's state, token usage and cost, and the account limit. Use it in EVERY Cowork session and EVERY Claude Code session (cloud, CLI, desktop, IDE) that does work that takes more than a few minutes or belongs to an ongoing project: code, documents, grants, films, research, data work. Report at the start, at each milestone, at least every 30 minutes while work runs, when a turn ends and waits on the user, and at the end. Use it also when the user says \"ping the dashboard\", \"track this\", \"log tokens\", or \"update the board\"."
 ---
 

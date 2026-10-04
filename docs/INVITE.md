@@ -57,7 +57,7 @@ Tell {{NAME}}: "Open {{BOARD}} once in your browser." The board then lists {{NAM
 
 ## Step 5. Sessions that list_sessions does not show
 
-- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the claude-dashboard skill.
+- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the token-dashboard skill.
 - Tell {{NAME}}: "Open the board, press Save skill file, and upload the zip in claude.ai under Settings, Capabilities, Skills." The board page builds the file for {{NAME}}.
 
 ## Step 6. Report

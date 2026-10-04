@@ -17,7 +17,7 @@ The dashboard shows every Claude project, cloud and local. For each project it s
 | `scripts/preview.mjs` | Loads the page in Chromium with a stub of `window.claude`, and saves screenshots. |
 | `tests/check.mjs` | End-to-end checks of the page against synthetic fixtures. |
 | `tests/make_fixtures.py` | Writes the synthetic fixtures. The names and numbers are invented. |
-| `skills/claude-dashboard/` | The skill that makes every Cowork and Claude Code session report to the board. `scripts/local_usage.py` measures a local session from its own transcript. |
+| `skills/token-dashboard/` | The skill that makes every Cowork and Claude Code session report to the board. `scripts/local_usage.py` measures a local session from its own transcript. |
 | `skills/david-dev-style/` | The dev house style, with section 9 for dashboard reports. |
 | `data/projects.json` | The project registry seed for the `projects` collection. |
 | `docs/DATA.md` | The database collections, the access rules, and how the page computes its figures. |
@@ -73,7 +73,7 @@ The board names a project after its repository: `owner/repo` of the first reposi
 - The hourly sync reads from each running session's events the token counts and times of each model call that the reported total does not hold yet. Claude Code adds an ended turn to that total late, sometimes hours late, so the count runs on through the ends of turns until the total changes. A script takes the counts from each event page and deletes the page, so no text reaches the board. The board then draws the turn's real hours. Output tokens arrive when the turn ends; the events give only a floor for them.
 - A turn that runs but has no event counts (a read that failed) shows as a hatched band on the chart and in a "Not counted yet" line under the figures.
 - **Cloud and local.** A session that `list_sessions` lists is cloud: the hourly sync measures its tokens, state and turns. Every other session is local: Cowork, CLI, desktop, IDE and scheduled runs. The `tags` filter that would list Cowork sessions is served only to OAuth callers, and their events refuse a request from a cloud session, so only their own reports show them. A session's own word for its surface does not decide its place: a Cowork session can look like a cloud session from inside.
-- A local session reports at the start, at each milestone, every 30 minutes, when a turn waits on the user, and at the end. Each report carries its state and the counts that `skills/claude-dashboard/scripts/local_usage.py` reads from the session's own transcript: tokens, cost, and 10-minute points. The script reads no text into the report.
+- A local session reports at the start, at each milestone, every 30 minutes, when a turn waits on the user, and at the end. Each report carries its state and the counts that `skills/token-dashboard/scripts/local_usage.py` reads from the session's own transcript: tokens, cost, and 10-minute points. The script reads no text into the report.
 - A project is **working now** when a session runs or a running job reported in the last 30 minutes. The session that takes the hourly reading does not count: it runs because it reads. Job rows show its real work. It is **active** when it is working, has an open job, or had any report in the last 72 hours. An active project that is not working reads **Idle**. A local session that reported running and then nothing for 45 minutes does not count as working: its project reads **No report**.
 - **Last token use** is the end of the last interval in which a session's total grew.
 - **Colours.** The 16 projects with the latest activity hold a colour each. Slots 9 to 16 are the eight hues at a second lightness step. A registry `color` stays while its project is among the 16; the rest draw in grey.
@@ -154,6 +154,6 @@ If another session published a newer version, merge its changes into this file b
 
 The skills in `skills/` are the source. Claude does not install them automatically. An installed skill applies to every project.
 
-1. Zip each skill folder, for example `cd skills && zip -r claude-dashboard.zip claude-dashboard`.
+1. Zip each skill folder, for example `cd skills && zip -r token-dashboard.zip token-dashboard`.
 2. In claude.ai, open Settings, then Capabilities, then Skills.
-3. Upload `claude-dashboard.zip`. Replace `david-dev-style` with the new zip.
+3. Upload `token-dashboard.zip`. It replaces the installed `token-dashboard` skill. Replace `david-dev-style` with its new zip too.
