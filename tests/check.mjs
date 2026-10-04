@@ -148,6 +148,25 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   await s.close();
 }
 
+/* ---- a turn longer than 3 h that every hourly reading saw running ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-turn-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const base = JSON.parse(fs.readFileSync(path.join(DB, 'syncs', '1791066360.json'), 'utf8'));      // the 22:26 reading
+  const lt = base.sessions.find((x) => x.id === 'session_01TURN001');
+  for (const hh of ['19', '20', '21']) {
+    const at = `2026-10-03T${hh}:26:00Z`;
+    fs.writeFileSync(path.join(dir, 'syncs', `${Date.parse(at) / 1000}.json`), JSON.stringify({ at, src: 'routine', sessions: [{ ...lt, updatedAt: at }] }));
+  }
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const heads = await s.page.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].innerText.split('\t').map((x) => x.trim()));
+  const r = (await rows(s.page))['owner/long-turn'], c = (n) => heads.indexOf(n);
+  check('turns: a turn longer than 3 h that every reading saw running places its tokens over the turn',
+    !!r && r[c('24 H')] === '120 M' && /^2\d M$/.test(r[c('LAST HOUR')]), JSON.stringify(r));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- the sync script records which session took the reading ---- */
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-by-'));

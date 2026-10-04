@@ -66,10 +66,10 @@ The board names a project after its repository: `owner/repo` of the first reposi
 
 ## How the figures are measured
 
-- A rate counts only tokens that two readings at most 3 hours apart place in time. The page spreads them evenly between the two readings.
+- A rate counts only tokens that two readings at most 3 hours apart place in time. The page spreads them evenly between the two readings. One exception: a turn that every hourly reading saw running, with no two readings more than 3 hours apart, spreads its tokens over the whole turn, up to a day.
 - Tokens used before the first reading, or between readings further apart, count in All tokens and cost. They count in no hour.
 - A window ends at the newest reading and says how much of it the readings cover.
-- Claude Code reports a running session's tokens only when a turn ends. Readings inside a turn show the same total. The board does not count them as zero: when the total grows, it spreads the growth over the turn, back to the last reading that saw the session idle or saw its total change, within the 3-hour limit.
+- Claude Code reports a running session's tokens only when a turn ends. Readings inside a turn show the same total. The board does not count them as zero: when the total grows, it spreads the growth over the turn, back to the last reading that saw the session idle or saw its total change.
 - A turn that still runs shows as a hatched band on the chart and in a "Not counted yet" line under the figures.
 - Cowork sessions do not appear in `list_sessions`, and a session without the Claude Code Remote tools cannot read its own usage. Such a session shows its tokens as "or more", or not at all.
 - A project is **working now** when a session runs or a running job reported in the last 30 minutes. The session that takes the hourly reading does not count: it runs because it reads. Job rows show its real work. It is **active** when it is working, has an open job, or had any report in the last 72 hours. An active project that is not working reads **Idle**.

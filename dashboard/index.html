@@ -807,7 +807,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   /* Claude Code reports a running session's tokens only when a turn ends. The readings inside one turn show the
      same total, and they are not a measured zero. When the total grows, the growth belongs to the whole turn,
      back to the last reading that saw the session idle or saw its total change. The readings inside the turn
-     drop out, so the growth spreads over the turn. A turn longer than FINE_SEC still places nothing. */
+     drop out, so the growth spreads over the turn. The start of such a turn carries a fifth field, 1, when no two
+     readings in it are more than FINE_SEC apart and the turn lasts at most DAILY_GAP_SEC: every reading saw the
+     session run, so the turn places its tokens however long it is. */
   function turnSpread(series) {
     const keep = [];
     for (let i = 0; i < series.length;) {
@@ -816,13 +818,21 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       let m = i;
       for (let k = i; k <= j; k += 1) if (series[k][2] === 0) m = k;                  // the last reading that saw it idle
       const inTurn = j + 1 < series.length && series.slice(m + 1, j + 1).some((p) => p[2] === 1);
-      keep.push(...series.slice(i, inTurn ? m + 1 : j + 1));
+      const kept = series.slice(i, inTurn ? m + 1 : j + 1);
+      if (inTurn) {
+        const run = series.slice(m, j + 2);
+        const seen = run.every((p, k) => !k || (p[0] - run[k - 1][0]) / 1000 <= FINE_SEC);
+        const len = (series[j + 1][0] - series[m][0]) / 1000;
+        kept[kept.length - 1] = [...kept[kept.length - 1].slice(0, 4), seen && len <= DAILY_GAP_SEC ? 1 : 0];
+      }
+      keep.push(...kept);
       i = j + 1;
     }
     return keep;
   }
-  /** The snapshot points of one session, as [ms, cumulative tokens], non-decreasing. */
-  const pointsOf = (s, byId, sync) => turnSpread(seriesOf(s, byId, sync)).map((p) => [p[0], p[1]]);
+  /** The snapshot points of one session, as [ms, cumulative tokens, turn], non-decreasing. turn is 1 on the start
+      of a turn that the hourly readings saw run; the interval from there to the next point is that turn. */
+  const pointsOf = (s, byId, sync) => turnSpread(seriesOf(s, byId, sync)).map((p) => [p[0], p[1], p[4] || 0]);
   /** A turn that runs and that Claude Code has not reported yet: the time since which the session's total has not
       changed while an hourly reading saw it run. 0 when there is none. */
   function pendingSince(s, series) {
@@ -834,14 +844,15 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     for (let k = i; k < series.length; k += 1) if (series[k][2] === 0) m = k;
     return series.slice(m + 1).some((p) => p[2] === 1 && p[3] === 's') ? series[m][0] : 0;
   }
-  /** Tokens between a and b, split into measured and unplaced parts. Readings further apart than maxGap place nothing. */
+  /** Tokens between a and b, split into measured and unplaced parts. Readings further apart than maxGap place nothing,
+      unless the earlier one starts a turn that the hourly readings saw run. */
   function alloc(pts, a, b, maxGap = FINE_SEC) {
     let fine = 0, coarse = 0;
     for (let i = 1; i < pts.length; i++) {
       const [t0, v0] = pts[i - 1], [t1, v1] = pts[i];
       if (t1 <= a || t0 >= b || t1 <= t0 || v1 <= v0) continue;
       const part = ((v1 - v0) * (Math.min(b, t1) - Math.max(a, t0))) / (t1 - t0);
-      if ((t1 - t0) / 1000 <= maxGap) fine += part; else coarse += part;
+      if ((t1 - t0) / 1000 <= maxGap || pts[i - 1][2] === 1) fine += part; else coarse += part;
     }
     return { fine, coarse };
   }
@@ -1174,7 +1185,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     for (const d of tickDocs) { const k = d.sid || String(d.id).split('~')[0]; if (!byId.has(k)) byId.set(k, []); byId.get(k).push(d); }
     const sync = syncPoints();
     const ser = sess.map((s) => seriesOf(s, byId, sync));
-    const pts = ser.map((x) => turnSpread(x).map((p) => [p[0], p[1]]));
+    const pts = ser.map((x) => turnSpread(x).map((p) => [p[0], p[1], p[4] || 0]));
     pendingBy = new Map();
     sess.forEach((s, i) => { const since = pendingSince(s, ser[i]); if (since) pendingBy.set(s.id, since); });
     const pend = sess.filter((s) => pendingBy.has(s.id));
@@ -1270,7 +1281,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         const first = Math.min(...pend.map((s) => pendingBy.get(s.id)));
         n.textContent = `Not counted yet: ${pend.length === 1 ? 'a running session' : `${pend.length} running sessions`} in ${names.join(', ')}. `
           + `${pend.length === 1 ? 'Its total has' : 'Their totals have'} not changed since ${when(first)}. Claude Code reports the tokens of a turn when the turn ends. `
-          + 'The board then spreads them over the turn, up to 3 h back.';
+          + 'The board then spreads them over the turn.';
         k.append(n);
       }
     }
@@ -1285,7 +1296,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         const [t0, v0] = p[i - 1], [t1, v1] = p[i];
         if (v1 <= v0) continue;
         const gap = (t1 - t0) / 1000;
-        if (gap <= FINE_SEC) { const x = { a: t0, b: t1, tok: v1 - v0, coarse: false, key }; sp.push(x); spL.push(x); }
+        if (gap <= FINE_SEC || p[i - 1][2] === 1) { const x = { a: t0, b: t1, tok: v1 - v0, coarse: false, key }; sp.push(x); spL.push(x); }
         else if (gap <= DAILY_GAP_SEC) {
           /* a ledger interval: the tokens belong to the UTC day of the earlier reading, whole */
           const a0 = Math.floor(t0 / DAY_MS) * DAY_MS;
@@ -1293,7 +1304,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         }
       }
     });
-    srcWord = 'Measured: the tokens between two readings at most 3 h apart, spread evenly over the time between them.';
+    srcWord = 'Measured: the tokens between two readings at most 3 h apart, spread evenly over the time between them. A turn that the hourly readings saw running spreads its tokens over the whole turn.';
     srcWordLong = 'Measured: the tokens between two readings at most 26 h apart. Hourly readings keep their own time. The daily ledger places a day\'s tokens in the UTC day of the earlier reading.';
     if (!sp.length && !spL.length) { sp = spans(all); spL = sp; srcWord = sp.length ? 'Job rows only, each job spread evenly across its own run.' : ''; srcWordLong = srcWord; }
     density(sp, spL, now, pend.map((s) => [pendingBy.get(s.id), T]));
