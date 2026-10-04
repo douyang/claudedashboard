@@ -99,6 +99,24 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   check('density: a queued job takes one line, with its figures at the right and no empty bar', !!qrow && qrow.one && !qrow.bar && /queued/.test(qrow.tail), JSON.stringify(qrow));
   const sel = await p.evaluate(() => { const x = document.querySelector('#f-project select'); return x ? x.options.length : 0; });
   check('density: the project filter is one dropdown', sel > 3, String(sel));
+  /* ---- status filter: one chip for jobs not finished, one for finished jobs; Done works in Active only ---- */
+  const stChips = await p.evaluate(() => [...document.querySelectorAll('#f-status button')].map((b) => b.innerText.trim()));
+  check('filter: the status chips are All, Open and Done, each with its count, and no one-state chips', stChips.length === 3 && stChips[0] === 'All' && /^Open \d+$/.test(stChips[1]) && /^Done \d+$/.test(stChips[2]), stChips.join(','));
+  const rowStates = () => p.evaluate(() => [...document.querySelectorAll('#projects article.row > .head > .chip')].map((c) => c.textContent.trim()));
+  const chipN = (i) => +String(stChips[i] || '').split(' ')[1];
+  await p.click('button[data-key="f-status:done"]');
+  await p.waitForTimeout(250);
+  const doneStates = await rowStates();
+  const doneNote = await p.evaluate(() => document.getElementById('scope-note').innerText);
+  check('filter: Done lists the finished jobs in Active only, as many as its chip says', doneStates.length > 0 && doneStates.length === chipN(2) && doneStates.every((x) => /^(Done|Failed|Stopped)$/.test(x)) && !/finished jobs hidden/.test(doneNote),
+    JSON.stringify([chipN(2), doneStates, doneNote]));
+  await p.click('button[data-key="f-status:live"]');
+  await p.waitForTimeout(250);
+  const openStates = await rowStates();
+  check('filter: Open lists running, waiting and queued jobs together, as many as its chip says', openStates.length === chipN(1) && openStates.includes('Running') && openStates.includes('Queued') && openStates.every((x) => /^(Running|Waiting|Queued|Answered)$/.test(x)),
+    JSON.stringify([chipN(1), openStates]));
+  await p.click('button[data-key="f-status:all"]');
+  await p.waitForTimeout(250);
   const people = await p.evaluate(() => [...document.querySelectorAll('#people tr')].slice(1).map((r) => r.children[0].innerText.replace('Rename', '').trim()));
   check('owner: the people table lists everyone', people.join(',') === 'David C,Drew,Priya', people.join(','));
   await p.click('button[data-key="f-person:u_drew"]');

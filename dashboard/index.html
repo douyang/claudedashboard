@@ -648,6 +648,10 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   /* Live: work still moving or still waiting on someone. An answered question is
      not live, even when its writer never moved the status on. */
   const isLive = (x) => x.s.status === 'running' || x.s.status === 'queued' || unanswered(x);
+  /* Open: live, or a question that has its answer but whose row nobody closed. Finished: done, failed or stopped.
+     The status filter has one chip for each; every row still names its own state. */
+  const isOpen = (x) => isLive(x) || (x.s.status === 'waiting' && x.s.answered);
+  const isFinished = (x) => x.s.status === 'done' || x.s.status === 'failed' || x.s.status === 'stopped';
 
   /** A job as of now: reported and projected progress, rate, time left. */
   function state(j, now) {
@@ -1180,7 +1184,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     };
     const nAsk = all.filter(unanswered).length, nBad = by('failed') + by('stopped');
     grp('Projects', [['running', 'working', nWorking], ['', 'active', nActive], ['', 'total', projects.length]], 'working');
-    grp('Jobs', [['running', 'running', by('running')], ['waiting', 'waiting on you', nAsk || null], ['', 'queued', by('queued')], ['done', 'done', by('done')], ['bad', 'stopped', nBad || null]]);
+    grp('Jobs', [['running', 'running', by('running')], ['waiting', 'waiting on you', nAsk || null], ['', 'queued', by('queued') || null], ['done', 'done', by('done')], ['bad', 'stopped', nBad || null]]);
 
     const head = $('headline');
     const open = projects.filter((p) => p.r.active > 0);
@@ -1265,7 +1269,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     sc.setAttribute('aria-pressed', String(showAll));
     sc.textContent = showAll ? 'Active only' : 'Show all';
     const hiddenP = projects.filter((p) => !p.active).length;
-    $('scope-note').textContent = showAll ? '' : `${hiddenP} inactive · finished jobs hidden`;
+    $('scope-note').textContent = showAll ? '' : fStatus === 'all' ? `${hiddenP} inactive · finished jobs hidden` : `${hiddenP} inactive hidden`;
     const wc = (k) => projects.filter((p) => (showAll || p.active) && (p.whereKey === k || (k !== 'all' && p.whereKey === 'both'))).length;
     const fp = $('f-person');
     const showBtn = isOwnerView ? canEdit : !!viewerUid;
@@ -1286,17 +1290,17 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     if (!$('invite').hidden && !inviteReady) { inviteReady = true; fillInvite(true); }
     chips('f-where', [['all', 'All'], ['cloud', `Cloud ${wc('cloud')}`], ['local', `Local ${wc('local')}`]],
       fWhere, (v) => { fWhere = v; keep('cad.where', v); render(); });
-    chips('f-status', [['all', 'All'], ['live', 'Open'], ['running', 'Running'], ['waiting', 'Waiting'], ['queued', 'Queued'], ['done', 'Done']],
-      fStatus, (v) => { fStatus = v; keep('cad.status', v); render(); });
     const listed = projects.filter((p) => (showAll || p.active) && whereMatch(p));
+    const scoped = listed.filter((p) => fProject === 'all' || p.name === fProject);
+    const nJobs = (f) => scoped.reduce((n, p) => n + p.items.filter(f).length, 0);
+    chips('f-status', [['all', 'All'], ['live', `Open ${nJobs(isOpen)}`], ['done', `Done ${nJobs(isFinished)}`]],
+      fStatus, (v) => { fStatus = v; keep('cad.status', v); render(); });
     pickList('f-project', [['all', `All ${listed.length}`], ...listed.map((p) => [p.name, p.name])],
       fProject, (v) => { fProject = v; keep('cad.project', v); render(); });
 
-    /* Active-only hides finished rows too. Answered-but-open rows stay so the writer sees to them. */
-    const keepRow = (x) => {
-      if (!showAll && !(isLive(x) || (x.s.status === 'waiting' && x.s.answered))) return false;
-      return fStatus === 'all' || (fStatus === 'live' ? isLive(x) : fStatus === 'waiting' ? unanswered(x) : x.s.status === fStatus);
-    };
+    /* All in Active only hides finished rows; answered-but-open rows stay so the writer sees to them.
+       Done shows the finished rows whatever the scope: the scope picks the projects, not the rows. */
+    const keepRow = (x) => (fStatus === 'live' ? isOpen(x) : fStatus === 'done' ? isFinished(x) : showAll || isOpen(x));
     const root = $('projects');
     root.querySelectorAll('.proj-card').forEach((c) => c.remove());
     let shown = 0;
@@ -1309,7 +1313,10 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       root.append(card(p, rows, now));
     }
     $('empty').hidden = shown > 0;
-    if (!shown) $('empty').textContent = projects.length ? 'No project matches these filters.' : 'Nothing on the board yet. Each project appears here when a session reports to it.';
+    if (!shown) $('empty').textContent = !projects.length ? 'Nothing on the board yet. Each project appears here when a session reports to it.'
+      : fStatus === 'live' ? 'No open jobs: no job runs, waits or is queued.'
+      : fStatus === 'done' ? (showAll ? 'No finished jobs.' : 'No finished jobs in active projects. Show all lists the others.')
+      : 'No project matches these filters.';
 
     numberNotes();
     if (focusKey) {
@@ -2238,7 +2245,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       el.append(sec);
     }
     const hid = p.items.length - rows.length;
-    if (hid > 0 && !showAll) {
+    if (hid > 0 && !showAll && fStatus === 'all') {
       const hn = document.createElement('p'); hn.className = 'hidden-note';
       const b = document.createElement('button'); b.type = 'button'; b.dataset.key = `more:${p.name}`; b.textContent = 'Show all';
       b.addEventListener('click', () => { showAll = true; keep('cad.all', '1'); render(); });
@@ -2380,6 +2387,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   }
 
   fStatus = recall('cad.status', 'all');
+  if (fStatus === 'running' || fStatus === 'waiting' || fStatus === 'queued') fStatus = 'live';   // the one-state chips before Open took them in
+  if (fStatus !== 'live' && fStatus !== 'done') fStatus = 'all';
   fProject = recall('cad.project', 'all');
   fWhere = recall('cad.where', 'all');
   fPerson = recall('cad.person', 'all');
