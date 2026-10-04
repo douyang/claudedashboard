@@ -233,6 +233,29 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   py('turns-merge', path.join(dir, 'next.json'));
   const t2 = JSON.parse(fs.readFileSync(path.join(dir, 'next.json'), 'utf8')).sessions[0].turn;
   check('events: the next reading continues the turn without counting a call twice', q.more === false && t2.tok === turn.tok + 317 && t2.calls === 4 && t2.since === turn.since, JSON.stringify([q, t2.tok, t2.calls]));
+  /* Claude Code adds a turn's tokens to the session total late. A reading after the turn ended and a new one began,
+     with the old total, keeps the ended turn: it counts through the result event back to the last reading */
+  fs.writeFileSync(path.join(dir, 'prev2.json'), fs.readFileSync(path.join(dir, 'next.json')));
+  fs.writeFileSync(path.join(dir, 'third.json'), JSON.stringify({ ...sync, at: '2026-10-04T07:35:00Z', sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'third.json'), '--prev', path.join(dir, 'prev2.json'));
+  page('r1.txt', [ev('2026-10-04T07:30:00Z', 'm7', 700), { created_at: '2026-10-04T07:10:00Z', result: {} }, ev('2026-10-04T06:30:00Z', 'm6', 600), ev('2026-10-04T06:00:00Z', 'm5', 300)], true, 'c10');
+  const rr = py('turns-add', 'session_A', path.join(dir, 'r1.txt'));
+  py('turns-merge', path.join(dir, 'third.json'));
+  const t3a = JSON.parse(fs.readFileSync(path.join(dir, 'third.json'), 'utf8')).sessions[0].turn;
+  check('events: a turn that ended while Claude Code still reports the old total stays in the count',
+    rr.more === false && !!t3a && t3a.tok === t2.tok + 617 + 717 && t3a.calls === 6 && t3a.since === turn.since, JSON.stringify([rr, t3a && t3a.tok, t3a && t3a.calls]));
+  /* the session is idle now and its total has still not changed: the reading still carries its unreported turns */
+  fs.writeFileSync(path.join(dir, 'prev3.json'), fs.readFileSync(path.join(dir, 'third.json')));
+  fs.writeFileSync(path.join(dir, 'fourth.json'), JSON.stringify({ ...sync, at: '2026-10-04T08:35:00Z', sessions: [{ ...sync.sessions[0], status: 'idle' }] }));
+  const plan4 = py('turns-plan', path.join(dir, 'fourth.json'), '--prev', path.join(dir, 'prev3.json'));
+  if (plan4.sessions.length) {
+    page('s1.txt', [{ created_at: '2026-10-04T08:00:00Z', result: {} }, ev('2026-10-04T07:50:00Z', 'm8', 800), ev('2026-10-04T07:30:00Z', 'm7', 700)], false, 'c11');
+    py('turns-add', 'session_A', path.join(dir, 's1.txt'));
+  }
+  py('turns-merge', path.join(dir, 'fourth.json'));
+  const t4 = JSON.parse(fs.readFileSync(path.join(dir, 'fourth.json'), 'utf8')).sessions[0].turn;
+  check('events: an idle session whose total Claude Code has not updated keeps its unreported turns',
+    JSON.stringify(plan4.sessions) === '["session_A"]' && !!t4 && !!t3a && t4.tok === t3a.tok + 817, JSON.stringify([plan4, t4 && t4.tok]));
   /* a turn longer than the page cap: the read stops after 30 pages and marks the turn partial */
   fs.writeFileSync(path.join(dir, 'cap.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
   py('turns-plan', path.join(dir, 'cap.json'));

@@ -40,11 +40,13 @@ board stores no text.
   turns-plan SYNC.json [--prev PREV.json]   list the running sessions to read
   turns-add SESSION_ID PAGE_FILE            add one page, newest first; print more and before_id
   turns-merge SYNC.json                     write `turn` into each running session of SYNC.json
-`turn` is {since, tok, out, calls, lastAt, lastMsg, pts, partial}: the turn's
-tokens so far (output is a floor until the turn ends) and [epoch seconds,
-tokens so far] points, one per 10 minutes. PREV.json, the newest sync document
-already on the board, lets a turn that still runs continue from where the last
-reading stopped. The collection decides whose sync it is: the
+`turn` is {since, tok, out, calls, lastAt, lastMsg, pts, partial}: the tokens
+of the turns that the reported total does not hold yet (output is a floor until
+a turn ends), and [epoch seconds, tokens so far] points, one per 10 minutes.
+PREV.json, the newest sync document already on the board, lets the count
+continue from where the last reading stopped. Claude Code adds an ended turn
+to the reported total late, sometimes hours late, so while that total stays
+the same the count runs on through the ends of turns. The collection decides whose sync it is: the
 board owner writes `syncs`; every other person writes
 `data/users/me/profile/syncs`, which only that person and the owner can read.
 """
@@ -99,12 +101,16 @@ def turns_plan(sync_path, prev_path):
         prev = {r['id']: r for r in p.get('sessions', []) if isinstance(r, dict) and r.get('id')}
     state = {}
     for r in sync['sessions']:
-        if r['status'] != 'running' or r['id'] == sync.get('by'):
+        if r['id'] == sync.get('by'):
             continue
         o = prev.get(r['id']) or {}
-        # the same reported total means no turn ended since the last reading: the turn read then still runs
-        keep = o.get('turn') if o.get('status') == 'running' and o.get('tok') == r['tok'] else None
-        state[r['id']] = {'prev': keep, 'calls': {}, 'pages': 0, 'ended': False, 'partial': False}
+        # Claude Code adds the tokens of ended turns to the session total late, sometimes hours late. While the
+        # reported total stays the same, the turn counts of the last reading are still outside it: carry them,
+        # also for a session that no longer runs.
+        keep = o.get('turn') if isinstance(o.get('turn'), dict) and o.get('tok') == r['tok'] else None
+        if r['status'] != 'running' and not keep:
+            continue
+        state[r['id']] = {'prev': keep, 'calls': {}, 'pages': 0, 'partial': False}
     json.dump(state, open(STATE, 'w'))
     print(json.dumps({'sessions': list(state)}))
 
@@ -119,10 +125,11 @@ def turns_add(sid, page_path):
     stop = False
     for e in sorted(events, key=lambda x: x.get('created_at') or '', reverse=True):
         at = e.get('created_at') or ''
-        if 'result' in e:                       # the end of the turn before this one
-            st['ended'] = bool(prev)
-            stop = True
-            break
+        if 'result' in e:                       # the end of a turn
+            if not prev:                        # no carried counts: the reported total holds that turn
+                stop = True
+                break
+            continue                            # carried counts: the reported total does not hold it yet
         if prev.get('lastAt') and at <= prev['lastAt']:
             stop = True
             break
@@ -149,7 +156,7 @@ def turns_merge(sync_path):
     rows = {r['id']: r for r in sync['sessions']}
     told = 0
     for sid, st in state.items():
-        prev = None if st['ended'] else st['prev']
+        prev = st['prev']
         calls = sorted(st['calls'].items(), key=lambda kv: kv[1][0])
         if not calls and not prev:
             continue
