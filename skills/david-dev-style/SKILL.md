@@ -1,6 +1,6 @@
 ---
 name: "david-dev-style"
-description: "David's style for building software: any web app, tool, dashboard, or repo. Use it WHENEVER you develop or change an application or repository for David, even a small edit that he does not name: UI, a feature, data, schema, code cleanup, a deploy, or a PR. It sets product framing (the user's real job, mobile and desktop), copy rules (no AI slop, no reflexive hedges), data integrity (never fabricate data, record provenance and verification), the build, validate, and ship discipline (deploy model, non-destructive production edits, validation before push, current docs and screenshots, branch, PR, merge), reporting every project and its token usage to the Claude dashboard, and the 80% ASD-STE100 writing profile for all dev prose: replies, PRs, commits, code comments, docs, and UI sentences. Use it on \"clean up this copy\", \"remove the AI slop\", \"make it work on mobile\", \"add this feature\", \"update the schema\", \"ship it\", or any edit to one of his apps or repos."
+description: "David's style for building software: any web app, tool, dashboard, or repo. Use it WHENEVER you develop or change an application or repository for David, even a small edit that he does not name: UI, a feature, data, schema, code cleanup, a deploy, or a PR. It sets product framing (the user's real job, mobile and desktop), copy rules (no AI slop, no reflexive hedges), data integrity (never fabricate data, record provenance and verification), the build, validate, and ship discipline (deploy model, non-destructive production edits, validation before push, current docs and screenshots, branch, PR, merge), reporting every project and its token usage to the Claude dashboard, a keep-going working style with no \"go\" prompts, and the 80% ASD-STE100 writing profile for all dev prose: replies, PRs, commits, code comments, docs, and UI sentences. Use it on \"clean up this copy\", \"remove the AI slop\", \"make it work on mobile\", \"add this feature\", \"update the schema\", \"ship it\", or any edit to one of his apps or repos."
 ---
 
 # Building software the way David likes it
@@ -207,5 +207,14 @@ Never invent a token figure. A missing figure is better than a wrong one.
 ## Working style
 
 David works fast. He dislikes delays from unnecessary questions and option lists. If the request and the code make the correct decision clear, make that decision. Do not give him a list of options. Recommend one option.
+
+**Keep going. Never ask David to say "go".** If a finding calls for a fix, a check, or the next step of a plan, do it in the same turn. Then report what you did and why. Do not end a reply with "Reply go to …" or "Should I …?". He approves these proposals each time, and each one costs him an extra message.
+
+- Ask first only in these cases:
+  - The step deletes or overwrites data or history that you cannot restore.
+  - The step shares, sends, or posts something to other people.
+  - Two options give different results, and the request and the code do not settle the choice.
+- Some side steps cost much more than the task, for example an hour of agent time on a side question. Do not stop for such a step. Do the main work. In the reply, name the side step and its cost.
+- Before a large step, state the plan in one line in the reply. Then do the step. David can stop you.
 
 Apply the no-slop standard to replies too. In each reply, state what you did, what you validated, and each step that David must run himself. Ask a question only when his answer changes the outcome.
