@@ -281,6 +281,8 @@ button.linklike:focus-visible, button.act:focus-visible, button.f:focus-visible,
 .ptable td.soon { color: var(--wait); }
 .ptable td.ok { color: var(--ok); }
 #people-wrap { min-width: 0; display: grid; gap: 8px; }
+#export-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#export-row .lab { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 2px; }
 .invite { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 14px 16px; display: grid; gap: 12px; }
 .invite h2 { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
 .invite p { margin: 0; color: var(--ink-2); font-size: 0.9rem; max-width: 70ch; }
@@ -349,6 +351,12 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       <details class="dtable"><summary>Table view</summary><div id="density-table"></div></details>
     </div>
     <div class="ptable-wrap"><table class="ptable" id="ptable" aria-label="Tokens by project"></table></div>
+    <div class="set" id="export-row" hidden>
+      <span class="lab">Export</span>
+      <button type="button" class="f" id="exp-daily" data-key="exp-daily">Daily CSV</button>
+      <button type="button" class="f" id="exp-hourly" data-key="exp-hourly">Hourly CSV</button>
+      <span class="live-note" id="exp-msg" role="status"></span>
+    </div>
     <div id="people-wrap" hidden>
       <h2 class="sec-h" id="people-h">People</h2>
       <div class="ptable-wrap"><table class="ptable" id="people" aria-label="Usage by person"></table></div>
@@ -422,10 +430,10 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
 
 <!-- assets:start -->
 <script type="application/json" id="assets">{
-"invite": "# Report {{NAME}}'s Claude usage to the {{BOARD_OWNER}} activity board\n\n{{NAME}} asks you to run this setup once. After it, an hourly update runs by itself, with no further action.\n\n- Board: {{BOARD}}\n- Reporter: {{NAME}}\n\n## Who can read what you write\n\n- You write only to the private path `data/users/me/profile/...`. The board resolves `me` to {{NAME}}'s own id.\n- Only {{NAME}} and {{BOARD_OWNER}} can read that path. Other people on the board cannot.\n- You cannot write anywhere else on the board. If a write to another path works, stop and report it.\n\n## What the setup sends\n\n- For each Claude Code cloud session of this account: id, title, status, model, start and update times, repositories, token counts, and the cost at API list prices.\n- The usage-limit state of the account: status, window and reset time.\n- Nothing else. No messages, no transcripts, no task summaries, no file contents.\n\n## Before you start\n\n- You need the tools ArtifactData and list_sessions (server claude-code-remote). If they are deferred, load them: ToolSearch \"select:ArtifactData,mcp__claude-code-remote__list_sessions\".\n- {{BOARD_OWNER}} must share the board with {{NAME}} with edit access (Contributor). If a write fails with \"not found\" or \"not allowed\", stop and tell {{NAME}} to ask {{BOARD_OWNER}} for edit access.\n- If ArtifactData says that resolving \"me\" needs the db and user capabilities, stop. Tell {{NAME}} to ask {{BOARD_OWNER}} to republish the board.\n- If a tool is missing, name the tool and the step that needs it. Then stop.\n\n## Step 1. Run the sync once now\n\nFollow \"THE SYNC\" at the end of this text. It writes the first document to the board.\n\n## Step 2. Check the first document\n\n- Call ArtifactData with action \"get\", url \"{{BOARD}}\", collection \"data/users/me/profile/syncs\", and the doc_id that the script printed.\n- If the document is missing or holds no sessions, stop and report the problem.\n\n## Step 3. Make the update hourly\n\n1. Call list_triggers. Look for a routine named \"Claude board hourly sync\".\n2. If the routine exists, call update_trigger on it with the cron and prompt below. Do not create a second routine.\n3. If it does not exist, call create_trigger (server claude-code-remote) with these settings:\n   - name: \"Claude board hourly sync\"\n   - cron_expression: \"0 * * * *\"\n   - create_new_session_on_fire: true\n   - initiation: \"human_request\"\n   - notifications: {}\n   - prompt: the full text of \"THE SYNC\", unchanged.\n4. If you have no create_trigger tool, tell {{NAME}} to create a scheduled task in the Claude app. The task runs every hour and its prompt is the text of \"THE SYNC\". Do not skip this silently.\n5. Call list_triggers again. Confirm that the routine is enabled. Note its next_run_at.\n\n## Step 4. Show {{NAME}} on the board\n\nTell {{NAME}}: \"Open {{BOARD}} once in your browser.\" The board then lists {{NAME}} for {{BOARD_OWNER}} and shows {{NAME}} their own usage.\n\n## Step 5. Sessions that list_sessions does not show\n\n- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the claude-dashboard skill.\n- Tell {{NAME}}: \"Open the board, press Save skill file, and upload the zip in claude.ai under Settings, Capabilities, Skills.\" The board page builds the file for {{NAME}}.\n\n## Step 6. Report\n\nReply in max 4 lines:\n- The number of sessions and tokens that the first sync wrote.\n- The routine id and its next run time.\n- Whether {{NAME}} still has to open the board and upload the skill.\n\n## THE SYNC\n\n{{SYNC}}\n",
-"sync": "Sync the Claude sessions of this account to the board {{BOARD}}. Do only these steps. Do not edit code, open pull requests, or write other documents. Keep the reply to one line.\n\n1. Load the tools. Run ToolSearch with \"select:mcp__claude-code-remote__list_sessions,ArtifactData\". Skip this step when both tools are loaded.\n2. Run `date -u +%Y-%m-%dT%H:%M:%SZ`. Call the result T.\n3. Save the script at the end of this text to /tmp/ccr_sync_doc.py. Skip this step when the file exists or when the repository checkout has scripts/ccr_sync_doc.py.\n4. Call list_sessions with {\"limit\": 100}. The tool saves a long answer to a file and gives the path. If the answer arrives inline, write it to /tmp/ls1.txt.\n5. Run: python3 /tmp/ccr_sync_doc.py \u003canswer files> /tmp/sync.json --at T\n   The script prints one JSON line with doc_id, sessions, tok, more and after_id.\n6. If \"more\" is true, call list_sessions with {\"limit\": 100, \"after_id\": \"\u003cafter_id>\"}. Save the answer as the next file (/tmp/ls2.txt, /tmp/ls3.txt, ...). Run step 5 again with every file. Repeat until \"more\" is false.\n7. Call ArtifactData with action \"set\", url \"{{BOARD}}\", collection \"{{COLLECTION}}\", doc_id = the printed doc_id, file_path \"/tmp/sync.json\". Do not pass if_version. If the set fails because the document exists, stop.\n8. Delete the answer files and /tmp/sync.json.\n9. Reply with one line: \"Synced \u003csessions> sessions, \u003ctok> tokens at T.\" If a step fails, reply with one line that names the step and the error, and stop.\n\nThe script:\n\n```python\n{{SCRIPT}}\n```\n",
-"script": "#!/usr/bin/env python3\n\"\"\"Make one hourly sync document from Claude Code Remote list_sessions answers.\n\nUsage:\n  python3 scripts/ccr_sync_doc.py ANSWER_FILE [ANSWER_FILE ...] OUT.json [--at 2026-10-03T23:00:00Z]\n\nEach ANSWER_FILE is one list_sessions answer saved to a file. Pass every page\nof the listing. The last path is the output file.\n\nThe output is one document for the board's `syncs` collection:\n{at, src, sessions: [{id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos}], quota}\n`tok` counts input, cache reads, cache writes and output. `quota` is the limit\nstate of the most recently updated session. The script does not read the\nsession transcripts or the task summaries: the board stores no message text.\n\nThe script prints one JSON line: doc_id (the read time in epoch seconds),\nsessions, tok, and `more`. When `more` is true, the last page was full: call list_sessions\nagain with `after_id` set to `after_id` and add that answer to the list.\nA new document per sync needs no if_version, so a scheduled run writes it\nwith one ArtifactData `set`. The collection decides whose sync it is: the\nboard owner writes `syncs`; every other person writes\n`data/users/me/profile/syncs`, which only that person and the owner can read.\n\"\"\"\nimport argparse, datetime as dt, json, sys, time\n\nPAGE = 100\n\n\ndef load_sessions(path):\n    txt = open(path).read()\n    i = txt.find('{\"ccr\"')\n    if i \u003c 0:\n        cands = [x for x in (txt.find('{'), txt.find('[')) if x >= 0]\n        if not cands:\n            sys.exit(f'no JSON in {path}')\n        i = min(cands)\n    d, _ = json.JSONDecoder().raw_decode(txt[i:])\n    last = None\n    if isinstance(d, dict):\n        c = d.get('ccr') or d\n        last = c.get('last_id')\n        d = c.get('data') or d.get('data') or d.get('sessions') or []\n    return d, last\n\n\ndef iso(epoch):\n    return dt.datetime.fromtimestamp(epoch, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')\n\n\ndef row(s):\n    em = s.get('external_metadata') or {}\n    u = em.get('usage') or {}\n    tok = sum(int(u.get(k) or 0) for k in ('input_tokens', 'cache_read_tokens', 'cache_write_tokens', 'output_tokens'))\n    return {\n        'id': s['id'], 'title': s.get('title') or s['id'],\n        'status': str(s.get('session_status') or '').lower().replace('session_status_', '') or 'idle',\n        'bucket': str(s.get('status_bucket') or '').lower().replace('session_status_bucket_', ''),\n        'model': em.get('last_served_model') or s.get('configured_model') or '',\n        'createdAt': s.get('created_at'), 'updatedAt': s.get('updated_at'),\n        'tok': tok, 'out': int(u.get('output_tokens') or 0), 'usd': round(float(u.get('cost_usd') or 0), 2),\n        'repos': [((x.get('git_repository') or {}).get('url') or '').replace('https://github.com/', '')\n                  for x in (s.get('session_context') or {}).get('sources', []) if (x.get('git_repository') or {}).get('url')],\n    }\n\n\ndef main():\n    ap = argparse.ArgumentParser()\n    ap.add_argument('paths', nargs='+', help='one or more list_sessions answer files, then the output file')\n    ap.add_argument('--at', help='UTC time of the list_sessions read; default now')\n    a = ap.parse_args()\n    if len(a.paths) \u003c 2:\n        sys.exit('give at least one answer file and the output file')\n    *answers, out = a.paths\n    at = int(dt.datetime.fromisoformat(a.at.replace('Z', '+00:00')).timestamp()) if a.at else int(time.time())\n    rows, seen, quota, latest, last_n, last_id = [], set(), None, '', 0, None\n    for path in answers:\n        page, last_id = load_sessions(path)\n        last_n = len(page)\n        for s in page:\n            if not isinstance(s, dict) or not s.get('id') or s['id'] in seen:\n                continue\n            seen.add(s['id'])\n            rows.append(row(s))\n            rl = (s.get('external_metadata') or {}).get('rate_limit_info')\n            if rl and (s.get('updated_at') or '') > latest:\n                latest = s.get('updated_at') or ''\n                quota = {'status': rl.get('status'), 'type': rl.get('rateLimitType'),\n                         'resetsAt': iso(rl['resetsAt']) if rl.get('resetsAt') else None,\n                         'overage': bool(rl.get('isUsingOverage')), 'asOf': latest}\n    doc = {'at': iso(at), 'src': 'routine', 'sessions': rows}\n    if quota:\n        doc['quota'] = quota\n    json.dump(doc, open(out, 'w'), ensure_ascii=False)\n    more = last_n >= PAGE\n    print(json.dumps({'doc_id': str(at), 'sessions': len(rows), 'tok': sum(r['tok'] for r in rows),\n                      'more': more, 'after_id': last_id if more else None}))\n\n\nif __name__ == '__main__':\n    main()\n",
-"skill": "---\nname: \"claude-dashboard\"\ndescription: \"Report every project to the shared Claude activity dashboard (https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4): the project, its jobs, the session's token usage and cost, and the account limit. Use it in EVERY Cowork session and EVERY Claude Code session (cloud, CLI, desktop, IDE) that does work that takes more than a few minutes or belongs to an ongoing project: code, documents, grants, films, research, data work. Report at the start, at each milestone, at least every 30 minutes while a job runs, and at the end. Use it also when the user says \\\"ping the dashboard\\\", \\\"track this\\\", \\\"log tokens\\\", or \\\"update the board\\\".\"\n---\n\n# Report to the Claude dashboard\n\nThe dashboard is one artifact: https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4. It shows every project of every person on the board, cloud and local, with its jobs, sessions, tokens, cost and token velocity. A project that does not report is invisible on it. Every session that does work reports.\n\nWrite with the `ArtifactData` tool on that URL. Load it with ToolSearch (`select:ArtifactData`) if it is deferred. In Cowork, use the same tool. If no tool can write to the artifact, say so once in the reply and continue the work.\n\n## Who reports\n\n\u003c!-- who:start -->\n- Person: David C (board owner)\n- Collection prefix: none\n- Limit document: collection `meta`, doc `quota`\n\u003c!-- who:end -->\n\nThe board shows each person's usage next to the others. What a person writes stays private to that person and to the board owner. The board owner reads everything.\n\n1. Put the collection prefix in front of every collection name below: `projects`, `sessions`, `jobs`, `ticks` and `syncs`. With the prefix `data/users/me/profile/`, the project `clinic-scheduler` is the document `clinic-scheduler` in the collection `data/users/me/profile/projects`.\n2. In that prefix, `me` stands for the person whose Claude account runs this session. The board resolves it. Do not replace it with an id.\n3. Write nowhere else. The board rejects a write to another path. If such a write works, stop and tell the person.\n4. Never write a document for another person.\n\n## Rules\n\n1. Never invent a figure. If the session cannot measure its tokens, write no token figure, or write a floor with `partial: true` and a `note` that says what it counts.\n2. Pin every write to an existing document with `if_version` from your last read. If a write fails on a version, read again and redo only your change.\n3. Write only your own documents: your project, your session, your jobs, your snapshot day. Do not edit the documents of other sessions.\n4. Use UTC timestamps in the form `2026-10-03T23:13:18Z`.\n5. Keep each write small. Use `update` to merge fields. Use one `batch` when you write more than two documents.\n6. Never write message text, transcripts, file contents or secrets. Write counts, titles and links.\n\n## 1. At the start: register the project\n\n1. Read the registry: `ArtifactData list` on collection `projects`.\n2. Find your project by `name` or `aliases`. If a job row uses another name for the same project, add that name to `aliases`.\n3. If the project is absent, create `projects/\u003cslug>` (lowercase, hyphens):\n\n| Field | Value |\n|---|---|\n| `name` | The project name that the user uses. |\n| `where` | `cloud` for a Claude Code cloud session (web, iOS, desktop app remote). `local` for Cowork and for a CLI or IDE session on the user's computer. |\n| `surface` | For example `Claude Code · cloud`, `Claude Code · CLI`, `Cowork`. |\n| `sessions` | An array with your session id. |\n| `repos` | `owner/repo` strings, if any. |\n| `artifacts` | `https://claude.ai/artifact/...` links, if any. |\n| `status` | `active`. Use `paused` or `done` only when the user says so. |\n| `color` | Leave it out. The board owner assigns the colour slots (1 to 8). |\n| `lastActivityAt` | Now. |\n\n4. If the project exists, `update` it: add your session id to `sessions` if absent, and set `lastActivityAt` to now.\n\nThe session id:\n- Claude Code cloud: call `get_session` (claude-code-remote MCP server) with no `session_id`. Use its `id`.\n- Cowork or a local CLI: use a stable id of the form `cowork-\u003cproject-slug>` or `cli-\u003cproject-slug>-\u003cYYYYMMDD>`. Reuse it for the whole session.\n\n## 2. Jobs: one row per task\n\nWrite `jobs/\u003cshort-id>` for each task that takes more than a few minutes. Reuse the id to update the row.\n\n| Field | Value |\n|---|---|\n| `project` | The registry `name`. |\n| `group` | A sub-heading for one batch of related jobs, for example `Review changes, 3 Oct`. |\n| `label` | What the job is, in one line. On a question to a person, write the question. |\n| `note` | The latest detail. Rewrite it as the job moves. |\n| `surface` | As in the registry. |\n| `status` | `queued`, `running`, `waiting` (needs a person), `done`, `failed` or `stopped`. |\n| `total`, `done`, `unit` | Progress, if the work has a count. |\n| `estSec` | The expected length in seconds. |\n| `tok`, `tokOut` | Tokens the job used so far, if you can measure them. |\n| `tokEst` | The expected total tokens at the end of the job. The board uses it for the projected tokens and cost of the project. |\n| `startedAt`, `updatedAt`, `finishedAt` | Timestamps. Refresh `updatedAt` on every report. |\n| `askedAt`, `answeredAt`, `answer` | For a question to a person. |\n| `link` | An https link to the PR, session or output. |\n\nClose each row when its work ends: `status: done` and `finishedAt`. A row left `running` goes stale after 30 minutes and misleads the board.\n\n## 3. Session usage and snapshots\n\n### Claude Code cloud session\n\n1. Call `get_session` with no `session_id`.\n2. From `external_metadata.usage`, compute `tok = input_tokens + cache_read_tokens + cache_write_tokens + output_tokens`.\n3. `set` or `update` `sessions/\u003csession id>`:\n\n```json\n{ \"title\": \"\u003csession title>\", \"project\": \"\u003cregistry name>\", \"where\": \"cloud\",\n  \"surface\": \"Claude Code · cloud\", \"status\": \"running\",\n  \"createdAt\": \"\u003ccreated_at>\", \"updatedAt\": \"\u003cnow>\",\n  \"tok\": 123456789, \"out\": 456789, \"usd\": 12.34, \"src\": \"ccr\" }\n```\n\n`usd` is `cost_usd`, rounded to cents. It is the cost at API list prices.\n\n4. Append one snapshot to `ticks/\u003csession id>~\u003cUTC day>`, for example `ticks/session_01ABC~2026-10-03`. Read it first. If it is absent, `set`:\n\n```json\n{ \"sid\": \"\u003csession id>\", \"project\": \"\u003cregistry name>\", \"day\": \"2026-10-03\",\n  \"pts\": [[1791069198, 123456789]], \"out\": 456789, \"usd\": 12.34, \"src\": \"ccr\", \"updatedAt\": \"\u003cnow>\" }\n```\n\nIf it exists, `update` with `pts` = the old array plus `[epoch seconds, tok]`, pinned with `if_version`. Skip the snapshot if `tok` did not change. Keep at most one snapshot per 15 minutes.\n\nAn hourly routine also writes the totals of every cloud session of the account to `syncs/\u003cepoch seconds>`. Your own snapshots add finer detail between the hourly syncs. Do not run that sync yourself unless the user asks.\n\n### Cowork or a local CLI session\n\nThese sessions do not appear in `list_sessions`, so their report is the only record.\n\n- If the session can read its own usage (for example `/cost` in the CLI), write `sessions/\u003cyour id>` with `tok`, `out`, `usd` and `src: \"report\"`, and append snapshots as above.\n- If it cannot, write `sessions/\u003cyour id>` with what you can measure, for example subagent token counts, plus `partial: true` and a `note` that says what the figure counts. Do not estimate the rest.\n- Set `where: \"local\"` and `surface: \"Cowork\"` or `\"Claude Code · CLI\"`.\n\n## 4. The account limit\n\n`get_session` also returns `external_metadata.rate_limit_info`. Write it with `update` to the limit document that \"Who reports\" names. The board owner writes these fields to `meta/quota`. Every other person writes them as one object in the field `quota` of the limit document.\n\n| Field | From |\n|---|---|\n| `status` | `status` (`allowed`, `allowed_warning` or `rejected`). |\n| `type` | `rateLimitType`, for example `five_hour`. |\n| `resetsAt` | `resetsAt` (epoch seconds), as a UTC timestamp. |\n| `overage` | `isUsingOverage`. |\n| `updatedAt` | Now. |\n\nAdd `pct`, `limitTok`, `weekResetsAt` or `weekPct` only when the session reads them from a real source. Never estimate a cap.\n\n## 5. The board note\n\n`meta/board` has a `note` for the line under the summary. The board writes its own summary of the top token users and current activity. Only the board owner writes a `note`, for something that needs a decision, in max 2 sentences, with `updatedAt`.\n\n## 6. At the end\n\n1. Close every job row that you opened.\n2. Write the final session usage and one last snapshot.\n3. Set `lastActivityAt` on the project.\n4. If the project is complete and the user agrees, set the project `status` to `done`.\n\n## Checklist for each report\n\n- [ ] Every collection name starts with the prefix from \"Who reports\".\n- [ ] Project in the registry, your session id in `sessions`, `lastActivityAt` set.\n- [ ] Job rows current; finished rows closed.\n- [ ] Session usage written (cloud: measured; local: measured or `partial`).\n- [ ] Snapshot appended if `tok` changed and 15 minutes passed.\n- [ ] Account limit written if `get_session` returned a limit state.\n"
+"invite": "# Report {{NAME}}'s Claude usage to the {{BOARD_OWNER}} activity board\n\n{{NAME}} asks you to run this setup once. After it, an hourly update runs by itself, with no further action.\n\n- Board: {{BOARD}}\n- Reporter: {{NAME}}\n\n## Who can read what you write\n\n- You write only to the private path `data/users/me/profile/...`. The board resolves `me` to {{NAME}}'s own id.\n- Only {{NAME}} and {{BOARD_OWNER}} can read that path. Other people on the board cannot.\n- You cannot write anywhere else on the board. If a write to another path works, stop and report it.\n\n## What the setup sends\n\n- For each Claude Code cloud session of this account: id, title, status, model, start and update times, repositories, token counts, and the cost at API list prices.\n- The usage-limit state of the account: status, window and reset time.\n- The same totals once a day, as a ledger entry. The ledger keeps usage after a session leaves the listing.\n- Nothing else. No messages, no transcripts, no task summaries, no file contents.\n\n## Before you start\n\n- You need the tools ArtifactData and list_sessions (server claude-code-remote). If they are deferred, load them: ToolSearch \"select:ArtifactData,mcp__claude-code-remote__list_sessions\".\n- {{BOARD_OWNER}} must share the board with {{NAME}} with edit access (Contributor). If a write fails with \"not found\" or \"not allowed\", stop and tell {{NAME}} to ask {{BOARD_OWNER}} for edit access.\n- If ArtifactData says that resolving \"me\" needs the db and user capabilities, stop. Tell {{NAME}} to ask {{BOARD_OWNER}} to republish the board.\n- If a tool is missing, name the tool and the step that needs it. Then stop.\n\n## Step 1. Run the sync once now\n\nFollow \"THE SYNC\" at the end of this text. It writes the first document to the board.\n\n## Step 2. Check the first document\n\n- Call ArtifactData with action \"get\", url \"{{BOARD}}\", collection \"data/users/me/profile/syncs\", and the doc_id that the script printed.\n- Call it again for collection \"data/users/me/profile/daily\" and the day that the script printed. A day that already has an entry is fine.\n- If the sync document is missing or holds no sessions, stop and report the problem.\n\n## Step 3. Make the update hourly\n\n1. Call list_triggers. Look for a routine named \"Claude board hourly sync\".\n2. If the routine exists, call update_trigger on it with the cron and prompt below. Do not create a second routine.\n3. If it does not exist, call create_trigger (server claude-code-remote) with these settings:\n   - name: \"Claude board hourly sync\"\n   - cron_expression: \"0 * * * *\"\n   - create_new_session_on_fire: true\n   - initiation: \"human_request\"\n   - notifications: {}\n   - prompt: the full text of \"THE SYNC\", unchanged.\n4. If you have no create_trigger tool, tell {{NAME}} to create a scheduled task in the Claude app. The task runs every hour and its prompt is the text of \"THE SYNC\". Do not skip this silently.\n5. Call list_triggers again. Confirm that the routine is enabled. Note its next_run_at.\n\n## Step 4. Show {{NAME}} on the board\n\nTell {{NAME}}: \"Open {{BOARD}} once in your browser.\" The board then lists {{NAME}} for {{BOARD_OWNER}} and shows {{NAME}} their own usage.\n\n## Step 5. Sessions that list_sessions does not show\n\n- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the claude-dashboard skill.\n- Tell {{NAME}}: \"Open the board, press Save skill file, and upload the zip in claude.ai under Settings, Capabilities, Skills.\" The board page builds the file for {{NAME}}.\n\n## Step 6. Report\n\nReply in max 4 lines:\n- The number of sessions and tokens that the first sync wrote.\n- The routine id and its next run time.\n- Whether {{NAME}} still has to open the board and upload the skill.\n\n## THE SYNC\n\n{{SYNC}}\n",
+"sync": "Sync the Claude sessions of this account to the board {{BOARD}}. Do only these steps. Do not edit code, open pull requests, or write other documents. Keep the reply to one line.\n\n1. Load the tools. Run ToolSearch with \"select:mcp__claude-code-remote__list_sessions,ArtifactData\". Skip this step when both tools are loaded.\n2. Run `date -u +%Y-%m-%dT%H:%M:%SZ`. Call the result T.\n3. Save the script at the end of this text to /tmp/ccr_sync_doc.py. Skip this step when the file exists or when the repository checkout has scripts/ccr_sync_doc.py.\n4. Call list_sessions with {\"limit\": 100}. The tool saves a long answer to a file and gives the path. If the answer arrives inline, write it to /tmp/ls1.txt.\n5. Run: python3 /tmp/ccr_sync_doc.py \u003canswer files> /tmp/sync.json --daily /tmp/daily.json --at T\n   The script prints one JSON line with doc_id, day, sessions, tok, more and after_id.\n6. If \"more\" is true, call list_sessions with {\"limit\": 100, \"after_id\": \"\u003cafter_id>\"}. Save the answer as the next file (/tmp/ls2.txt, /tmp/ls3.txt, ...). Run step 5 again with every file. Repeat until \"more\" is false.\n7. Call ArtifactData with action \"set\", url \"{{BOARD}}\", collection \"{{COLLECTION}}\", doc_id = the printed doc_id, file_path \"/tmp/sync.json\". Do not pass if_version. If the set fails because the document exists, stop.\n8. Call ArtifactData with action \"set\", url \"{{BOARD}}\", collection \"{{DAILY}}\", doc_id = the printed day, file_path \"/tmp/daily.json\". Do not pass if_version. If the board refuses because the document exists, ignore it: the first reading of each UTC day stays as the ledger entry.\n9. Delete the answer files, /tmp/sync.json and /tmp/daily.json.\n10. Reply with one line: \"Synced \u003csessions> sessions, \u003ctok> tokens at T.\" If the write result in step 7 says that 20,000 or more of 25,000 documents are used, add \"Storage is nearly full.\" If a step fails, reply with one line that names the step and the error, and stop.\n\nThe script:\n\n```python\n{{SCRIPT}}\n```\n",
+"script": "#!/usr/bin/env python3\n\"\"\"Make one hourly sync document from Claude Code Remote list_sessions answers.\n\nUsage:\n  python3 scripts/ccr_sync_doc.py ANSWER_FILE [ANSWER_FILE ...] OUT.json [--daily DAILY.json] [--at 2026-10-03T23:00:00Z]\n  python3 scripts/ccr_sync_doc.py --from-sync SYNC.json DAILY.json\n\nEach ANSWER_FILE is one list_sessions answer saved to a file. Pass every page\nof the listing. The last path is the output file.\n\nThe output is one document for the board's `syncs` collection:\n{at, src, sessions: [{id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos}], quota}\n`tok` counts input, cache reads, cache writes and output. `quota` is the limit\nstate of the most recently updated session. The script does not read the\nsession transcripts or the task summaries: the board stores no message text.\n\nWith --daily the script also writes the day's ledger entry for the board's\n`daily` collection: {day, at, cols, rows}, one row per session with the totals\nat this reading. The board keeps the first reading of each UTC day, so a\nsecond write to the same day is refused and the first one stays. The ledger\nkeeps usage after a session leaves the listing and after the hourly syncs\nmove out of the page's 8-day window. --from-sync makes the same entry from a\nsync document that already exists, to fill a gap.\n\nThe script prints one JSON line: doc_id (the read time in epoch seconds),\nday (the UTC day of the read), sessions, tok, and `more`. When `more` is true, the last page was full: call list_sessions\nagain with `after_id` set to `after_id` and add that answer to the list.\nA new document per sync needs no if_version, so a scheduled run writes it\nwith one ArtifactData `set`. The collection decides whose sync it is: the\nboard owner writes `syncs`; every other person writes\n`data/users/me/profile/syncs`, which only that person and the owner can read.\n\"\"\"\nimport argparse, datetime as dt, json, sys, time\n\nPAGE = 100\n\n\ndef load_sessions(path):\n    txt = open(path).read()\n    i = txt.find('{\"ccr\"')\n    if i \u003c 0:\n        cands = [x for x in (txt.find('{'), txt.find('[')) if x >= 0]\n        if not cands:\n            sys.exit(f'no JSON in {path}')\n        i = min(cands)\n    d, _ = json.JSONDecoder().raw_decode(txt[i:])\n    last = None\n    if isinstance(d, dict):\n        c = d.get('ccr') or d\n        last = c.get('last_id')\n        d = c.get('data') or d.get('data') or d.get('sessions') or []\n    return d, last\n\n\ndef iso(epoch):\n    return dt.datetime.fromtimestamp(epoch, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')\n\n\nDAILY_COLS = ['id', 'title', 'status', 'tok', 'out', 'usd', 'createdAt', 'repo']\n\n\ndef daily_doc(sync):\n    \"\"\"The ledger entry of a UTC day, from one sync document: the totals at that reading.\"\"\"\n    rows = [[r['id'], r['title'], r['status'], r['tok'], r['out'], r['usd'], r['createdAt'], (r.get('repos') or [''])[0]]\n            for r in sync['sessions']]\n    return {'day': sync['at'][:10], 'at': sync['at'], 'src': sync.get('src', 'routine'), 'cols': DAILY_COLS, 'rows': rows}\n\n\ndef row(s):\n    em = s.get('external_metadata') or {}\n    u = em.get('usage') or {}\n    tok = sum(int(u.get(k) or 0) for k in ('input_tokens', 'cache_read_tokens', 'cache_write_tokens', 'output_tokens'))\n    return {\n        'id': s['id'], 'title': s.get('title') or s['id'],\n        'status': str(s.get('session_status') or '').lower().replace('session_status_', '') or 'idle',\n        'bucket': str(s.get('status_bucket') or '').lower().replace('session_status_bucket_', ''),\n        'model': em.get('last_served_model') or s.get('configured_model') or '',\n        'createdAt': s.get('created_at'), 'updatedAt': s.get('updated_at'),\n        'tok': tok, 'out': int(u.get('output_tokens') or 0), 'usd': round(float(u.get('cost_usd') or 0), 2),\n        'repos': [((x.get('git_repository') or {}).get('url') or '').replace('https://github.com/', '')\n                  for x in (s.get('session_context') or {}).get('sources', []) if (x.get('git_repository') or {}).get('url')],\n    }\n\n\ndef main():\n    ap = argparse.ArgumentParser()\n    ap.add_argument('paths', nargs='+', help='one or more list_sessions answer files, then the output file')\n    ap.add_argument('--at', help='UTC time of the list_sessions read; default now')\n    ap.add_argument('--daily', help='also write the ledger entry of this reading to this file')\n    ap.add_argument('--from-sync', help='make the ledger entry from this existing sync document; the one path is the output')\n    a = ap.parse_args()\n    if a.from_sync:\n        if len(a.paths) != 1:\n            sys.exit('give the output file')\n        doc = daily_doc(json.load(open(a.from_sync)))\n        json.dump(doc, open(a.paths[0], 'w'), ensure_ascii=False)\n        print(json.dumps({'day': doc['day'], 'sessions': len(doc['rows'])}))\n        return\n    if len(a.paths) \u003c 2:\n        sys.exit('give at least one answer file and the output file')\n    *answers, out = a.paths\n    at = int(dt.datetime.fromisoformat(a.at.replace('Z', '+00:00')).timestamp()) if a.at else int(time.time())\n    rows, seen, quota, latest, last_n, last_id = [], set(), None, '', 0, None\n    for path in answers:\n        page, last_id = load_sessions(path)\n        last_n = len(page)\n        for s in page:\n            if not isinstance(s, dict) or not s.get('id') or s['id'] in seen:\n                continue\n            seen.add(s['id'])\n            rows.append(row(s))\n            rl = (s.get('external_metadata') or {}).get('rate_limit_info')\n            if rl and (s.get('updated_at') or '') > latest:\n                latest = s.get('updated_at') or ''\n                quota = {'status': rl.get('status'), 'type': rl.get('rateLimitType'),\n                         'resetsAt': iso(rl['resetsAt']) if rl.get('resetsAt') else None,\n                         'overage': bool(rl.get('isUsingOverage')), 'asOf': latest}\n    doc = {'at': iso(at), 'src': 'routine', 'sessions': rows}\n    if quota:\n        doc['quota'] = quota\n    json.dump(doc, open(out, 'w'), ensure_ascii=False)\n    if a.daily:\n        json.dump(daily_doc(doc), open(a.daily, 'w'), ensure_ascii=False)\n    more = last_n >= PAGE\n    print(json.dumps({'doc_id': str(at), 'day': doc['at'][:10], 'sessions': len(rows), 'tok': sum(r['tok'] for r in rows),\n                      'more': more, 'after_id': last_id if more else None}))\n\n\nif __name__ == '__main__':\n    main()\n",
+"skill": "---\nname: \"claude-dashboard\"\ndescription: \"Report every project to the shared Claude activity dashboard (https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4): the project, its jobs, the session's token usage and cost, and the account limit. Use it in EVERY Cowork session and EVERY Claude Code session (cloud, CLI, desktop, IDE) that does work that takes more than a few minutes or belongs to an ongoing project: code, documents, grants, films, research, data work. Report at the start, at each milestone, at least every 30 minutes while a job runs, and at the end. Use it also when the user says \\\"ping the dashboard\\\", \\\"track this\\\", \\\"log tokens\\\", or \\\"update the board\\\".\"\n---\n\n# Report to the Claude dashboard\n\nThe dashboard is one artifact: https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4. It shows every project of every person on the board, cloud and local, with its jobs, sessions, tokens, cost and token velocity. A project that does not report is invisible on it. Every session that does work reports.\n\nWrite with the `ArtifactData` tool on that URL. Load it with ToolSearch (`select:ArtifactData`) if it is deferred. In Cowork, use the same tool. If no tool can write to the artifact, say so once in the reply and continue the work.\n\n## Who reports\n\n\u003c!-- who:start -->\n- Person: David C (board owner)\n- Collection prefix: none\n- Limit document: collection `meta`, doc `quota`\n\u003c!-- who:end -->\n\nThe board shows each person's usage next to the others. What a person writes stays private to that person and to the board owner. The board owner reads everything.\n\n1. Put the collection prefix in front of every collection name below: `projects`, `sessions`, `jobs`, `ticks` and `syncs`. With the prefix `data/users/me/profile/`, the project `clinic-scheduler` is the document `clinic-scheduler` in the collection `data/users/me/profile/projects`.\n2. In that prefix, `me` stands for the person whose Claude account runs this session. The board resolves it. Do not replace it with an id.\n3. Write nowhere else. The board rejects a write to another path. If such a write works, stop and tell the person.\n4. Never write a document for another person.\n\n## Rules\n\n1. Never invent a figure. If the session cannot measure its tokens, write no token figure, or write a floor with `partial: true` and a `note` that says what it counts.\n2. Pin every write to an existing document with `if_version` from your last read. If a write fails on a version, read again and redo only your change.\n3. Write only your own documents: your project, your session, your jobs, your snapshot day. Do not edit the documents of other sessions.\n4. Use UTC timestamps in the form `2026-10-03T23:13:18Z`.\n5. Keep each write small. Use `update` to merge fields. Use one `batch` when you write more than two documents.\n6. Never write message text, transcripts, file contents or secrets. Write counts, titles and links.\n\n## 1. At the start: register the project\n\n1. Read the registry: `ArtifactData list` on collection `projects`.\n2. Find your project by `name` or `aliases`. If a job row uses another name for the same project, add that name to `aliases`.\n3. If the project is absent, create `projects/\u003cslug>` (lowercase, hyphens):\n\n| Field | Value |\n|---|---|\n| `name` | The project name that the user uses. |\n| `where` | `cloud` for a Claude Code cloud session (web, iOS, desktop app remote). `local` for Cowork and for a CLI or IDE session on the user's computer. |\n| `surface` | For example `Claude Code · cloud`, `Claude Code · CLI`, `Cowork`. |\n| `sessions` | An array with your session id. |\n| `repos` | `owner/repo` strings, if any. |\n| `artifacts` | `https://claude.ai/artifact/...` links, if any. |\n| `status` | `active`. Use `paused` or `done` only when the user says so. |\n| `color` | Leave it out. The board owner assigns the colour slots (1 to 8). |\n| `lastActivityAt` | Now. |\n\n4. If the project exists, `update` it: add your session id to `sessions` if absent, and set `lastActivityAt` to now.\n\nThe session id:\n- Claude Code cloud: call `get_session` (claude-code-remote MCP server) with no `session_id`. Use its `id`.\n- Cowork or a local CLI: use a stable id of the form `cowork-\u003cproject-slug>` or `cli-\u003cproject-slug>-\u003cYYYYMMDD>`. Reuse it for the whole session.\n\n## 2. Jobs: one row per task\n\nWrite `jobs/\u003cshort-id>` for each task that takes more than a few minutes. Reuse the id to update the row.\n\n| Field | Value |\n|---|---|\n| `project` | The registry `name`. |\n| `group` | A sub-heading for one batch of related jobs, for example `Review changes, 3 Oct`. |\n| `label` | What the job is, in one line. On a question to a person, write the question. |\n| `note` | The latest detail. Rewrite it as the job moves. |\n| `surface` | As in the registry. |\n| `status` | `queued`, `running`, `waiting` (needs a person), `done`, `failed` or `stopped`. |\n| `total`, `done`, `unit` | Progress, if the work has a count. |\n| `estSec` | The expected length in seconds. |\n| `tok`, `tokOut` | Tokens the job used so far, if you can measure them. |\n| `tokEst` | The expected total tokens at the end of the job. The board uses it for the projected tokens and cost of the project. |\n| `startedAt`, `updatedAt`, `finishedAt` | Timestamps. Refresh `updatedAt` on every report. |\n| `askedAt`, `answeredAt`, `answer` | For a question to a person. |\n| `link` | An https link to the PR, session or output. |\n\nClose each row when its work ends: `status: done` and `finishedAt`. A row left `running` goes stale after 30 minutes and misleads the board.\n\n## 3. Session usage and snapshots\n\n### Claude Code cloud session\n\n1. Call `get_session` with no `session_id`.\n2. From `external_metadata.usage`, compute `tok = input_tokens + cache_read_tokens + cache_write_tokens + output_tokens`.\n3. `set` or `update` `sessions/\u003csession id>`:\n\n```json\n{ \"title\": \"\u003csession title>\", \"project\": \"\u003cregistry name>\", \"where\": \"cloud\",\n  \"surface\": \"Claude Code · cloud\", \"status\": \"running\",\n  \"createdAt\": \"\u003ccreated_at>\", \"updatedAt\": \"\u003cnow>\",\n  \"tok\": 123456789, \"out\": 456789, \"usd\": 12.34, \"src\": \"ccr\" }\n```\n\n`usd` is `cost_usd`, rounded to cents. It is the cost at API list prices.\n\n4. Append one snapshot to `ticks/\u003csession id>~\u003cUTC day>`, for example `ticks/session_01ABC~2026-10-03`. Read it first. If it is absent, `set`:\n\n```json\n{ \"sid\": \"\u003csession id>\", \"project\": \"\u003cregistry name>\", \"day\": \"2026-10-03\",\n  \"pts\": [[1791069198, 123456789]], \"out\": 456789, \"usd\": 12.34, \"src\": \"ccr\", \"updatedAt\": \"\u003cnow>\" }\n```\n\nIf it exists, `update` with `pts` = the old array plus `[epoch seconds, tok]`, pinned with `if_version`. Skip the snapshot if `tok` did not change. Keep at most one snapshot per 15 minutes.\n\nAn hourly routine also writes the totals of every cloud session of the account to `syncs/\u003cepoch seconds>`, and the first reading of each UTC day to `daily/\u003cUTC day>`. The daily ledger keeps usage for good. Your own snapshots add finer detail between the hourly syncs. Do not run that sync yourself unless the user asks.\n\n### Cowork or a local CLI session\n\nThese sessions do not appear in `list_sessions`, so their report is the only record.\n\n- If the session can read its own usage (for example `/cost` in the CLI), write `sessions/\u003cyour id>` with `tok`, `out`, `usd` and `src: \"report\"`, and append snapshots as above.\n- If it cannot, write `sessions/\u003cyour id>` with what you can measure, for example subagent token counts, plus `partial: true` and a `note` that says what the figure counts. Do not estimate the rest.\n- Set `where: \"local\"` and `surface: \"Cowork\"` or `\"Claude Code · CLI\"`.\n\n## 4. The account limit\n\n`get_session` also returns `external_metadata.rate_limit_info`. Write it with `update` to the limit document that \"Who reports\" names. The board owner writes these fields to `meta/quota`. Every other person writes them as one object in the field `quota` of the limit document.\n\n| Field | From |\n|---|---|\n| `status` | `status` (`allowed`, `allowed_warning` or `rejected`). |\n| `type` | `rateLimitType`, for example `five_hour`. |\n| `resetsAt` | `resetsAt` (epoch seconds), as a UTC timestamp. |\n| `overage` | `isUsingOverage`. |\n| `updatedAt` | Now. |\n\nAdd `pct`, `limitTok`, `weekResetsAt` or `weekPct` only when the session reads them from a real source. Never estimate a cap.\n\n## 5. The board note\n\n`meta/board` has a `note` for the line under the summary. The board writes its own summary of the top token users and current activity. Only the board owner writes a `note`, for something that needs a decision, in max 2 sentences, with `updatedAt`.\n\n## 6. At the end\n\n1. Close every job row that you opened.\n2. Write the final session usage and one last snapshot.\n3. Set `lastActivityAt` on the project.\n4. If the project is complete and the user agrees, set the project `status` to `done`.\n\n## Checklist for each report\n\n- [ ] Every collection name starts with the prefix from \"Who reports\".\n- [ ] Project in the registry, your session id in `sessions`, `lastActivityAt` set.\n- [ ] Job rows current; finished rows closed.\n- [ ] Session usage written (cloud: measured; local: measured or `partial`).\n- [ ] Snapshot appended if `tok` changed and 15 minutes passed.\n- [ ] Account limit written if `get_session` returned a limit state.\n"
 }</script>
 <!-- assets:end -->
 
@@ -443,7 +451,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   const BOARD_URL = 'https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4';
   const DEFAULT_OWNER = 'david';       // the board owner's own collections; every other person is their user id
   const SYNC_LATE_SEC = 150 * 60;      // an hourly sync later than this counts as missed
-  let jobs = [], board = null, quota = null, sesDocs = [], projDocs = [], tickDocs = [], syncDocs = [], peopleDocs = [], db = null;
+  const DAILY_GAP_SEC = 26 * 3600;     // two ledger readings this close place the tokens between them in a day
+  const DAY_MS = 86400000;
+  let jobs = [], board = null, quota = null, sesDocs = [], projDocs = [], tickDocs = [], syncDocs = [], dailyDocs = [], peopleDocs = [], db = null;
   let quotaDoc = null;               // meta/quota as sessions wrote it
   let projSlot = new Map();          // project name -> colour slot 1-8, 0 for Other
   let live = null, liveAt = 0, liveErr = 'wait';
@@ -686,6 +696,15 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       }
     }
     if (live) for (const s of live) { const prev = m.get(s.id) || {}; m.set(s.id, { ...prev, ...s, project: prev.project || '' }); }
+    /* A session that Claude Code no longer lists keeps its last known totals: its tokens were spent. */
+    const lastSeen = new Map();
+    const see = (x, at, o) => { const k = String(x.id); const cur = lastSeen.get(k); if (!cur || at > cur.at) lastSeen.set(k, { x, at, o }); };
+    for (const d of syncDocs) if (Array.isArray(d.sessions)) for (const x of d.sessions) see(x, t(d.at), d.owner);
+    for (const d of dailyDocs) for (const x of dailyRows(d)) see(x, t(d.at), d.owner);
+    for (const [id, k] of lastSeen) {
+      if (m.has(id) || !num(k.x.tok)) continue;
+      m.set(id, { ...normSync(k.x), project: '', gone: true, status: 'removed', bucket: '', ownerDoc: '', ownerSync: k.o || '', live: false });
+    }
     const out = [...m.values()];
     for (const s of out) s.owner = s.ownerDoc || s.ownerSync || sidOwner.get(s.id) || DEFAULT_OWNER;
     return out;
@@ -707,13 +726,25 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
              tok: num(x.tok), out: num(x.out), usd: num(x.usd), repos: Array.isArray(x.repos) ? x.repos : [], where: 'cloud',
              surface: 'Claude Code · cloud', src: 'ccr', partial: false };
   }
-  /** Sync snapshots per session: [ms, tokens]. */
+  /** The sessions of a ledger entry, as objects like the rows of a sync document. */
+  function dailyRows(d) {
+    const cols = Array.isArray(d.cols) ? d.cols : [];
+    return (Array.isArray(d.rows) ? d.rows : []).map((r) => {
+      const o = {};
+      cols.forEach((c, i) => { o[c] = r[i]; });
+      if (o.repo) o.repos = [o.repo];
+      return o;
+    }).filter((o) => o.id);
+  }
+  /** Readings per session, from the hourly syncs and the daily ledger: [ms, tokens]. */
   function syncPoints() {
     const m = new Map();
+    const add = (x, at) => { if (!num(x.tok)) return; if (!m.has(x.id)) m.set(x.id, []); m.get(x.id).push([at, num(x.tok)]); };
     for (const d of syncDocs) {
       const at = t(d.at); if (!at || !Array.isArray(d.sessions)) continue;
-      for (const x of d.sessions) { if (!num(x.tok)) continue; if (!m.has(x.id)) m.set(x.id, []); m.get(x.id).push([at, num(x.tok)]); }
+      for (const x of d.sessions) add(x, at);
     }
+    for (const d of dailyDocs) { const at = t(d.at); if (at) for (const x of dailyRows(d)) add(x, at); }
     return m;
   }
   const repoTitle = (s) => { const r = Array.isArray(s.repos) && s.repos[0]; return typeof r === 'string' && r ? r.split('/').pop() : ''; };
@@ -743,14 +774,14 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     }
     return out;
   }
-  /** Tokens between a and b, split into measured and spread parts. */
-  function alloc(pts, a, b) {
+  /** Tokens between a and b, split into measured and unplaced parts. Readings further apart than maxGap place nothing. */
+  function alloc(pts, a, b, maxGap = FINE_SEC) {
     let fine = 0, coarse = 0;
     for (let i = 1; i < pts.length; i++) {
       const [t0, v0] = pts[i - 1], [t1, v1] = pts[i];
       if (t1 <= a || t0 >= b || t1 <= t0 || v1 <= v0) continue;
       const part = ((v1 - v0) * (Math.min(b, t1) - Math.max(a, t0))) / (t1 - t0);
-      if ((t1 - t0) / 1000 <= FINE_SEC) fine += part; else coarse += part;
+      if ((t1 - t0) / 1000 <= maxGap) fine += part; else coarse += part;
     }
     return { fine, coarse };
   }
@@ -760,15 +791,16 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   /** The latest time a session's tokens are known to have grown: the end of its last growing segment. */
   function lastGrowth(pts) { for (let i = pts.length - 1; i > 0; i--) if (pts[i][1] > pts[i - 1][1]) return pts[i][0]; return 0; }
   /** Time ranges in which each session of these people was read twice, at most FINE_SEC apart. Only there is a rate known. */
-  function observedRanges(owners) {
+  function observedRanges(owners, maxGap = FINE_SEC) {
     const by = new Map();
     const add = (o, at) => { if (!at) return; if (!by.has(o)) by.set(o, []); by.get(o).push(at); };
     for (const d of syncDocs) if (Array.isArray(d.sessions) && owners.includes(ownerOf(d))) add(ownerOf(d), t(d.at));
+    for (const d of dailyDocs) if (owners.includes(ownerOf(d))) add(ownerOf(d), t(d.at));
     if (live && liveAt && owners.includes(DEFAULT_OWNER)) add(DEFAULT_OWNER, liveAt);
     const out = [];
     for (const list of by.values()) {
       list.sort((x, y) => x - y);
-      for (let i = 1; i < list.length; i++) if (list[i] > list[i - 1] && (list[i] - list[i - 1]) / 1000 <= FINE_SEC) out.push([list[i - 1], list[i]]);
+      for (let i = 1; i < list.length; i++) if (list[i] > list[i - 1] && (list[i] - list[i - 1]) / 1000 <= maxGap) out.push([list[i - 1], list[i]]);
     }
     return out;
   }
@@ -1063,7 +1095,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   }
 
   /** Totals, velocity, projections, the chart and the table by project. Returns the figures the summary line uses. */
-  let srcWord = '';
+  let srcWord = '', srcWordLong = '';
   let covFn = () => 0;   // milliseconds of a time range that two readings at most 3 h apart cover
   function usagePanel(projects, sess, now, all, sessAll, ids) {
     const byId = new Map();
@@ -1078,6 +1110,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const ranges = observedRanges(owners);
     const lastObs = Math.max(0, live && liveAt && owners.includes(DEFAULT_OWNER) ? liveAt : 0, ...latestSyncs().filter((d) => owners.includes(ownerOf(d))).map((d) => t(d.at)));
     const T = lastObs || now;                                   // windows end at the newest reading, so each one is fully read
+    const rangesLong = observedRanges(owners, DAILY_GAP_SEC);
+    covLongFn = (a, b) => covered(rangesLong, a, b);
+    const winLong = (a, b) => pts.reduce((acc, p) => acc + alloc(p, a, b, DAILY_GAP_SEC).fine, 0);
     const unplacedTot = pts.reduce((a, p) => a + unplaced(p), 0);
     const tot = sess.reduce((a, s) => a + s.tok, 0);
     const usd = sess.reduce((a, s) => a + s.usd, 0);
@@ -1086,6 +1121,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const acctRate = tot > 0 && usd > 0 ? usd / tot : 0;            // dollars per token, whole account
     const w1 = win(T - H, T), w24 = win(T - 24 * H, T), w7 = win(T - 168 * H, T);
     const c1 = covered(ranges, T - H, T), c24 = covered(ranges, T - 24 * H, T), c7 = covered(ranges, T - 168 * H, T);
+    const w30 = winLong(T - 720 * H, T), c30 = covered(rangesLong, T - 720 * H, T);
     covFn = (a, b) => covered(ranges, a, b);
 
     /* per project: tokens in the last hour and the last 24 h */
@@ -1138,12 +1174,14 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       p.textContent = 'No session usage yet. Cloud sessions appear after the hourly sync or a live read; Cowork and CLI sessions appear when they report.';
       k.append(p);
     } else {
-      kpi('All tokens', tk(tot), `${sess.length} sessions${part ? ` · ${part} partial` : ''} · since each began`);
+      const goneN = sess.filter((s) => s.gone).length;
+      kpi('All tokens', tk(tot), `${sess.length} sessions${part ? ` · ${part} partial` : ''}${goneN ? ` · ${goneN} no longer listed` : ''} · since each began`);
       kpi('Cost, API prices', money(usd), `output ${tk(out)}`);
       const rate = (w, c) => (c > 0 ? `${tk(w / (c / H))}/h` : '');
       kpi('Last hour', c1 > 0 ? tk(w1) : '—', c1 > 0 ? `to ${clock(T)}${c1 < 0.9 * H ? ` · measured ${dur(c1 / 1000)}` : ''}` : 'no two readings in this hour yet');
       kpi('Last 24 h', c24 > 0 ? tk(w24) : '—', c24 > 0 ? `${money(w24 * acctRate)} · ${rate(w24, c24)} · measured ${dur(c24 / 1000)} of 24 h` : 'not measured yet');
       kpi('Last 7 days', c7 > 0 ? tk(w7) : '—', c7 > 0 ? `${money(w7 * acctRate)} · measured ${dur(c7 / 1000)} of 7 days` : 'not measured yet');
+      kpi('Last 30 days', c30 > 0 ? tk(w30) : '—', c30 > 0 ? `${money(w30 * acctRate)} · from the daily ledger and hourly readings · measured ${dur(c30 / 1000)} of 30 days` : 'the ledger has no two readings yet');
       kpi('At end of open jobs', openAll ? `${tk(tot + moreAll)}` : '—', openAll ? `+${tk(moreAll)} · ${money(usd + moreUsd)} est.` : 'no open jobs');
       if (unplacedTot > 0) {
         const n = document.createElement('p'); n.className = 'live-note'; n.style.gridColumn = '1 / -1'; n.style.margin = '0';
@@ -1155,14 +1193,25 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     /* Tokens per hour and the limit windows. Session snapshots are the source when
        any exist; otherwise the job rows that carry tokens. Each span is spread evenly
        and carries its project, so the bars stack by project. */
-    let sp = [];
+    let sp = [], spL = [];
     pts.forEach((p, si) => {
       const key = nameOf(sess[si]);
-      for (let i = 1; i < p.length; i++) if (p[i][1] > p[i - 1][1] && (p[i][0] - p[i - 1][0]) / 1000 <= FINE_SEC) sp.push({ a: p[i - 1][0], b: p[i][0], tok: p[i][1] - p[i - 1][1], coarse: false, key });
+      for (let i = 1; i < p.length; i++) {
+        const [t0, v0] = p[i - 1], [t1, v1] = p[i];
+        if (v1 <= v0) continue;
+        const gap = (t1 - t0) / 1000;
+        if (gap <= FINE_SEC) { const x = { a: t0, b: t1, tok: v1 - v0, coarse: false, key }; sp.push(x); spL.push(x); }
+        else if (gap <= DAILY_GAP_SEC) {
+          /* a ledger interval: the tokens belong to the UTC day of the earlier reading, whole */
+          const a0 = Math.floor(t0 / DAY_MS) * DAY_MS;
+          spL.push({ a: a0, b: a0 + DAY_MS, tok: v1 - v0, coarse: false, key });
+        }
+      }
     });
     srcWord = 'Measured: the tokens between two readings at most 3 h apart, spread evenly over the time between them.';
-    if (!sp.length) { sp = spans(all); srcWord = sp.length ? 'Job rows only, each job spread evenly across its own run.' : ''; }
-    density(sp, now);
+    srcWordLong = 'Measured: the tokens between two readings at most 26 h apart. Hourly readings keep their own time. The daily ledger places a day\'s tokens in the UTC day of the earlier reading.';
+    if (!sp.length && !spL.length) { sp = spans(all); spL = sp; srcWord = sp.length ? 'Job rows only, each job spread evenly across its own run.' : ''; srcWordLong = srcWord; }
+    density(sp, spL, now);
 
     /* table by project: every project, inactive ones dimmed, whatever the filters below say */
     const tbl = $('ptable');
@@ -1387,8 +1436,11 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
      the same spans, so the chart and the windows can never disagree. */
   const HOUR = 3600000;
   const STEPS = [1, 2, 3, 6, 12, 24, 48, 72];
-  const RANGES = [['12', '12 h', 12], ['48', '48 h', 48], ['168', '7 d', 168], ['all', 'All', 0]];
+  const RANGES = [['12', '12 h', 12], ['48', '48 h', 48], ['168', '7 d', 168], ['720', '30 d', 720], ['2160', '90 d', 2160], ['all', 'All', 0]];
+  const isLong = (v) => v === 'all' || +v > 168;     // longer ranges read the daily ledger, in whole days
   let dsig = '', dbars = [], dstep = 1, don = -1, dRange = '48';
+  let covLongFn = () => 0;                           // milliseconds of a range that readings at most 26 h apart cover
+  let perDay = false;                                // the plot shows tokens per day instead of per hour
 
   /** Each reported job as a span of time carrying its tokens. A job with no
       start puts its tokens at its last report, so none are spread across time
@@ -1415,9 +1467,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     return sum;
   }
   /** Equal buckets over [from, to), sized so the bars stay readable. */
-  function bins(sp, from, to, maxBars) {
+  function bins(sp, from, to, maxBars, minStep = 1) {
     const hrs = (to - from) / HOUR;
-    const step = STEPS.find((h) => hrs / h <= maxBars) || Math.ceil(hrs / maxBars);
+    const step = STEPS.find((h) => h >= minStep && hrs / h <= maxBars) || Math.max(minStep, Math.ceil(hrs / maxBars));
     const ms = step * HOUR;
     const first = Math.floor(from / ms) * ms;
     const groups = new Map();
@@ -1429,7 +1481,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       const parts = [];
       for (const k of keys) { const v = inRange(groups.get(k), t0, t0 + ms); if (v > 0) parts.push({ key: k, tok: v, slot: projSlot.get(k) || 0 }); }
       const tok = parts.reduce((a, x) => a + x.tok, 0);
-      bars.push({ t0, t1: t0 + ms, tok, rate: tok / step, parts });
+      bars.push({ t0, t1: t0 + ms, tok, rate: tok / (minStep >= 24 ? step / 24 : step), parts });
     }
     return { step, bars };
   }
@@ -1451,17 +1503,29 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
   }
 
-  function density(sp, now) {
+  function density(spH, spL, now) {
     const host = $('density');
-    if (!sp.length) { host.hidden = true; return; }
+    const long = isLong(dRange);
+    const sp = long ? spL : spH;               // hourly readings for the short ranges, the daily ledger for the long ones
+    if (!spH.length && !spL.length) { host.hidden = true; return; }
     host.hidden = false;
+    perDay = long;
+    chips('density-range', RANGES.map(([v, t2]) => [v, t2]), dRange,
+      (v) => { dRange = v; keep('cad.range', v); dsig = ''; render(); });
+    if (!sp.length) {
+      /* nothing measured at this resolution: keep the range buttons so a longer range is one tap away */
+      $('density-plot').textContent = ''; $('density-legend').textContent = ''; $('density-cap').textContent = ''; $('density-table').textContent = '';
+      $('density-sub').textContent = long ? 'The ledger has no two readings at most 26 h apart yet.' : 'No tokens measured in the hourly readings. Pick a longer range to read the daily ledger.';
+      dsig = '';
+      windows(spH, now, now, now);
+      return;
+    }
     const first = Math.min(...sp.map((x) => x.a));
     const to = Math.max(now, ...sp.map((x) => x.b));
+    const firstH = spH.length ? Math.min(...spH.map((x) => x.a)) : now;
     /* The work is bunched, so the default view is the last two days and the whole
        span is one tap away. The two window tiles never follow this: a 5-hour and
        a 7-day window are what they are. */
-    chips('density-range', RANGES.map(([v, t2]) => [v, t2]), dRange,
-      (v) => { dRange = v; keep('cad.range', v); dsig = ''; render(); });
     const span = RANGES.find(([v]) => v === dRange);
     const from = span && span[2] ? Math.max(first, to - span[2] * HOUR) : first;
     const plot = $('density-plot');
@@ -1474,25 +1538,26 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const sig = JSON.stringify([sp.map((x) => [x.a, x.b, x.tok, x.key]), [...projSlot], Math.round(w / 8), dRange, reset5, Math.floor(to / HOUR)]);
     if (sig !== dsig) {
       dsig = sig;
-      const b = bins(sp, from, to, maxBars);
+      const b = bins(sp, from, to, maxBars, long ? 24 : 1);
       dstep = b.step; dbars = b.bars;
       drawPlot(plot, dbars, dstep, w);
     }
-    windows(sp, now, first, to);
+    windows(spH, now, firstH, to);
 
     const total = inRange(sp, from, to);
     const hrs = (to - from) / HOUR;
     const peak = dbars.reduce((a, x) => Math.max(a, x.rate), 0);
     const sub = $('density-sub');
     sub.textContent = '';
-    const covMs = covFn(from, to), covH = covMs / HOUR;
-    sub.append(srcWord, ' ');
+    const covMs = (long ? covLongFn : covFn)(from, to), covH = covMs / HOUR;
+    const U = long ? '/day' : '/h';
+    sub.append(long ? srcWordLong : srcWord, ' ');
     const b1 = document.createElement('b'); b1.textContent = tk(total);
-    const b2 = document.createElement('b'); b2.textContent = tk(covH > 0 ? total / covH : 0);
+    const b2 = document.createElement('b'); b2.textContent = tk(covH > 0 ? (total / covH) * (long ? 24 : 1) : 0);
     const b3 = document.createElement('b'); b3.textContent = tk(peak);
     sub.append(b1, ` measured in the ${dur(hrs * 3600)} range, which readings cover for ${dur(covMs / 1000)}`);
-    if (covH > 0) sub.append(' — mean ', b2, '/h');
-    sub.append(', peak ', b3, '/h in a ', dstep === 1 ? '1-hour' : `${dstep}-hour`, ' bucket.');
+    if (covH > 0) sub.append(' — mean ', b2, U);
+    sub.append(', peak ', b3, U, ' in a ', dstep === 1 ? '1-hour' : `${dstep}-hour`, ' bucket.');
   }
 
   function drawPlot(plot, bars, step, w) {
@@ -1501,7 +1566,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const pw = w - L - R, ph = H - T - AX;
     const top = nice(bars.reduce((a, x) => Math.max(a, x.rate), 0));
     const svg = svgEl('svg', { viewBox: `0 0 ${w} ${H}`, role: 'img',
-      'aria-label': `Reported tokens per hour, ${step}-hour buckets, peak ${tk(top)} per hour` });
+      'aria-label': `Measured tokens per ${perDay ? 'day' : 'hour'}, ${step}-hour buckets, peak ${tk(top)} per ${perDay ? 'day' : 'hour'}` });
     /* hairline grid, solid, one shade off the surface */
     for (let i = 0; i <= 2; i++) {
       const v = (top * i) / 2, y = T + ph - (ph * i) / 2;
@@ -1533,7 +1598,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       const bx = L + slot * i + pad;
       let y0 = T + ph;
       b2.parts.forEach((pt, j) => {
-        const h = (ph * (pt.tok / step)) / top;
+        const h = (ph * (pt.tok / (perDay ? step / 24 : step))) / top;
         if (h <= 0) return;
         const last = j === b2.parts.length - 1;
         const d = last ? barPath(bx, y0 - Math.max(1.5, h), bw, Math.max(1.5, h), 4) : `M${bx},${y0}V${y0 - h}H${bx + bw}V${y0}Z`;
@@ -1551,7 +1616,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       const near = cx > L + pw - 28 ? 'end' : cx < L + 28 ? 'start' : 'middle';
       const lab = svgEl('text', { class: 'peak', x: near === 'end' ? L + pw : near === 'start' ? L : cx,
         y: T + ph - h - 4, 'text-anchor': near });
-      lab.textContent = `${tk(bars[peakI].rate)}/h`;
+      lab.textContent = `${tk(bars[peakI].rate)}${perDay ? '/day' : '/h'}`;
       svg.append(lab);
     }
     svg.append(svgEl('line', { class: 'axis', x1: L, y1: T, x2: L, y2: T + ph }));
@@ -1560,7 +1625,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     for (const i of [...new Set(ticks)]) {
       const lab = svgEl('text', { class: 'xlab', x: L + (pw * (i + 0.5)) / bars.length,
         y: T + ph + 13, 'text-anchor': i === 0 ? 'start' : i === bars.length - 1 ? 'end' : 'middle' });
-      lab.textContent = `${day(bars[i].t0)} ${clock(bars[i].t0)}`;
+      lab.textContent = perDay ? day(bars[i].t0) : `${day(bars[i].t0)} ${clock(bars[i].t0)}`;
       svg.append(lab);
     }
     const lg = $('density-legend');
@@ -1574,7 +1639,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       it.append(sw, k2);
       lg.append(it);
     }
-    $('density-cap').textContent = `tokens per hour · ${step === 1 ? '1-hour' : `${step}-hour`} buckets`
+    $('density-cap').textContent = `tokens per ${perDay ? 'day' : 'hour'} · ${step === 1 ? '1-hour' : `${step}-hour`} buckets`
       + (shaded ? ' · shaded: the current 5-hour window' : '') + ' · times in your clock';
     plot.append(svg);
 
@@ -1593,17 +1658,17 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       const b2 = bars[i];
       tip.textContent = '';
       const s1 = document.createElement('div');
-      s1.append(`${day(b2.t0)} ${clock(b2.t0)}–${clock(b2.t1)}`);
+      s1.append(perDay ? (step === 24 ? day(b2.t0) : `${day(b2.t0)} – ${day(b2.t1 - 1)}`) : `${day(b2.t0)} ${clock(b2.t0)}–${clock(b2.t1)}`);
       const s2 = document.createElement('div');
-      const n1 = document.createElement('b'); n1.textContent = `${tk(b2.rate)}/h`;
+      const n1 = document.createElement('b'); n1.textContent = `${tk(b2.rate)}${perDay ? '/day' : '/h'}`;
       const n2 = document.createElement('b'); n2.textContent = tk(b2.tok);
       s2.append(n1, ' · ', n2, ' in the bucket');
       tip.append(s1, s2);
       for (const pt of [...b2.parts].sort((a, c) => c.tok - a.tok).slice(0, 5)) {
         const r2 = document.createElement('div'); r2.className = 'tr';
         const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = `var(--s${pt.slot || '-other'})`;
-        const nb = document.createElement('b'); nb.textContent = tk(pt.tok / step);
-        r2.append(sw, `${pt.key} `, nb, '/h');
+        const nb = document.createElement('b'); nb.textContent = tk(pt.tok / (perDay ? step / 24 : step));
+        r2.append(sw, `${pt.key} `, nb, perDay ? '/day' : '/h');
         tip.append(r2);
       }
       tip.hidden = false;
@@ -1620,12 +1685,12 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     tb.textContent = '';
     const table = document.createElement('table');
     const hr = document.createElement('tr');
-    for (const h2 of ['Bucket', 'Tokens per hour', 'Tokens', 'Largest project']) { const th = document.createElement('th'); th.textContent = h2; hr.append(th); }
+    for (const h2 of ['Bucket', perDay ? 'Tokens per day' : 'Tokens per hour', 'Tokens', 'Largest project']) { const th = document.createElement('th'); th.textContent = h2; hr.append(th); }
     table.append(hr);
     for (const b2 of bars) {
       if (b2.tok <= 0) continue;
       const tr = document.createElement('tr');
-      const c0 = document.createElement('td'); c0.textContent = `${day(b2.t0)} ${clock(b2.t0)}`;
+      const c0 = document.createElement('td'); c0.textContent = perDay ? day(b2.t0) : `${day(b2.t0)} ${clock(b2.t0)}`;
       const c1 = document.createElement('td'); c1.className = 'n'; c1.textContent = n0(b2.rate);
       const c2 = document.createElement('td'); c2.className = 'n'; c2.textContent = n0(b2.tok);
       const big = [...b2.parts].sort((a, c) => c.tok - a.tok)[0];
@@ -1740,7 +1805,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       if (s.status !== 'running' && SESSION_TAG[s.bucket]) { const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = SESSION_TAG[s.bucket]; st.append(tg); }
       const sn = document.createElement('span'); sn.className = 'sn'; sn.textContent = s.tok ? `${tk(s.tok)}${s.usd ? ` · ${money(s.usd)}` : ''}` : '—';
       const sub = document.createElement('span'); sub.className = 'sub';
-      const word = s.status === 'running' ? 'Running now' : s.status === 'archived' ? 'Archived' : s.status === 'idle' ? 'Idle' : (s.status || 'Idle');
+      const word = s.gone ? 'No longer listed by Claude Code' : s.status === 'running' ? 'Running now' : s.status === 'archived' ? 'Archived' : s.status === 'idle' ? 'Idle' : (s.status || 'Idle');
       sub.textContent = `${word}${s.updatedAt ? ` · session updated ${ago(s.updatedAt)}` : ''}${s.where === 'local' ? ' · reported by the session' : ''}`;
       r.append(dot, st, sn, sub);
       list.append(r);
@@ -1981,15 +2046,45 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     if (!planes.has(owner)) planes.set(owner, {});
     planes.get(owner)[kind] = docs;
     merge();
+    if (kind === 'syncs' || kind === 'daily') backfillDaily(owner);
     render();
+  }
+  /* ---- The daily ledger ----
+     One small entry per UTC day: the totals of every session at the day's first reading. It keeps usage after a
+     session leaves the listing and after the hourly readings move out of the page's 8-day window. The sync writes it.
+     A completed day that has hourly readings but no entry gets one here, from its first reading. */
+  const DAILY_COLS = ['id', 'title', 'status', 'tok', 'out', 'usd', 'createdAt', 'repo'];
+  const dailyFromSync = (d) => ({ day: String(d.at).slice(0, 10), at: d.at, src: d.src || 'routine', cols: DAILY_COLS,
+    rows: d.sessions.map((r) => [r.id, r.title, r.status, num(r.tok), num(r.out), Math.round(num(r.usd) * 100) / 100, r.createdAt || null, (r.repos || [])[0] || '']) });
+  const filled = new Set();
+  function backfillDaily(owner) {
+    const pl = planes.get(owner);
+    if (!db || !pl || !pl.syncs || !pl.daily) return;                   // wait for both snapshots
+    const have = new Set(pl.daily.map((d) => d.id));
+    const today = dayKey(Date.now());
+    const first = new Map();
+    for (const d of pl.syncs) {
+      if (!Array.isArray(d.sessions) || !d.sessions.length) continue;
+      const day = String(d.at || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day >= today) continue;   // today is still open
+      const cur = first.get(day);
+      if (!cur || t(d.at) < t(cur.at)) first.set(day, d);
+    }
+    for (const [day, d] of first) {
+      const key = `${owner}~${day}`;
+      if (have.has(day) || filled.has(key)) continue;
+      filled.add(key);
+      const ref = owner === DEFAULT_OWNER ? db.doc(`daily/${day}`) : db.doc(`data/users/${owner}/profile/daily/${day}`);
+      ref.set(dailyFromSync(d)).catch(() => filled.delete(key));         // a view that cannot write leaves it to the next one
+    }
   }
   /** Rebuild the arrays the page reads. A document's owner is the plane it came from, whatever the document says. */
   function merge() {
     const stamp = (docs, o) => (docs || []).map((d) => ({ ...d, owner: o }));
-    jobs = []; sesDocs = []; projDocs = []; tickDocs = []; syncDocs = [];
+    jobs = []; sesDocs = []; projDocs = []; tickDocs = []; syncDocs = []; dailyDocs = [];
     for (const [o, pl] of planes) {
       jobs.push(...stamp(pl.jobs, o)); sesDocs.push(...stamp(pl.sessions, o)); projDocs.push(...stamp(pl.projects, o));
-      tickDocs.push(...stamp(pl.ticks, o)); syncDocs.push(...stamp(pl.syncs, o));
+      tickDocs.push(...stamp(pl.ticks, o)); syncDocs.push(...stamp(pl.syncs, o)); dailyDocs.push(...stamp(pl.daily, o));
     }
     applyRegistry();
   }
@@ -2003,6 +2098,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     on('projects', ref('projects'));
     on('syncs', ref('syncs').where('at', '>=', iso(Date.now() - 8 * 86400000)));
     on('ticks', ref('ticks').where('day', '>=', dayKey(Date.now() - 15 * 86400000)));
+    on('daily', ref('daily'));      // the ledger: small, one entry per UTC day, kept whole
   }
   /** One person's private subtree: data/users/<id>/profile and the collections below it. */
   function watchPerson(uid) {
@@ -2033,6 +2129,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       viewerUid = me.id || ''; viewerName = me.name || '';
     }
     canEdit = isOwnerView && !!userApi;
+    $('export-row').hidden = !dl;
     if (isOwnerView) {
       watchPlane(DEFAULT_OWNER, (n) => db.collection(n), () => { $('headline').textContent = 'The board stopped updating. Reload to reconnect.'; });
       db.doc('meta/board').onSnapshot((snap) => { board = snap.exists ? snap.data() : null; render(); }, () => {});
@@ -2062,7 +2159,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   /** The setup text. It is the same for everyone but the name: the board resolves `me` to the person who writes. */
   function buildInstructions(name) {
     const A = assetText();
-    const sync = fillIn(A.sync, { BOARD: BOARD_URL, COLLECTION: 'data/users/me/profile/syncs', SCRIPT: String(A.script || '').replace(/\s+$/, '') });
+    const sync = fillIn(A.sync, { BOARD: BOARD_URL, COLLECTION: 'data/users/me/profile/syncs', DAILY: 'data/users/me/profile/daily', SCRIPT: String(A.script || '').replace(/\s+$/, '') });
     return `${fillIn(A.invite, { NAME: name, BOARD: BOARD_URL, BOARD_OWNER: ownerName(DEFAULT_OWNER), SYNC: sync }).trim()}\n`;
   }
   /** The skill file: its who block names the person and the private path that the person writes to. */
@@ -2151,6 +2248,64 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       msg.className = 'msg bad'; msg.textContent = e && e.code === 'declined' ? 'Saving was declined.' : 'This view could not save the file.';
     }
   });
+
+  /* ---------------------------------------------------------------- *
+   * CSV export: the ledger and the hourly readings, as the board     *
+   * holds them. A person exports their own, the owner exports all.   *
+   * ---------------------------------------------------------------- */
+  const csvCell = (v) => {
+    let x = v === null || v === undefined ? '' : String(v);
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(x)) x = `'${x}`;      // a text cell never starts a spreadsheet formula
+    return /[",\r\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
+  };
+  const csvText = (rows) => `﻿${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
+  const byText = (...cols) => (a, b) => { for (const c of cols) { const d = String(a[c]).localeCompare(String(b[c])); if (d) return d; } return 0; };
+  /** One row per session per ledger day, with the growth since that session's previous reading. */
+  function ledgerRows() {
+    const head = ['day', 'person', 'session_id', 'title', 'repo', 'status', 'tokens_total', 'tokens_since_previous_reading', 'output_tokens_total', 'cost_usd_total', 'reading_utc'];
+    const by = new Map();
+    for (const d of dailyDocs) for (const x of dailyRows(d)) { const k = `${d.owner}\u0001${x.id}`; if (!by.has(k)) by.set(k, []); by.get(k).push({ d, x }); }
+    const out = [];
+    for (const list of by.values()) {
+      list.sort((a, b) => t(a.d.at) - t(b.d.at));
+      list.forEach(({ d, x }, i) => out.push([d.day || d.id, ownerName(d.owner), x.id, x.title, x.repo || '', x.status,
+        num(x.tok), i ? Math.max(0, num(x.tok) - num(list[i - 1].x.tok)) : '', num(x.out), num(x.usd).toFixed(2), d.at]));
+    }
+    return [head, ...out.sort(byText(0, 1, 3))];
+  }
+  /** One row per session per hourly reading. This reads the newest 1000 readings of each person, not only the 8 days on screen. */
+  async function hourlyRows() {
+    const head = ['reading_utc', 'person', 'session_id', 'title', 'repo', 'status', 'tokens_total', 'tokens_since_previous_reading', 'output_tokens_total', 'cost_usd_total'];
+    const sources = isOwnerView
+      ? [[DEFAULT_OWNER, 'syncs'], ...peopleDocs.filter((p) => p.id !== DEFAULT_OWNER).map((p) => [p.id, `data/users/${p.id}/profile/syncs`])]
+      : [[viewerUid, `data/users/${viewerUid}/profile/syncs`]];
+    const out = [];
+    for (const [o, path] of sources) {
+      const snap = await db.collection(path).orderBy('at', 'desc').limit(1000).get();
+      const docs = snap.docs.map((d) => d.data()).filter((d) => d && Array.isArray(d.sessions)).sort((a, b) => t(a.at) - t(b.at));
+      const prev = new Map();
+      for (const d of docs) for (const x of d.sessions) {
+        const p0 = prev.get(x.id);
+        out.push([d.at, ownerName(o), x.id, x.title, (x.repos || [])[0] || '', x.status, num(x.tok), p0 === undefined ? '' : Math.max(0, num(x.tok) - p0), num(x.out), num(x.usd).toFixed(2)]);
+        prev.set(x.id, num(x.tok));
+      }
+    }
+    return [head, ...out.sort(byText(0, 1, 3))];
+  }
+  async function exportCsv(kind) {
+    const msg = $('exp-msg');
+    msg.textContent = 'Preparing the file.';
+    try {
+      const rows = kind === 'daily' ? ledgerRows() : await hourlyRows();
+      if (rows.length < 2) { msg.textContent = 'Nothing to export yet.'; return; }
+      await dl.save({ filename: `claude-usage-${kind}.csv`, data: csvText(rows) });
+      msg.textContent = `Saved ${n0(rows.length - 1)} rows.`;
+    } catch (e) {
+      msg.textContent = e && e.code === 'declined' ? 'Saving was declined.' : 'This view could not save the file.';
+    }
+  }
+  $('exp-daily').addEventListener('click', () => exportCsv('daily'));
+  $('exp-hourly').addEventListener('click', () => exportCsv('hourly'));
 
   (async () => {
     await ready;

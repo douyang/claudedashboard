@@ -105,7 +105,7 @@ Close each row when its work ends: `status: done` and `finishedAt`. A row left `
 
 If it exists, `update` with `pts` = the old array plus `[epoch seconds, tok]`, pinned with `if_version`. Skip the snapshot if `tok` did not change. Keep at most one snapshot per 15 minutes.
 
-An hourly routine also writes the totals of every cloud session of the account to `syncs/<epoch seconds>`. Your own snapshots add finer detail between the hourly syncs. Do not run that sync yourself unless the user asks.
+An hourly routine also writes the totals of every cloud session of the account to `syncs/<epoch seconds>`, and the first reading of each UTC day to `daily/<UTC day>`. The daily ledger keeps usage for good. Your own snapshots add finer detail between the hourly syncs. Do not run that sync yourself unless the user asks.
 
 ### Cowork or a local CLI session
 

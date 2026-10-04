@@ -72,7 +72,67 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
     const out = execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile('${f}');assert z.testzip() is None;t=z.read('claude-dashboard/SKILL.md').decode();print(z.namelist()[0]);print('Person: Sam' in t)`]).toString().trim().split('\n');
     check('invite: the zip is valid, holds the skill, and names the person', out[0] === 'claude-dashboard/SKILL.md' && out[1] === 'True', out.join(' | '));
   }
+
+  /* ---- history: the ledger, sessions that left the listing, long ranges, CSV ---- */
+  await p.click('button[data-key="f-person:all"]');
+  await p.waitForTimeout(250);
+  const writes = await p.evaluate(() => window.__writes);
+  const day3 = writes.find((x) => x[1] === 'daily/2026-10-03');
+  check('history: the owner page fills a completed day that has no ledger entry', !!day3 && day3[0] === 'set' && day3[2].at === '2026-10-03T22:26:00Z' && day3[2].rows.length === 4, JSON.stringify(day3 && [day3[1], day3[2].at, day3[2].rows.length]));
+  check('history: it fills the same day in a person\'s subtree, and not the open day', writes.some((x) => x[1] === 'data/users/u_drew/profile/daily/2026-10-03') && !writes.some((x) => /daily\/2026-10-04$/.test(x[1])));
+  if (day3) {
+    const f = path.join(os.tmpdir(), 'check-day3.json');
+    fs.writeFileSync(f, JSON.stringify(day3[2]));
+    const out = execFileSync('python3', [new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname, '--from-sync', path.join(DB, 'syncs', '1791066360.json'), path.join(os.tmpdir(), 'check-day3-py.json')]);
+    const py = JSON.parse(fs.readFileSync(path.join(os.tmpdir(), 'check-day3-py.json'), 'utf8'));
+    check('history: the page and scripts/ccr_sync_doc.py make the same ledger entry', JSON.stringify(py) === JSON.stringify(day3[2]) || (JSON.stringify(Object.entries(py).sort()) === JSON.stringify(Object.entries(day3[2]).sort())), String(out));
+  }
+  const kp2 = await p.evaluate(() => document.getElementById('kpis').innerText);
+  check('history: All tokens counts the session that Claude Code no longer lists', /no longer listed/.test(kp2), kp2.split('\n').slice(0, 3).join(' | '));
+  check('history: Last 30 days comes from the ledger', /LAST 30 DAYS\n[\d.]+ [MB]/.test(kp2), kp2);
+  const rows2 = await rows(p);
+  check('history: the project of the removed session stays in the table with its tokens', rows2['retired-experiment'] && rows2['retired-experiment'][col('TOKENS')] === '405 M', JSON.stringify(rows2['retired-experiment']));
+  for (const range of ['720', 'all']) {
+    await p.click(`button[data-key="density-range:${range}"]`);
+    await p.waitForTimeout(250);
+    const g = await p.evaluate(() => ({ cap: document.getElementById('density-cap').innerText, sub: document.getElementById('density-sub').innerText, segs: document.querySelectorAll('#density-plot .seg').length }));
+    check(`history: the ${range === 'all' ? 'All' : '30 d'} range shows tokens per day from the ledger`, /tokens per day/.test(g.cap) && g.segs > 0 && /ledger/.test(g.sub), JSON.stringify(g).slice(0, 220));
+    const tall = await p.evaluate(() => { const svg = document.querySelector('#density-plot svg'); const h = svg.viewBox.baseVal.height; const st = {}; for (const x of svg.querySelectorAll('.seg')) st[x.dataset.i] = (st[x.dataset.i] || 0) + x.getBBox().height; return Math.max(0, ...Object.values(st)) / h; });
+    check(`history: the tallest ${range === 'all' ? 'All' : '30 d'} bar reaches into the plot, not a sliver at its base`, tall > 0.4, tall.toFixed(2));
+  }
+  await p.click('button[data-key="density-range:48"]');
+  await p.click('#exp-daily');
+  await p.waitForTimeout(400);
+  await p.click('#exp-hourly');
+  await p.waitForTimeout(400);
+  const files = await p.evaluate(() => window.__saved.filter((f) => /^claude-usage-/.test(f.filename)).map((f) => [f.filename, f.b64]));
+  const csv = (name) => { const f = files.find((x) => x[0] === name); return f ? Buffer.from(f[1], 'base64').toString('utf8').replace(/^﻿/, '') : ''; };
+  const daily = csv('claude-usage-daily.csv'), hourly = csv('claude-usage-hourly.csv');
+  const dlines = daily.trim().split('\r\n');
+  check('csv: the daily file has the header and one row per session per ledger day', dlines[0] === 'day,person,session_id,title,repo,status,tokens_total,tokens_since_previous_reading,output_tokens_total,cost_usd_total,reading_utc' && dlines.length === 1 + 5 + 5 + 6 + 4 + 2, `${dlines.length} lines`);
+  check('csv: a title with a comma and a quote is quoted', daily.includes('"Weekly ""export"", v2"'));
+  check('csv: a title that starts with = cannot start a spreadsheet formula', daily.includes('"\'=SUM(1,1) test"') && !/(^|,)=SUM/m.test(daily));
+  check('csv: growth is blank at a first reading and exact after', /2026-09-30,David C,session_01HARBOR1,[^\n]*,8600000000,,/.test(daily) && /2026-10-01,David C,session_01HARBOR1,[^\n]*,8800000000,200000000,/.test(daily));
+  const hlines = hourly.trim().split('\r\n');
+  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 12 + 6 + 1, `${hlines.length} lines`);
+  check('csv: the hourly file names each person', /,Drew,/.test(hourly) && /,Priya,/.test(hourly) && /,David C,/.test(hourly));
   await s.close();
+}
+
+/* ---- only the ledger: the range buttons stay, and 30 d reads the ledger ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-ledger-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  for (const d of ['syncs', 'data__users__u_drew__profile__syncs', 'data__users__u_priya__profile__syncs']) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const g = await s.page.evaluate(() => ({ hidden: document.getElementById('density').hidden, buttons: document.querySelectorAll('#density-range button').length, sub: document.getElementById('density-sub').innerText }));
+  check('ledger only: the range buttons stay when the hourly readings measured nothing', !g.hidden && g.buttons === 6 && /Pick a longer range/.test(g.sub), JSON.stringify(g).slice(0, 200));
+  await s.page.click('button[data-key="density-range:720"]');
+  await s.page.waitForTimeout(250);
+  const segs = await s.page.evaluate(() => document.querySelectorAll('#density-plot .seg').length);
+  check('ledger only: 30 d draws the days from the ledger', segs > 0, String(segs));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 /* ---- a person's view ---- */
@@ -84,10 +144,17 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('person: sees their own projects', /clinic.scheduler/i.test(body) && /faq.site/i.test(body));
   check('person: sees nothing of the owner or of another person', !/Atlas|Harbor|Quarterly|Priya|David C/.test(body.replace(/David C activity board/g, '')), body.match(/Atlas|Harbor|Quarterly|Priya/)?.[0]);
   const w = await p.evaluate(() => window.__writes.map((x) => `${x[0]} ${x[1]}`));
-  check('person: the only write is their own join entry', w.length === 1 && w[0] === 'update join/u_drew', w.join(' | '));
+  check('person: every write is in their own subtree or is their own join entry', w.length > 0 && w.every((x) => /^(update join\/u_drew|set data\/users\/u_drew\/)/.test(x)), w.join(' | '));
+  check('person: the page filled the ledger day that had hourly readings and no entry', w.includes('set data/users/u_drew/profile/daily/2026-10-03'), w.join(' | '));
   const ui = await p.evaluate(() => ({ people: !document.getElementById('people-wrap').hidden, setup: !!document.querySelector('button[data-key="f-person:add"]'), live: document.getElementById('livenote').innerText }));
   check('person: no people table, and a way to set up their own Claude', !ui.people && ui.setup, JSON.stringify(ui));
   check('person: no live read on the owner connector', !/live read/.test(ui.live), ui.live);
+  await p.click('#exp-daily');
+  await p.waitForTimeout(400);
+  await p.click('#exp-hourly');
+  await p.waitForTimeout(400);
+  const texts = await p.evaluate(() => window.__saved.filter((f) => /^claude-usage-/.test(f.filename)).map((f) => new TextDecoder().decode(Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0)))));
+  check('person: both exports hold only their own sessions', texts.length === 2 && texts.every((t0) => /session_01DREW/.test(t0) && !/HARBOR|ATLAS|MODEL|PRIYA|RETIRE/.test(t0)), texts.map((t0) => t0.length).join(','));
   await s.close();
 }
 

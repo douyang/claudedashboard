@@ -96,7 +96,7 @@ function stub({ docs, viewer, uid, name, live, liveData }) {
   window.__saved = [];
   const downloads = {
     save: async ({ filename, data }) => {
-      const buf = new Uint8Array(data instanceof Blob ? await data.arrayBuffer() : data);
+      const buf = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data instanceof Blob ? await data.arrayBuffer() : data);
       let s = ''; for (const b of buf) s += String.fromCharCode(b);
       window.__saved.push({ filename, size: buf.length, b64: btoa(s) });
       return { status: 'saved' };

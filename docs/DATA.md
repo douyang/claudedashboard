@@ -43,6 +43,17 @@ One document per hourly sync. A scheduled routine calls `list_sessions`, runs `s
 
 `bucket` is Claude Code's own state: `working`, `blocked` (waits on a person), `review_ready`, `completed` or `failed`.
 
+## `daily/<UTC day>`
+
+The ledger. One entry per UTC day, written by the sync at the day's first reading and never replaced: the board keeps the first one. Fields: `day`, `at`, `src`, `cols` (id, title, status, tok, out, usd, createdAt, repo), and `rows`, one array per session with the totals at that reading. An entry is about 4 KB for 22 sessions. The page reads every entry, so the ledger never leaves the window.
+
+A completed day that has hourly readings but no entry gets one from the page, made from the day's first reading. `scripts/ccr_sync_doc.py --from-sync SYNC.json DAILY.json` makes the same entry.
+
+The ledger keeps three things that the hourly readings cannot:
+- Usage per day for the 30 d, 90 d and All ranges, after the hourly readings leave the 8-day window.
+- A session that Claude Code no longer lists. The board counts its last known totals and marks it "No longer listed".
+- A durable copy for the CSV export.
+
 ## `ticks/<session id>~<UTC day>`
 
 Usage snapshots. `pts` is an array of `[epoch seconds, cumulative tokens]`. One document per session per day keeps the database far below its 25,000-document limit.
@@ -64,6 +75,8 @@ Written by a person when they open the board: `name`, `joinedAt`, `seenAt`. The 
 - **Points.** For each session, the page builds a series of `[time, cumulative tokens]`: zero at `createdAt` for a cloud session, every sync and snapshot, and the current total at `updatedAt` (or at the live read time for a running session). The series never decreases.
 - **Measured tokens.** Between two consecutive points at most 3 hours apart, the page spreads the growth evenly over the time between them. Growth across a longer gap is **unplaced**: the tokens are in the totals and in no hour. Equal totals at both ends count as measured zero, whatever the gap.
 - **Windows.** The last hour, 24 hours and 7 days end at the newest reading. Each says how long the readings cover inside it. A rate divides the measured tokens by that covered time.
+- **Days.** Last 30 days and the 30 d, 90 d and All ranges accept readings at most 26 hours apart. Hourly readings keep their own time. A pair of ledger readings places its tokens in the UTC day of the earlier reading. A gap longer than 26 hours places nothing.
+- **Sessions that left.** A session that appears in the hourly readings or the ledger but not in the newest listing keeps its last known totals, marked "No longer listed". Its tokens stay in All tokens and cost.
 - **Last token use.** The end of the last interval in which a session's total grew. A project takes the latest of its sessions.
 - **Cost.** At API list prices, as Claude Code reports it, in whole dollars. A project with tokens but no reported cost (a Cowork session) gets the account's dollars per token, marked with ≈.
 - **At the end of the open jobs.** Each running or queued job adds its `tokEst` less its `tok`. A job with a time estimate and no `tokEst` adds the project's measured rate times its time left. A job with neither adds nothing, and the board says so. Cost uses the project's own dollars per token.

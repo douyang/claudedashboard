@@ -16,6 +16,7 @@
 
 - For each Claude Code cloud session of this account: id, title, status, model, start and update times, repositories, token counts, and the cost at API list prices.
 - The usage-limit state of the account: status, window and reset time.
+- The same totals once a day, as a ledger entry. The ledger keeps usage after a session leaves the listing.
 - Nothing else. No messages, no transcripts, no task summaries, no file contents.
 
 ## Before you start
@@ -32,7 +33,8 @@ Follow "THE SYNC" at the end of this text. It writes the first document to the b
 ## Step 2. Check the first document
 
 - Call ArtifactData with action "get", url "{{BOARD}}", collection "data/users/me/profile/syncs", and the doc_id that the script printed.
-- If the document is missing or holds no sessions, stop and report the problem.
+- Call it again for collection "data/users/me/profile/daily" and the day that the script printed. A day that already has an entry is fine.
+- If the sync document is missing or holds no sessions, stop and report the problem.
 
 ## Step 3. Make the update hourly
 

@@ -6,6 +6,9 @@ The board owner has three projects that mirror three real situations:
   Harbor docs    idle: 9 B lifetime tokens, nothing moves between syncs, its session updated 80 min ago
   Quarterly model idle for two days: 1.2 B lifetime tokens
 Drew and Priya each have a private subtree that only they and the owner read.
+The owner also has a daily ledger for 30 Sep to 2 Oct. It holds a session that the newest sync no longer lists,
+and two titles that stress the CSV export (a comma and a quote, and a leading "=").
+Oct 3 has hourly readings and no ledger entry, so the page must fill it.
 The fixtures' clock is 2026-10-04T00:25:00Z.
 """
 import datetime as dt, json, os, shutil
@@ -46,6 +49,20 @@ put('jobs', 'atlas-import', {'project': 'Atlas port', 'label': 'Import the 2024 
                              'unit': 'files', 'startedAt': '2026-10-03T22:30:00Z', 'updatedAt': '2026-10-04T00:20:00Z', 'estSec': 14400, 'tokEst': 600_000_000})
 put('jobs', 'atlas-schema', {'project': 'Atlas port', 'label': 'Schema draft', 'status': 'done', 'surface': 'Claude Code · cloud', 'startedAt': '2026-10-03T20:00:00Z',
                              'finishedAt': '2026-10-03T21:10:00Z', 'updatedAt': '2026-10-03T21:10:00Z'})
+# the daily ledger: the first reading of each UTC day
+COLS = ['id', 'title', 'status', 'tok', 'out', 'usd', 'createdAt', 'repo']
+def ledger(day, harbor, model, atlas, retire):
+    rows = [['session_01HARBOR1', 'Harbor docs: resume the crawl', 'idle', harbor, harbor // 90, round(harbor * 9.6e-7, 2), '2026-09-12T14:00:00Z', 'owner/harbor-docs'],
+            ['session_01HARBOR2', 'Harbor docs: first pass', 'archived', 1_300_000_000, 14_000_000, 960.0, '2026-09-12T01:00:00Z', 'owner/harbor-docs'],
+            ['session_01MODEL01', 'Quarterly model: dashboards', 'idle', model, model // 90, round(model * 9.4e-7, 2), '2026-09-07T01:00:00Z', 'owner/quarterly-model'],
+            ['session_01RETIRE1', 'Weekly "export", v2', 'idle', retire, retire // 90, round(retire * 1.1e-6, 2), '2026-09-20T10:00:00Z', 'owner/retired-experiment'],
+            ['session_01FORMULA', '=SUM(1,1) test', 'idle', 5_000_000, 50_000, 6.0, '2026-09-29T10:00:00Z', 'owner/retired-experiment']]
+    if atlas:
+        rows.append(['session_01ATLAS01', 'Atlas port: build the importer', 'running', atlas, atlas // 90, round(atlas * 1e-6, 2), '2026-10-02T09:00:00Z', 'owner/atlas-port'])
+    put('daily', day, {'day': day, 'at': f'{day}T00:26:00Z', 'src': 'routine', 'cols': COLS, 'rows': rows})
+ledger('2026-09-30', 8_600_000_000, 1_000_000_000, 0, 400_000_000)
+ledger('2026-10-01', 8_800_000_000, 1_150_000_000, 0, 400_000_000)
+ledger('2026-10-02', 8_950_000_000, 1_200_000_000, 120_000_000, 400_000_000)
 put('meta', 'quota', {'status': 'allowed', 'type': 'five_hour', 'resetsAt': '2026-10-04T03:00:00Z', 'overage': False, 'updatedAt': '2026-10-04T00:23:00Z'})
 
 # Drew: three syncs; one session grows

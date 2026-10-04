@@ -23,6 +23,21 @@ The dashboard shows every Claude project, cloud and local. For each project it s
 | `docs/DATA.md` | The database collections, the access rules, and how the page computes its figures. |
 | `CLAUDE.md` | What the usage-sync session does when it receives `sync`. |
 
+## What the board keeps
+
+| Data | Kept | Where |
+|---|---|---|
+| Each hourly reading of every session | until you delete it | `syncs/<epoch>`; the page reads the last 8 days |
+| The first reading of each UTC day | for good | `daily/<UTC day>`; the page reads all of them |
+| A session that Claude Code no longer lists | its last totals, for good | the ledger |
+| Jobs, projects, session reports | in place, latest state | `jobs`, `projects`, `sessions` |
+
+Usage before the first reading has no timestamps. Nobody recorded it, so no chart can place it. It counts in All tokens and cost. The ledger and the hourly readings build the history from the first reading on.
+
+The CSV buttons next to the project table save the data as files: **Daily CSV** (the ledger, with the growth since each session's previous reading) and **Hourly CSV** (the newest 1000 readings of each person). A person exports their own. The owner exports everyone's. A spreadsheet never reads a title that starts with `=`, `+`, `-` or `@` as a formula.
+
+The database holds at most 25,000 documents. Hourly readings add 24 a day for each person, and job rows add more. The sync reply says "Storage is nearly full" at 20,000. Then export the hourly CSV and delete the oldest readings. The ledger keeps the days.
+
 ## Who sees what
 
 The page declares these database rules:
@@ -56,7 +71,7 @@ Why: an earlier version spread each session's lifetime tokens evenly from its cr
 
 The text makes the person's Claude do these steps once:
 
-1. Read every session of the account with `list_sessions`, and write one `syncs` document to the person's private subtree.
+1. Read every session of the account with `list_sessions`, and write one `syncs` document and, on the first reading of each UTC day, one `daily` entry to the person's private subtree.
 2. Check that the document exists.
 3. Create a routine that runs every hour with the same sync as its prompt. One fresh session runs each time.
 4. Report what it did.

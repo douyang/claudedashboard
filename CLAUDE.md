@@ -10,6 +10,7 @@ A routine sends the message `sync` to the usage-sync session every hour (UTC min
 2. Follow `docs/SYNC.md` with these values:
    - board URL: `https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4`
    - collection: `syncs`
+   - daily collection: `daily`
    - script: `scripts/ccr_sync_doc.py` in this checkout (skip the step that saves it to `/tmp`)
 3. Reply with one line.
 

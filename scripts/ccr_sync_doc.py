@@ -2,7 +2,8 @@
 """Make one hourly sync document from Claude Code Remote list_sessions answers.
 
 Usage:
-  python3 scripts/ccr_sync_doc.py ANSWER_FILE [ANSWER_FILE ...] OUT.json [--at 2026-10-03T23:00:00Z]
+  python3 scripts/ccr_sync_doc.py ANSWER_FILE [ANSWER_FILE ...] OUT.json [--daily DAILY.json] [--at 2026-10-03T23:00:00Z]
+  python3 scripts/ccr_sync_doc.py --from-sync SYNC.json DAILY.json
 
 Each ANSWER_FILE is one list_sessions answer saved to a file. Pass every page
 of the listing. The last path is the output file.
@@ -13,8 +14,16 @@ The output is one document for the board's `syncs` collection:
 state of the most recently updated session. The script does not read the
 session transcripts or the task summaries: the board stores no message text.
 
+With --daily the script also writes the day's ledger entry for the board's
+`daily` collection: {day, at, cols, rows}, one row per session with the totals
+at this reading. The board keeps the first reading of each UTC day, so a
+second write to the same day is refused and the first one stays. The ledger
+keeps usage after a session leaves the listing and after the hourly syncs
+move out of the page's 8-day window. --from-sync makes the same entry from a
+sync document that already exists, to fill a gap.
+
 The script prints one JSON line: doc_id (the read time in epoch seconds),
-sessions, tok, and `more`. When `more` is true, the last page was full: call list_sessions
+day (the UTC day of the read), sessions, tok, and `more`. When `more` is true, the last page was full: call list_sessions
 again with `after_id` set to `after_id` and add that answer to the list.
 A new document per sync needs no if_version, so a scheduled run writes it
 with one ArtifactData `set`. The collection decides whose sync it is: the
@@ -47,6 +56,16 @@ def iso(epoch):
     return dt.datetime.fromtimestamp(epoch, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
+DAILY_COLS = ['id', 'title', 'status', 'tok', 'out', 'usd', 'createdAt', 'repo']
+
+
+def daily_doc(sync):
+    """The ledger entry of a UTC day, from one sync document: the totals at that reading."""
+    rows = [[r['id'], r['title'], r['status'], r['tok'], r['out'], r['usd'], r['createdAt'], (r.get('repos') or [''])[0]]
+            for r in sync['sessions']]
+    return {'day': sync['at'][:10], 'at': sync['at'], 'src': sync.get('src', 'routine'), 'cols': DAILY_COLS, 'rows': rows}
+
+
 def row(s):
     em = s.get('external_metadata') or {}
     u = em.get('usage') or {}
@@ -67,7 +86,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('paths', nargs='+', help='one or more list_sessions answer files, then the output file')
     ap.add_argument('--at', help='UTC time of the list_sessions read; default now')
+    ap.add_argument('--daily', help='also write the ledger entry of this reading to this file')
+    ap.add_argument('--from-sync', help='make the ledger entry from this existing sync document; the one path is the output')
     a = ap.parse_args()
+    if a.from_sync:
+        if len(a.paths) != 1:
+            sys.exit('give the output file')
+        doc = daily_doc(json.load(open(a.from_sync)))
+        json.dump(doc, open(a.paths[0], 'w'), ensure_ascii=False)
+        print(json.dumps({'day': doc['day'], 'sessions': len(doc['rows'])}))
+        return
     if len(a.paths) < 2:
         sys.exit('give at least one answer file and the output file')
     *answers, out = a.paths
@@ -91,8 +119,10 @@ def main():
     if quota:
         doc['quota'] = quota
     json.dump(doc, open(out, 'w'), ensure_ascii=False)
+    if a.daily:
+        json.dump(daily_doc(doc), open(a.daily, 'w'), ensure_ascii=False)
     more = last_n >= PAGE
-    print(json.dumps({'doc_id': str(at), 'sessions': len(rows), 'tok': sum(r['tok'] for r in rows),
+    print(json.dumps({'doc_id': str(at), 'day': doc['at'][:10], 'sessions': len(rows), 'tok': sum(r['tok'] for r in rows),
                       'more': more, 'after_id': last_id if more else None}))
 
 
