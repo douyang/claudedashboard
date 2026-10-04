@@ -420,7 +420,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         <dt>tok, tokOut, tokEst</dt><dd>Tokens used so far, the output tokens among them, and the expected total.</dd>
         <dt>startedAt, updatedAt, finishedAt</dt><dd>Timestamps in UTC, as <span class="num">2026-10-01T06:21:41Z</span>. A running job with no report for 30 minutes is stale.</dd>
       </dl>
-      <p><b>meta/board</b> holds a <span class="num">note</span> and <span class="num">updatedAt</span>. <b>meta/quota</b> holds the board owner's account limit as Claude Code reports it (other people store it in the field <span class="num">quota</span> of their <span class="num">profile</span> document): <span class="num">status</span> (allowed, allowed_warning or rejected), <span class="num">type</span> (for example five_hour), <span class="num">resetsAt</span>, <span class="num">overage</span>, <span class="num">notice</span>, <span class="num">updatedAt</span>. Optionally <span class="num">pct</span> (the share of the current window used, 0 to 100), <span class="num">limitTok</span> (the window's token cap when a session knows it), <span class="num">weekResetsAt</span> and <span class="num">weekPct</span> for the 7-day window. The window tiles use each one when it is posted and say so while it is missing; they never guess a cap.</p>
+      <p><b>meta/board</b> holds a <span class="num">note</span> and <span class="num">updatedAt</span>. <b>meta/quota</b> holds the board owner's account limit as Claude Code reports it (other people store it in the field <span class="num">quota</span> of their <span class="num">profile</span> document): <span class="num">status</span> (allowed, allowed_warning or rejected), <span class="num">type</span> (for example five_hour), <span class="num">resetsAt</span>, <span class="num">overage</span>, <span class="num">notice</span>, <span class="num">updatedAt</span>. Optionally <span class="num">pct</span> (the share of the current window used, 0 to 100), <span class="num">limitTok</span> (the window's token cap when a session knows it), <span class="num">weekResetsAt</span> and <span class="num">weekPct</span> for the 7-day window. The window tiles show each one when it is posted. They never guess a cap.</p>
     </div>
   </details>
 
@@ -1187,6 +1187,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   /** Totals, velocity, projections, the chart and the table by project. Returns the figures the summary line uses. */
   let srcWord = '', srcWordLong = '';
   let covFn = () => 0;   // milliseconds of a time range that two readings at most 3 h apart cover
+  let readEnd = 0, readFirst = 0;   // the newest reading, and the oldest hourly reading, of the people in view
   function usagePanel(projects, sess, now, all, sessAll, ids) {
     const byId = new Map();
     for (const d of tickDocs) { const k = d.sid || String(d.id).split('~')[0]; if (!byId.has(k)) byId.set(k, []); byId.get(k).push(d); }
@@ -1217,6 +1218,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const c1 = covered(ranges, T - H, T), c24 = covered(ranges, T - 24 * H, T), c7 = covered(ranges, T - 168 * H, T);
     const w30 = winLong(T - 720 * H, T), c30 = covered(rangesLong, T - 720 * H, T);
     covFn = (a, b) => covered(ranges, a, b);
+    readEnd = T;
+    const hourly = syncDocs.filter((d) => Array.isArray(d.sessions) && owners.includes(ownerOf(d))).map((d) => t(d.at)).filter(Boolean);
+    readFirst = hourly.length ? Math.min(...hourly) : 0;
 
     /* per project: tokens in the last hour and the last 24 h */
     const nameOf = sessionProject;
@@ -1306,11 +1310,13 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     let sp = [], spL = [];
     pts.forEach((p, si) => {
       const key = nameOf(sess[si]);
+      const base = sess[si].tok - (sess[si].inTurn || 0);                  // the cost covers the reported tokens, not a running turn
+      const r = base > 0 && sess[si].usd > 0 ? sess[si].usd / base : 0;      // dollars per token
       for (let i = 1; i < p.length; i++) {
         const [t0, v0] = p[i - 1], [t1, v1] = p[i];
         if (v1 <= v0) continue;
         const gap = (t1 - t0) / 1000;
-        if (gap <= FINE_SEC || p[i - 1][2] === 1) { const x = { a: t0, b: t1, tok: v1 - v0, coarse: false, key }; sp.push(x); spL.push(x); }
+        if (gap <= FINE_SEC || p[i - 1][2] === 1) { const x = { a: t0, b: t1, tok: v1 - v0, coarse: false, key, r }; sp.push(x); spL.push(x); }
         else if (gap <= DAILY_GAP_SEC) {
           /* a ledger interval: the tokens belong to the UTC day of the earlier reading, whole */
           const a0 = Math.floor(t0 / DAY_MS) * DAY_MS;
@@ -1549,13 +1555,13 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     }
     return out;
   }
-  /** Tokens inside [from, to), each span spread evenly over its own run. */
-  function inRange(sp, from, to) {
+  /** Tokens inside [from, to), each span spread evenly over its own run. `val` sums another value of each span instead. */
+  function inRange(sp, from, to, val = (x) => x.tok) {
     let sum = 0;
     for (const x of sp) {
-      if (x.b <= x.a) { if (x.b >= from && x.b < to) sum += x.tok; continue; }
+      if (x.b <= x.a) { if (x.b >= from && x.b < to) sum += val(x); continue; }
       const a = Math.max(x.a, from), b = Math.min(x.b, to);
-      if (b > a) sum += (x.tok * (b - a)) / (x.b - x.a);
+      if (b > a) sum += (val(x) * (b - a)) / (x.b - x.a);
     }
     return sum;
   }
@@ -1610,12 +1616,11 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       $('density-plot').textContent = ''; $('density-legend').textContent = ''; $('density-cap').textContent = ''; $('density-table').textContent = '';
       $('density-sub').textContent = long ? 'The ledger has no two readings at most 26 h apart yet.' : 'No tokens measured in the hourly readings. Pick a longer range to read the daily ledger.';
       dsig = '';
-      windows(spH, now, now, now);
+      windows(spH, now);
       return;
     }
     const first = Math.min(...sp.map((x) => x.a));
     const to = Math.max(now, ...sp.map((x) => x.b));
-    const firstH = spH.length ? Math.min(...spH.map((x) => x.a)) : now;
     /* The work is bunched, so the default view is the last two days and the whole
        span is one tap away. The two window tiles never follow this: a 5-hour and
        a 7-day window are what they are. */
@@ -1635,7 +1640,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       dstep = b.step; dbars = b.bars;
       drawPlot(plot, dbars, dstep, w, pendSpans);
     }
-    windows(spH, now, firstH, to);
+    windows(spH, now);
 
     const total = inRange(sp, from, to);
     const hrs = (to - from) / HOUR;
@@ -1813,10 +1818,11 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     tb.append(table);
   }
 
-  /** The 5-hour and 7-day windows: what the reported rows put in each one, the
-      rate, where that rate lands by the reset, and what the limit state and any
-      reported share allow us to say about the cap. */
-  function windows(sp, now, first, to) {
+  /** The 5-hour and 7-day windows: the tokens that the readings place in each one, how much
+      of it the readings cover, the rate while read, and the limit state that Claude Code
+      reports. Both end at the newest reading, like the figures above, so the tokens and the
+      time that covers them come from the same readings. */
+  function windows(sp, now) {
     const host = $('density-win');
     host.textContent = '';
     if (!soloQuota) {
@@ -1837,51 +1843,58 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       }
       host.append(el);
     };
+    const end = readEnd || now;                                    // the newest reading
+    const rateOf = (a, b) => inRange(sp, a, b) / (covFn(a, b) / HOUR);
+    /* cost: each session's reported dollars per token times its measured tokens */
+    const usdIn = (a, b) => {
+      const v = inRange(sp, a, b, (x) => x.tok * (x.r || 0));
+      const some = sp.some((x) => !x.r && x.tok > 0 && x.b > a && x.a < b);
+      return v >= 0.5 ? `≈ ${money(v)}${some ? ' or more' : ''}` : '';
+    };
+    const cost = (a, b) => [usdIn(a, b) && `${usdIn(a, b)} at API list prices`];
     const [word, cls] = quota && quota.status ? LIMIT[quota.status] || [String(quota.status), 'caution'] : ['', ''];
+    const asOf = quota && t(quota.updatedAt) ? ` ${ago(t(quota.updatedAt))}` : '';
 
-    /* 5-hour: anchored on the reported reset when there is one */
+    /* 5 hours: the window that Claude Code reports, from its reset less 5 h; else the 5 h to the newest reading */
     const r5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
-    const a5 = r5 ? r5 - 5 * HOUR : now - 5 * HOUR;
-    const used5 = inRange(sp, a5, now);
-    const el5 = Math.max(1 / 60, (Math.min(now, r5 || now) - a5) / HOUR);
-    const cov5 = covFn(a5, Math.min(now, r5 || now)) / HOUR;
-    const rate5 = cov5 > 0 ? used5 / cov5 : 0;               // per hour of reading, not per hour of window
-    const left5 = r5 && r5 > now ? (r5 - now) / HOUR : 0;
-    const l5 = [[`${tk(rate5)}/h over ${dur(el5 * 3600)} of the 5 h; readings cover ${dur(covFn(a5, Math.min(now, r5 || now)) / 1000)}`]];
-    if (r5) l5.push([left5
-      ? `resets ${when(r5)}, in ${dur(left5 * 3600)} — ${tk(used5 + rate5 * left5)} by then at this rate`
-      : `reset due ${when(r5)}`]);
-    const pct = quota && +quota.pct > 0 ? +quota.pct : 0;
-    if (pct) {
-      const pr = pct / el5;
-      l5.push([`share ${pct.toFixed(0)}% reported${left5 ? `, about ${Math.min(100, pct + pr * left5).toFixed(0)}% by the reset` : ''} · ${pr.toFixed(1)}%/h`]);
-      l5.push([`implies a cap of at least ${tk(used5 / (pct / 100))}`]);
-    } else if (num(quota && quota.limitTok)) {
-      l5.push([`cap ${tk(num(quota.limitTok))} reported — ${((used5 / num(quota.limitTok)) * 100).toFixed(0)}% of it measured here`]);
+    const open5 = r5 > now;
+    const a5 = open5 ? r5 - 5 * HOUR : end - 5 * HOUR;
+    const b5 = Math.max(a5, Math.min(end, open5 ? r5 : end));
+    const cov5 = covFn(a5, b5), used5 = inRange(sp, a5, b5);
+    const l5 = [[open5 ? `${when(a5)} to ${when(r5)}, resets in ${dur((r5 - now) / 1000)}`
+      : r5 ? `The window that Claude Code reported ended ${when(r5)}. Shown: the 5 h to the newest reading.`
+      : 'The 5 h to the newest reading. Claude Code reported no 5-hour reset.']];
+    if (cov5 > 0) {
+      l5.push([`Readings cover ${dur(cov5 / 1000)} of it: ${tk(rateOf(a5, b5))}/h while read`]);
+      l5.push(cost(a5, b5));
+      if (open5 && cov5 >= HOUR) l5.push([`About ${tk(used5 + rateOf(a5, b5) * ((r5 - b5) / HOUR))} by the reset at this rate`]);
     } else {
-      l5.push(['share of the cap not reported — post quota.pct or quota.limitTok']);
+      const next = end + HOUR;
+      l5.push([`The next hourly reading${next > now ? `, due about ${when(next)},` : ''} measures it.`]);
     }
-    if (word && quota.type === 'five_hour') l5.push([`${word} at this level, so the cap is above what is measured here`, `wstate ${cls}`]);
-    tile('5-hour window', `${tk(used5)} measured`, l5);
+    if (open5) {
+      const pa = a5 - 5 * HOUR, pb = Math.min(a5, end), covP = pb > pa ? covFn(pa, pb) : 0;
+      const uP = usdIn(pa, pb);
+      if (covP > 0) l5.push([`The 5 h before it: ${tk(inRange(sp, pa, pb))} measured${uP ? `, ${uP}` : ''}; readings cover ${dur(covP / 1000)}`]);
+    }
+    const pct = quota && +quota.pct > 0 ? +quota.pct : 0, cap = num(quota && quota.limitTok);
+    if (pct) l5.push([`share ${pct.toFixed(0)}% reported`]);
+    else if (cap) l5.push([`cap ${tk(cap)} reported — ${((used5 / cap) * 100).toFixed(0)}% of it measured here`]);
+    if (word && quota.type === 'five_hour') l5.push([`${word}, as Claude Code reported${asOf}.${pct || cap ? '' : ' It reports no share of the limit.'}`, `wstate ${cls}`]);
+    tile('5-hour window', cov5 > 0 ? `${tk(used5)} measured` : 'No reading yet', l5);
 
-    /* 7 days: a trailing week, projected to a reported week reset when given */
-    const a7 = now - 168 * HOUR;
-    const used7 = inRange(sp, a7, now);
-    const el7 = Math.min(168, Math.max(1 / 60, (now - Math.max(a7, first)) / HOUR));
-    const cov7 = covFn(a7, now) / HOUR;
-    const rate7 = cov7 > 0 ? used7 / cov7 : 0;
+    /* 7 days: the trailing week to the newest reading */
+    const a7 = end - 168 * HOUR;
+    const cov7 = covFn(a7, end), used7 = inRange(sp, a7, end);
+    const l7 = [[cov7 > 0 ? `Readings cover ${dur(cov7 / 1000)} of the 7 days: ${tk(rateOf(a7, end))}/h while read` : 'No two readings at most 3 h apart in the last 7 days.']];
+    if (cov7 > 0) l7.push(cost(a7, end));
+    if (readFirst > a7) l7.push([`Hourly readings start ${when(readFirst)}, so they cover all 7 days from ${when(readFirst + 168 * HOUR)} if they continue.`]);
     const reset7 = quota ? t(quota.weekResetsAt) : 0;
-    const left7 = reset7 && reset7 > now ? (reset7 - now) / HOUR : 0;
-    const l7 = [[`${tk(rate7)}/h mean across the trailing ${dur(el7 * 3600)}; readings cover ${dur(covFn(a7, now) / 1000)}`]];
-    if (reset7) l7.push([left7
-      ? `resets ${when(reset7)}, in ${dur(left7 * 3600)} — ${tk(used7 + rate7 * left7)} by then at this rate`
-      : `reset due ${when(reset7)}`]);
-    else l7.push(['week reset not reported — post quota.weekResetsAt']);
+    if (reset7) l7.push([reset7 > now ? `resets ${when(reset7)}, in ${dur((reset7 - now) / 1000)}` : `reset due ${when(reset7)}`]);
     const wp = quota && +quota.weekPct > 0 ? +quota.weekPct : 0;
-    if (wp) l7.push([`share ${wp.toFixed(0)}% reported · implies a cap of at least ${tk(used7 / (wp / 100))}`]);
-    else l7.push(['share of the cap not reported — post quota.weekPct']);
-    if (word && quota.type && String(quota.type).indexOf('seven_day') === 0) l7.push([`${word} at this level`, `wstate ${cls}`]);
-    tile('7-day window', `${tk(used7)} measured`, l7);
+    if (wp) l7.push([`share ${wp.toFixed(0)}% reported`]);
+    if (word && quota.type && String(quota.type).indexOf('seven_day') === 0) l7.push([`${word}, as Claude Code reported${asOf}`, `wstate ${cls}`]);
+    tile('7-day window', cov7 > 0 ? `${tk(used7)} measured` : 'No readings yet', l7);
   }
 
   function chips(id, opts, cur, pick) {

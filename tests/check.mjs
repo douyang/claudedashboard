@@ -250,6 +250,35 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/* ---- the 5-hour and 7-day tiles: tokens and covered time from the same readings, and no hints for fields that nobody reports ---- */
+{
+  const tiles = async (db) => {
+    const s = await open({ db, now: NOW, viewer: 'owner', width: 1100 });
+    await s.page.click('button[data-key="f-person:david"]');
+    await s.page.waitForTimeout(300);
+    const out = await s.page.evaluate(() => ({ body: document.body.innerText, wins: [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText) }));
+    await s.close();
+    return out;
+  };
+  const rate = '[\\d.]+(?: [kMB])?\\/h while read';
+  const a = await tiles(DB);
+  const h5 = a.wins.find((x) => /^5-hour/i.test(x)) || '', d7 = a.wins.find((x) => /^7-day/i.test(x)) || '';
+  check('windows: the 5-hour tile says how much of the window the readings cover, and the rate while read', /measured/.test(h5) && new RegExp(`Readings cover 1 h 57 min of it: ${rate}`).test(h5) && /≈ \$\d[\d,]* at API list prices/.test(h5), JSON.stringify(h5));
+  check('windows: the 7-day rate is per hour of reading, and says so', new RegExp(`Readings cover 1 h 57 min of the 7 days: ${rate}`).test(d7) && /Hourly readings start/.test(d7) && !/mean across/.test(d7), JSON.stringify(d7));
+  check('windows: no hint asks for a field that Claude Code does not report', !/post quota/.test(a.body), (a.body.match(/.*post quota.*/) || [''])[0]);
+  /* a new window that no reading reaches yet, and a snapshot after the newest reading */
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-win-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'meta', 'quota.json'), JSON.stringify({ status: 'allowed', type: 'five_hour', resetsAt: '2026-10-04T05:24:00Z', overage: false, updatedAt: '2026-10-04T00:24:00Z' }));
+  fs.mkdirSync(path.join(dir, 'ticks'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ticks', 'session_01ATLAS01~2026-10-04.json'), JSON.stringify({ sid: 'session_01ATLAS01', day: '2026-10-04', pts: [[Date.parse('2026-10-04T00:24:30Z') / 1000, 405_000_000]], src: 'ccr' }));
+  const b = await tiles(dir);
+  const g5 = b.wins.find((x) => /^5-hour/i.test(x)) || '';
+  check('windows: a window that no reading reaches yet says so, instead of tokens at a rate of zero', /No reading yet/.test(g5) && /The next hourly reading, due about .+, measures it/.test(g5) && !/ 0\/h|cover 0 s/.test(g5), JSON.stringify(g5));
+  check('windows: it then shows the 5 h before it', /The 5 h before it: [\d.]+(?: [kMB])? measured, ≈ \$[\d,]+; readings cover 1 h 57 min/.test(g5), JSON.stringify(g5));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- only the ledger: the range buttons stay, and 30 d reads the ledger ---- */
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-ledger-'));
