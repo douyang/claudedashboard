@@ -1,6 +1,7 @@
 {
  "at": "2026-10-04T00:23:00Z",
  "src": "routine",
+ "by": "session_01PRIYA04",
  "sessions": [
   {
    "id": "session_01PRIYA01",
@@ -44,6 +45,21 @@
    "out": 55555,
    "usd": 6.0,
    "repos": []
+  },
+  {
+   "id": "session_01PRIYA04",
+   "title": "Hourly board sync",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-04T00:00:00Z",
+   "updatedAt": "2026-10-04T00:23:00Z",
+   "tok": 2000000,
+   "out": 22222,
+   "usd": 3.0,
+   "repos": [
+    "priya/figures"
+   ]
   }
  ]
 }

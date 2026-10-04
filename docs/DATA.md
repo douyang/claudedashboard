@@ -51,7 +51,7 @@ One document per session. `repos` (`owner/repo` strings) and `folder` decide the
 
 ## `syncs/<epoch seconds>`
 
-One document per hourly sync. A scheduled routine calls `list_sessions`, runs `scripts/ccr_sync_doc.py`, and writes the result. Fields: `at`, `src`, `sessions` (id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos), and `quota` (the limit state of the most recently updated session). The page reads the last 8 days. The newest sync of each person supplies that person's cloud sessions when the page cannot read Claude Code Remote itself, for example when the connector answers `blocked_by_policy`. The sync stores no message text and no task summaries.
+One document per hourly sync. A scheduled routine calls `list_sessions`, runs `scripts/ccr_sync_doc.py`, and writes the result. Fields: `at`, `src`, `by` (the id of the session that took the reading, when the script can tell), `sessions` (id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos), and `quota` (the limit state of the most recently updated session). The page reads the last 8 days. The newest sync of each person supplies that person's cloud sessions when the page cannot read Claude Code Remote itself, for example when the connector answers `blocked_by_policy`. The sync stores no message text and no task summaries.
 
 `bucket` is Claude Code's own state: `working`, `blocked` (waits on a person), `review_ready`, `completed` or `failed`.
 
@@ -92,7 +92,7 @@ Written by a person when they open the board: `name`, `joinedAt`, `seenAt`. The 
 - **Last token use.** The end of the last interval in which a session's total grew. A project takes the latest of its sessions.
 - **Cost.** At API list prices, as Claude Code reports it, in whole dollars. A project with tokens but no reported cost (a Cowork session) gets the account's dollars per token, marked with ≈.
 - **At the end of the open jobs.** Each running or queued job adds its `tokEst` less its `tok`. A job with a time estimate and no `tokEst` adds the project's measured rate times its time left. A job with neither adds nothing, and the board says so. Cost uses the project's own dollars per token.
-- **Working now.** A running session, or a running job that reported in the last 30 minutes.
+- **Working now.** A running session, or a running job that reported in the last 30 minutes. The session that took the newest hourly reading (`by`) does not count: it runs because it reads. Its updates do not count as activity either. Its tokens and cost count as usual.
 - **Active.** Working now, an open job, or any activity in the last 72 hours. `status` and `pinned` override this.
 - **Cloud or local.** The registry `where` first. Else Claude Code cloud sessions and `Claude Code · web` rows count as cloud, and `Cowork` and `CLI` rows count as local.
 - **Colours.** Each project draws in its registry slot in the chart, the table, and on its card. The bars stack in slot order.

@@ -9,8 +9,9 @@ The owner's registry entries keep their old labels, to show that the board names
 Harbor notes shares Harbor docs' repository, spelled in another case: one project. Studio is a Cowork project that has a
 folder and no repository, and Field notes is a Cowork session with a folder and no registry entry. Long name has a very
 long repository name, to check phone width.
-Drew and Priya each have a private subtree that only they and the owner read. Priya has two spellings of one repository
-and one session with no repository and no folder.
+Drew and Priya each have a private subtree that only they and the owner read. Priya has two spellings of one repository,
+one session with no repository and no folder, and the session that took her reading (`by`): it runs, and it must not
+make its project read Working now.
 The owner also has a daily ledger for 30 Sep to 2 Oct. It holds a session that the newest sync no longer lists,
 and two titles that stress the CSV export (a comma and a quote, and a leading "=").
 Oct 3 has hourly readings and no ledger entry, so the page must fill it.
@@ -90,9 +91,10 @@ put('data__users__u_drew', 'profile', {'quota': {'status': 'allowed', 'type': 'f
 put('join', 'u_drew', {'name': 'Drew', 'joinedAt': '2026-10-03T22:10:00Z', 'seenAt': '2026-10-04T00:20:00Z'})
 
 # Priya: one sync; the owner sees it, Drew does not
-put('data__users__u_priya__profile__syncs', '1791073380', {'at': '2026-10-04T00:23:00Z', 'src': 'routine',
+put('data__users__u_priya__profile__syncs', '1791073380', {'at': '2026-10-04T00:23:00Z', 'src': 'routine', 'by': 'session_01PRIYA04',
     'sessions': [sess('session_01PRIYA01', 'Grant figure pipeline', 'priya/figures', 'idle', 'completed', 77_000_000, at(2026, 10, 1, 9), at(2026, 10, 2, 1), 95.0),
                  sess('session_01PRIYA02', 'Figure tweaks', 'Priya/Figures', 'idle', 'completed', 12_000_000, at(2026, 10, 2, 9), at(2026, 10, 3, 1), 14.0),
-                 {**sess('session_01PRIYA03', 'Untracked scratch work', 'x/y', 'idle', 'completed', 5_000_000, at(2026, 10, 3, 9), at(2026, 10, 3, 10), 6.0), 'repos': []}]})
+                 {**sess('session_01PRIYA03', 'Untracked scratch work', 'x/y', 'idle', 'completed', 5_000_000, at(2026, 10, 3, 9), at(2026, 10, 3, 10), 6.0), 'repos': []},
+                 sess('session_01PRIYA04', 'Hourly board sync', 'priya/figures', 'running', 'working', 2_000_000, at(2026, 10, 4, 0, 0), at(2026, 10, 4, 0, 23), 3.0)]})
 put('join', 'u_priya', {'name': 'Priya', 'joinedAt': '2026-10-03T22:40:00Z', 'seenAt': '2026-10-03T22:40:00Z'})
 print('wrote', ROOT)

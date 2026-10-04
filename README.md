@@ -69,7 +69,7 @@ The board names a project after its repository: `owner/repo` of the first reposi
 - A rate counts only tokens that two readings at most 3 hours apart place in time. The page spreads them evenly between the two readings.
 - Tokens used before the first reading, or between readings further apart, count in All tokens and cost. They count in no hour.
 - A window ends at the newest reading and says how much of it the readings cover.
-- A project is **working now** when a session runs or a running job reported in the last 30 minutes. It is **active** when it is working, has an open job, or had any report in the last 72 hours. An active project that is not working reads **Idle**.
+- A project is **working now** when a session runs or a running job reported in the last 30 minutes. The session that takes the hourly reading does not count: it runs because it reads. Job rows show its real work. It is **active** when it is working, has an open job, or had any report in the last 72 hours. An active project that is not working reads **Idle**.
 - **Last token use** is the end of the last interval in which a session's total grew.
 
 Why: an earlier version spread each session's lifetime tokens evenly from its creation to its last update. An idle project with billions of lifetime tokens then showed use in every recent hour. `tests/check.mjs` keeps that case.

@@ -50,8 +50,12 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('names: a Cowork session with a folder and no registry entry forms a project named after the folder',
     !!R['Field notes'] && /^local$/i.test(R['Field notes'][col('RUNS')]) && /^3(\.0)? M\+$/.test(R['Field notes'][col('TOKENS')]), JSON.stringify(R['Field notes']));
   check('names: repository names that differ in case are one project',
-    !!R['priya/figures'] && !R['Priya/Figures'] && R['priya/figures'][col('SESSIONS')].startsWith('2'), JSON.stringify(R['priya/figures']));
+    !!R['priya/figures'] && !R['Priya/Figures'] && R['priya/figures'][col('SESSIONS')].startsWith('3'), JSON.stringify(R['priya/figures']));
   check('names: a session with no repository and no folder keeps its own name', !!R['Untracked scratch work (not in the registry)'], Object.keys(R).join(' | '));
+  /* ---- reader: the session that takes the hourly reading runs because it reads; that is not work ---- */
+  check('reader: the session that took the reading does not make its project work', /^idle$/i.test(pills['priya/figures']) && /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
+  const sl = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'priya/figures'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
+  check('reader: its row says that it took the reading, and the count shows no running session', /Took the latest hourly reading/.test(sl) && !/running/i.test(sl.split('\n')[0]), sl.slice(0, 200));
   const own = await p.evaluate(() => [...document.querySelectorAll('.proj-card h2 .own')].map((e) => e.innerText));
   check('names: the owner of a repository reads in a lighter tone', own.length > 0 && own.includes('owner/'), own.join(','));
   const kp = await p.evaluate(() => document.getElementById('kpis').innerText);
@@ -130,9 +134,20 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('csv: a title that starts with = cannot start a spreadsheet formula', daily.includes('"\'=SUM(1,1) test"') && !/(^|,)=SUM/m.test(daily));
   check('csv: growth is blank at a first reading and exact after', /2026-09-30,David C,session_01HARBOR1,[^\n]*,8600000000,,/.test(daily) && /2026-10-01,David C,session_01HARBOR1,[^\n]*,8800000000,200000000,/.test(daily));
   const hlines = hourly.trim().split('\r\n');
-  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 12 + 6 + 3, `${hlines.length} lines`);
+  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 12 + 6 + 4, `${hlines.length} lines`);
   check('csv: the hourly file names each person', /,Drew,/.test(hourly) && /,Priya,/.test(hourly) && /,David C,/.test(hourly));
   await s.close();
+}
+
+/* ---- the sync script records which session took the reading ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-by-'));
+  const answer = path.join(dir, 'ls1.txt');
+  fs.writeFileSync(answer, JSON.stringify({ ccr: { data: [{ id: 'session_01TESTABC', title: 'T', session_status: 'SESSION_STATUS_RUNNING', created_at: '2026-10-04T00:00:00Z', updated_at: '2026-10-04T00:10:00Z', external_metadata: { usage: { input_tokens: 1, output_tokens: 1 } } }] } }));
+  const run = (env) => { execFileSync('python3', [new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname, answer, path.join(dir, 'out.json'), '--at', '2026-10-04T00:15:00Z'], { env: { PATH: process.env.PATH, ...env } }); return JSON.parse(fs.readFileSync(path.join(dir, 'out.json'), 'utf8')); };
+  check('script: the reading names the session that took it, from the cloud environment', run({ CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01TESTABC' }).by === 'session_01TESTABC');
+  check('script: without the environment variable the reading names no session', !('by' in run({})));
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 /* ---- only the ledger: the range buttons stay, and 30 d reads the ledger ---- */

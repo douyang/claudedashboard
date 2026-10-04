@@ -9,7 +9,10 @@ Each ANSWER_FILE is one list_sessions answer saved to a file. Pass every page
 of the listing. The last path is the output file.
 
 The output is one document for the board's `syncs` collection:
-{at, src, sessions: [{id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos}], quota}
+{at, src, by, sessions: [{id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos}], quota}
+`by` is the id of the session that ran this script, read from the cloud environment (CLAUDE_CODE_REMOTE_SESSION_ID,
+or --by). A session that reads the board is running because it reads, so the board does not count its running state
+or its updates as work. The script leaves `by` out when it cannot tell which session it runs in.
 `tok` counts input, cache reads, cache writes and output. `quota` is the limit
 state of the most recently updated session. The script does not read the
 session transcripts or the task summaries: the board stores no message text.
@@ -30,7 +33,7 @@ with one ArtifactData `set`. The collection decides whose sync it is: the
 board owner writes `syncs`; every other person writes
 `data/users/me/profile/syncs`, which only that person and the owner can read.
 """
-import argparse, datetime as dt, json, sys, time
+import argparse, datetime as dt, json, os, sys, time
 
 PAGE = 100
 
@@ -50,6 +53,12 @@ def load_sessions(path):
         last = c.get('last_id')
         d = c.get('data') or d.get('data') or d.get('sessions') or []
     return d, last
+
+
+def self_id():
+    """The id of the session that runs this script: "cse_..." in the cloud environment, "session_..." in the listing."""
+    v = os.environ.get('CLAUDE_CODE_REMOTE_SESSION_ID', '')
+    return 'session_' + v[4:] if v.startswith('cse_') else v if v.startswith('session_') else ''
 
 
 def iso(epoch):
@@ -88,6 +97,7 @@ def main():
     ap.add_argument('--at', help='UTC time of the list_sessions read; default now')
     ap.add_argument('--daily', help='also write the ledger entry of this reading to this file')
     ap.add_argument('--from-sync', help='make the ledger entry from this existing sync document; the one path is the output')
+    ap.add_argument('--by', help='id of the session that took the reading; default: this session, from the environment')
     a = ap.parse_args()
     if a.from_sync:
         if len(a.paths) != 1:
@@ -116,6 +126,9 @@ def main():
                          'resetsAt': iso(rl['resetsAt']) if rl.get('resetsAt') else None,
                          'overage': bool(rl.get('isUsingOverage')), 'asOf': latest}
     doc = {'at': iso(at), 'src': 'routine', 'sessions': rows}
+    by = a.by or self_id()
+    if by:
+        doc['by'] = by
     if quota:
         doc['quota'] = quota
     json.dump(doc, open(out, 'w'), ensure_ascii=False)
