@@ -102,6 +102,8 @@ A person who opens the board sees their own usage, and a **Set up my Claude** bu
 
 A routine sends `sync` to the usage-sync session at minute 26 of every hour. The session follows `docs/SYNC.md` and writes `syncs/<epoch>`. `CLAUDE.md` holds the values, so the procedure survives a context reset.
 
+After the listing, the sync reads the turn that runs now in each running session from its events, through a sub-agent that keeps the cost low. `scripts/ccr_sync_doc.py turns-add` takes only token counts and times from each event page and deletes the page.
+
 - The routine wakes one session that stays alive. A routine that starts a fresh session each hour does not work: fresh routine sessions do not get the Claude Code Remote tools, so they cannot call `list_sessions`.
 - To stop the sync, disable the routine in claude.ai Routines.
 - One test run cost about $0.11 at API list prices.
