@@ -190,6 +190,8 @@ details.howto dd { margin: 0; color: var(--ink-2); min-width: 0; }
 .dplot .band { fill: var(--accent-soft); opacity: 0.45; }
 .dplot .bandedge { stroke: var(--accent-soft); stroke-width: 1; }
 .dplot .bandlab { fill: var(--ink-3); font: 400 8.5px var(--sans); }
+.dplot .pending { fill: url(#pend-hatch); }
+.dplot .hatch { stroke: var(--ink-3); stroke-width: 1.5; opacity: 0.4; }
 .dplot .bar { fill: var(--accent); }
 .dplot .bar.on { fill: var(--ink-2); }
 .dtip { position: absolute; z-index: 2; pointer-events: none; background: var(--paper); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; font: 400 0.8rem/1.35 var(--sans); box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; }
@@ -464,6 +466,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   let armed = null, armedAt = 0;       // the row whose Done waits for a second tap
   const closing = new Set(), failed = new Set();
   let aliasMap = new Map(), sidProject = new Map(), sidTitle = new Map(), sidOwner = new Map();
+  let pendingBy = new Map();         // session id -> the time since which a running turn has not been reported
   let canEdit = false, isOwnerView = true, userApi = null, dl = null;   // who is viewing, from the user capability
   let viewerUid = '', viewerName = '', inviteOpen = false, holdRender = false;
   const profiles = new Map(), openSess = new Set();                  // person id -> their profile document; projects with the session list open
@@ -757,15 +760,18 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       return o;
     }).filter((o) => o.id);
   }
-  /** Readings per session, from the hourly syncs and the daily ledger: [ms, tokens]. */
+  /** Readings per session, from the hourly syncs and the daily ledger: [ms, tokens, state]. The state is 1 when the
+      session ran at the reading, 0 when it did not, and -1 when the reading does not say (the ledger). The session
+      that took the reading ran because it read, so it counts as not running. */
   function syncPoints() {
     const m = new Map();
-    const add = (x, at) => { if (!num(x.tok)) return; if (!m.has(x.id)) m.set(x.id, []); m.get(x.id).push([at, num(x.tok)]); };
+    const add = (x, at, st) => { if (!num(x.tok)) return; if (!m.has(x.id)) m.set(x.id, []); m.get(x.id).push([at, num(x.tok), st]); };
     for (const d of syncDocs) {
       const at = t(d.at); if (!at || !Array.isArray(d.sessions)) continue;
-      for (const x of d.sessions) add(x, at);
+      const by = typeof d.by === 'string' ? d.by : '';
+      for (const x of d.sessions) add(x, at, x.status === 'running' && String(x.id) !== by ? 1 : 0);
     }
-    for (const d of dailyDocs) { const at = t(d.at); if (at) for (const x of dailyRows(d)) add(x, at); }
+    for (const d of dailyDocs) { const at = t(d.at); if (at) for (const x of dailyRows(d)) add(x, at, -1); }
     return m;
   }
   /** The project of a session. The registry pins a session to a project. Else the session's first repository names it,
@@ -778,23 +784,55 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     return { name: qual(s.owner, title), title, reg: false, byRepo: false };
   }
   const sessionProject = (s) => sessionProjectInfo(s).name;
-  /** The snapshot points of one session, as [ms, cumulative tokens], non-decreasing. */
-  function pointsOf(s, byId, sync) {
-    const pts = [];
-    if (s.src === 'ccr' && s.createdAt) pts.push([s.createdAt, 0]);
-    for (const p of (sync && sync.get(s.id)) || []) pts.push(p);
+  /** The readings of one session as [ms, cumulative tokens, state, from], non-decreasing. state: 1 running, 0 not
+      running, -1 not known. from: 's' an hourly reading, 't' a snapshot, 'e' the session's own last update, 'c' its start. */
+  function seriesOf(s, byId, sync) {
+    const raw = [];
+    if (s.src === 'ccr' && s.createdAt) raw.push([s.createdAt, 0, 0, 'c']);
+    for (const p of (sync && sync.get(s.id)) || []) raw.push([p[0], p[1], p.length > 2 ? p[2] : -1, 's']);
     for (const d of byId.get(s.id) || []) for (const p of Array.isArray(d.pts) ? d.pts : []) {
-      if (Array.isArray(p) && p.length >= 2 && Number.isFinite(+p[0]) && Number.isFinite(+p[1])) pts.push([+p[0] * 1000, +p[1]]);
+      if (Array.isArray(p) && p.length >= 2 && Number.isFinite(+p[0]) && Number.isFinite(+p[1])) raw.push([+p[0] * 1000, +p[1], -1, 't']);
     }
     const end = s.live && s.status === 'running' ? liveAt : s.updatedAt;
-    if (end && s.tok) pts.push([end, s.tok]);
-    pts.sort((a, b) => a[0] - b[0]);
+    if (end && s.tok) raw.push([end, s.tok, working(s) ? 1 : 0, 'e']);
+    raw.sort((a, b) => a[0] - b[0]);
     const out = []; let hi = 0;
-    for (const [at, v] of pts) {
+    for (const [at, v, st, from] of raw) {
       hi = Math.max(hi, v);
-      if (out.length && out[out.length - 1][0] === at) out[out.length - 1][1] = hi; else out.push([at, hi]);
+      const last = out[out.length - 1];
+      if (last && last[0] === at) { last[1] = hi; if (st > last[2]) { last[2] = st; last[3] = from; } } else out.push([at, hi, st, from]);
     }
     return out;
+  }
+  /* Claude Code reports a running session's tokens only when a turn ends. The readings inside one turn show the
+     same total, and they are not a measured zero. When the total grows, the growth belongs to the whole turn,
+     back to the last reading that saw the session idle or saw its total change. The readings inside the turn
+     drop out, so the growth spreads over the turn. A turn longer than FINE_SEC still places nothing. */
+  function turnSpread(series) {
+    const keep = [];
+    for (let i = 0; i < series.length;) {
+      let j = i;
+      while (j + 1 < series.length && series[j + 1][1] === series[i][1]) j += 1;     // series[i..j] share one total
+      let m = i;
+      for (let k = i; k <= j; k += 1) if (series[k][2] === 0) m = k;                  // the last reading that saw it idle
+      const inTurn = j + 1 < series.length && series.slice(m + 1, j + 1).some((p) => p[2] === 1);
+      keep.push(...series.slice(i, inTurn ? m + 1 : j + 1));
+      i = j + 1;
+    }
+    return keep;
+  }
+  /** The snapshot points of one session, as [ms, cumulative tokens], non-decreasing. */
+  const pointsOf = (s, byId, sync) => turnSpread(seriesOf(s, byId, sync)).map((p) => [p[0], p[1]]);
+  /** A turn that runs and that Claude Code has not reported yet: the time since which the session's total has not
+      changed while an hourly reading saw it run. 0 when there is none. */
+  function pendingSince(s, series) {
+    if (!working(s) || !series.length) return 0;
+    const lastV = series[series.length - 1][1];
+    let i = series.length - 1;
+    while (i > 0 && series[i - 1][1] === lastV) i -= 1;                               // series[i..] share the last total
+    let m = i;
+    for (let k = i; k < series.length; k += 1) if (series[k][2] === 0) m = k;
+    return series.slice(m + 1).some((p) => p[2] === 1 && p[3] === 's') ? series[m][0] : 0;
   }
   /** Tokens between a and b, split into measured and unplaced parts. Readings further apart than maxGap place nothing. */
   function alloc(pts, a, b, maxGap = FINE_SEC) {
@@ -1135,7 +1173,11 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const byId = new Map();
     for (const d of tickDocs) { const k = d.sid || String(d.id).split('~')[0]; if (!byId.has(k)) byId.set(k, []); byId.get(k).push(d); }
     const sync = syncPoints();
-    const pts = sess.map((s) => pointsOf(s, byId, sync));
+    const ser = sess.map((s) => seriesOf(s, byId, sync));
+    const pts = ser.map((x) => turnSpread(x).map((p) => [p[0], p[1]]));
+    pendingBy = new Map();
+    sess.forEach((s, i) => { const since = pendingSince(s, ser[i]); if (since) pendingBy.set(s.id, since); });
+    const pend = sess.filter((s) => pendingBy.has(s.id));
     /* A rate counts only tokens that two readings at most 3 h apart place in time. Tokens used before the
        first reading, or between readings further apart, are in the totals but belong to no hour. */
     const win = (a, b) => pts.reduce((acc, p) => acc + alloc(p, a, b).fine, 0);
@@ -1222,6 +1264,15 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         n.textContent = `${tk(unplacedTot)} of the ${tk(tot)} tokens were used before the first reading, or between readings more than 3 h apart. They count in All tokens and cost, and in no hourly rate.`;
         k.append(n);
       }
+      if (pend.length) {
+        const n = document.createElement('p'); n.className = 'live-note warn'; n.id = 'pending-note'; n.style.gridColumn = '1 / -1'; n.style.margin = '0';
+        const names = [...new Set(pend.map((s) => nameOf(s)))];
+        const first = Math.min(...pend.map((s) => pendingBy.get(s.id)));
+        n.textContent = `Not counted yet: ${pend.length === 1 ? 'a running session' : `${pend.length} running sessions`} in ${names.join(', ')}. `
+          + `${pend.length === 1 ? 'Its total has' : 'Their totals have'} not changed since ${when(first)}. Claude Code reports the tokens of a turn when the turn ends. `
+          + 'The board then spreads them over the turn, up to 3 h back.';
+        k.append(n);
+      }
     }
 
     /* Tokens per hour and the limit windows. Session snapshots are the source when
@@ -1245,7 +1296,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     srcWord = 'Measured: the tokens between two readings at most 3 h apart, spread evenly over the time between them.';
     srcWordLong = 'Measured: the tokens between two readings at most 26 h apart. Hourly readings keep their own time. The daily ledger places a day\'s tokens in the UTC day of the earlier reading.';
     if (!sp.length && !spL.length) { sp = spans(all); spL = sp; srcWord = sp.length ? 'Job rows only, each job spread evenly across its own run.' : ''; srcWordLong = srcWord; }
-    density(sp, spL, now);
+    density(sp, spL, now, pend.map((s) => [pendingBy.get(s.id), T]));
 
     /* table by project: every project, inactive ones dimmed, whatever the filters below say */
     const tbl = $('ptable');
@@ -1537,7 +1588,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
   }
 
-  function density(spH, spL, now) {
+  function density(spH, spL, now, pendSpans = []) {
     const host = $('density');
     const long = isLong(dRange);
     const sp = long ? spL : spH;               // hourly readings for the short ranges, the daily ledger for the long ones
@@ -1569,12 +1620,12 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     /* the plot is rebuilt only when its own inputs move, so a tooltip survives
        the board's once-a-second refresh */
     const reset5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
-    const sig = JSON.stringify([sp.map((x) => [x.a, x.b, x.tok, x.key]), [...projSlot], Math.round(w / 8), dRange, reset5, Math.floor(to / HOUR)]);
+    const sig = JSON.stringify([sp.map((x) => [x.a, x.b, x.tok, x.key]), [...projSlot], Math.round(w / 8), dRange, reset5, Math.floor(to / HOUR), pendSpans]);
     if (sig !== dsig) {
       dsig = sig;
       const b = bins(sp, from, to, maxBars, long ? 24 : 1);
       dstep = b.step; dbars = b.bars;
-      drawPlot(plot, dbars, dstep, w);
+      drawPlot(plot, dbars, dstep, w, pendSpans);
     }
     windows(spH, now, firstH, to);
 
@@ -1594,7 +1645,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     sub.append(', peak ', b3, U, ' in a ', dstep === 1 ? '1-hour' : `${dstep}-hour`, ' bucket.');
   }
 
-  function drawPlot(plot, bars, step, w) {
+  function drawPlot(plot, bars, step, w, pendSpans = []) {
     plot.textContent = '';
     const H = 110, AX = 16, L = 46, R = 6, T = 10;
     const pw = w - L - R, ph = H - T - AX;
@@ -1621,6 +1672,26 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         svg.append(svgEl('line', { class: 'bandedge', x1: bx, y1: T, x2: bx, y2: T + ph }));
         shaded = true;
       }
+    }
+    /* a turn that runs and that Claude Code has not reported yet: hatched, so it does not read as zero */
+    let hatched = false;
+    for (const [a0, b0] of pendSpans) {
+      const a = Math.max(bars[0].t0, a0), b = Math.min(bars[bars.length - 1].t1, b0);
+      if (!(b > a)) continue;
+      if (!hatched) {
+        const defs = svgEl('defs', {});
+        const pat = svgEl('pattern', { id: 'pend-hatch', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' });
+        pat.append(svgEl('line', { class: 'hatch', x1: 0, y1: 0, x2: 0, y2: 6 }));
+        defs.append(pat); svg.append(defs);
+      }
+      const px = x(a), pw2 = Math.max(2, x(b) - px);
+      svg.append(svgEl('rect', { class: 'pending', x: px, y: T, width: pw2, height: ph }));
+      if (pw2 > 70 && !hatched) {
+        const lab = svgEl('text', { class: 'bandlab', x: px + 4, y: T + 10 });
+        lab.textContent = 'turn running, not reported';
+        svg.append(lab);
+      }
+      hatched = true;
     }
     const slot = pw / bars.length;
     /* thin marks: a 2px gap when narrow, a capped bar when the slots are wide */
@@ -1674,7 +1745,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       lg.append(it);
     }
     $('density-cap').textContent = `tokens per ${perDay ? 'day' : 'hour'} · ${step === 1 ? '1-hour' : `${step}-hour`} buckets`
-      + (shaded ? ' · shaded: the current 5-hour window' : '') + ' · times in your clock';
+      + (shaded ? ' · shaded: the current 5-hour window' : '') + (hatched ? ' · hatched: a running turn that Claude Code has not reported yet' : '') + ' · times in your clock';
     plot.append(svg);
 
     /* a tooltip on the bar under the pointer, and a table view underneath */
@@ -1839,7 +1910,8 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       if (s.status !== 'running' && SESSION_TAG[s.bucket]) { const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = SESSION_TAG[s.bucket]; st.append(tg); }
       const sn = document.createElement('span'); sn.className = 'sn'; sn.textContent = s.tok ? `${tk(s.tok)}${s.usd ? ` · ${money(s.usd)}` : ''}` : '—';
       const sub = document.createElement('span'); sub.className = 'sub';
-      const word = s.gone ? 'No longer listed by Claude Code' : s.reader && s.status === 'running' ? 'Took the latest hourly reading' : s.status === 'running' ? 'Running now' : s.status === 'archived' ? 'Archived' : s.status === 'idle' ? 'Idle' : (s.status || 'Idle');
+      const word = s.gone ? 'No longer listed by Claude Code' : s.reader && s.status === 'running' ? 'Took the latest hourly reading'
+        : pendingBy.has(s.id) ? `Running a turn; total unchanged since ${when(pendingBy.get(s.id))}` : s.status === 'running' ? 'Running now' : s.status === 'archived' ? 'Archived' : s.status === 'idle' ? 'Idle' : (s.status || 'Idle');
       sub.textContent = `${word}${s.updatedAt ? ` · session updated ${ago(s.updatedAt)}` : ''}${s.where === 'local' ? ' · reported by the session' : ''}`;
       r.append(dot, st, sn, sub);
       list.append(r);

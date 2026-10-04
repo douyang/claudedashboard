@@ -61,6 +61,36 @@
    "repos": [
     "owner/quarterly-model"
    ]
+  },
+  {
+   "id": "session_01TURN001",
+   "title": "Long turn: rebuild the index",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T01:00:00Z",
+   "updatedAt": "2026-10-03T23:26:00Z",
+   "tok": 500000000,
+   "out": 5555555,
+   "usd": 500.0,
+   "repos": [
+    "owner/long-turn"
+   ]
+  },
+  {
+   "id": "session_01PEND001",
+   "title": "Pending turn: migrate the archive",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T01:00:00Z",
+   "updatedAt": "2026-10-03T23:26:00Z",
+   "tok": 80000000,
+   "out": 888888,
+   "usd": 80.0,
+   "repos": [
+    "owner/pending-turn"
+   ]
   }
  ],
  "quota": {

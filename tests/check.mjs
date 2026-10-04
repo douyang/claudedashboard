@@ -56,6 +56,15 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('reader: the session that took the reading does not make its project work', /^idle$/i.test(pills['priya/figures']) && /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
   const sl = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'priya/figures'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
   check('reader: its row says that it took the reading, and the count shows no running session', /Took the latest hourly reading/.test(sl) && !/running/i.test(sl.split('\n')[0]), sl.slice(0, 200));
+  /* ---- turns: Claude Code reports a running session's tokens only when its turn ends ---- */
+  const lt = R['owner/long-turn'];
+  check('turns: the tokens of a finished turn spread over the readings it ran through', !!lt && /^[56]\d M$/.test(lt[col('LAST HOUR')]), JSON.stringify(lt));
+  const pn = await p.evaluate(() => (document.getElementById('pending-note') || {}).innerText || '');
+  check('turns: a turn that still runs is named as not counted yet', /Not counted yet/.test(pn) && /owner\/pending-turn/.test(pn) && /not changed since/.test(pn), pn);
+  const hatch = await p.evaluate(() => document.querySelectorAll('#density-plot rect.pending').length);
+  check('turns: the chart hatches the running turn instead of showing zero', hatch > 0, String(hatch));
+  const prow = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
+  check('turns: its session row says that the total has not changed', /total unchanged since/.test(prow), prow.slice(0, 200));
   const own = await p.evaluate(() => [...document.querySelectorAll('.proj-card h2 .own')].map((e) => e.innerText));
   check('names: the owner of a repository reads in a lighter tone', own.length > 0 && own.includes('owner/'), own.join(','));
   const kp = await p.evaluate(() => document.getElementById('kpis').innerText);
@@ -98,7 +107,7 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   await p.waitForTimeout(250);
   const writes = await p.evaluate(() => window.__writes);
   const day3 = writes.find((x) => x[1] === 'daily/2026-10-03');
-  check('history: the owner page fills a completed day that has no ledger entry', !!day3 && day3[0] === 'set' && day3[2].at === '2026-10-03T22:26:00Z' && day3[2].rows.length === 4, JSON.stringify(day3 && [day3[1], day3[2].at, day3[2].rows.length]));
+  check('history: the owner page fills a completed day that has no ledger entry', !!day3 && day3[0] === 'set' && day3[2].at === '2026-10-03T22:26:00Z' && day3[2].rows.length === 6, JSON.stringify(day3 && [day3[1], day3[2].at, day3[2].rows.length]));
   check('history: it fills the same day in a person\'s subtree, and not the open day', writes.some((x) => x[1] === 'data/users/u_drew/profile/daily/2026-10-03') && !writes.some((x) => /daily\/2026-10-04$/.test(x[1])));
   if (day3) {
     const f = path.join(os.tmpdir(), 'check-day3.json');
@@ -129,12 +138,12 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   const csv = (name) => { const f = files.find((x) => x[0] === name); return f ? Buffer.from(f[1], 'base64').toString('utf8').replace(/^﻿/, '') : ''; };
   const daily = csv('claude-usage-daily.csv'), hourly = csv('claude-usage-hourly.csv');
   const dlines = daily.trim().split('\r\n');
-  check('csv: the daily file has the header and one row per session per ledger day', dlines[0] === 'day,person,session_id,title,repo,status,tokens_total,tokens_since_previous_reading,output_tokens_total,cost_usd_total,reading_utc' && dlines.length === 1 + 5 + 5 + 6 + 4 + 2, `${dlines.length} lines`);
+  check('csv: the daily file has the header and one row per session per ledger day', dlines[0] === 'day,person,session_id,title,repo,status,tokens_total,tokens_since_previous_reading,output_tokens_total,cost_usd_total,reading_utc' && dlines.length === 1 + 5 + 5 + 6 + 6 + 2, `${dlines.length} lines`);
   check('csv: a title with a comma and a quote is quoted', daily.includes('"Weekly ""export"", v2"'));
   check('csv: a title that starts with = cannot start a spreadsheet formula', daily.includes('"\'=SUM(1,1) test"') && !/(^|,)=SUM/m.test(daily));
   check('csv: growth is blank at a first reading and exact after', /2026-09-30,David C,session_01HARBOR1,[^\n]*,8600000000,,/.test(daily) && /2026-10-01,David C,session_01HARBOR1,[^\n]*,8800000000,200000000,/.test(daily));
   const hlines = hourly.trim().split('\r\n');
-  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 12 + 6 + 4, `${hlines.length} lines`);
+  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 18 + 6 + 4, `${hlines.length} lines`);
   check('csv: the hourly file names each person', /,Drew,/.test(hourly) && /,Priya,/.test(hourly) && /,David C,/.test(hourly));
   await s.close();
 }

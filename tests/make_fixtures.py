@@ -15,6 +15,9 @@ make its project read Working now.
 The owner also has a daily ledger for 30 Sep to 2 Oct. It holds a session that the newest sync no longer lists,
 and two titles that stress the CSV export (a comma and a quote, and a leading "=").
 Oct 3 has hourly readings and no ledger entry, so the page must fill it.
+Two more owner sessions show how Claude Code reports tokens: only when a turn ends. Long turn runs through two
+readings with one total, then grows; the growth must spread over the whole turn. Pending turn still runs with an
+unchanged total; the board must say that its tokens are not counted yet.
 The fixtures' clock is 2026-10-04T00:25:00Z.
 """
 import datetime as dt, json, os, shutil
@@ -47,6 +50,12 @@ for t, g in zip(syncs, grow):
         sess('session_01HARBOR2', 'Harbor docs: first pass', 'owner/harbor-docs', 'archived', 'completed', 1_300_000_000, at(2026, 9, 12, 1), at(2026, 9, 13, 5), 960.0),
         sess('session_01MODEL01', 'Quarterly model: dashboards', 'owner/quarterly-model', 'idle', 'completed', 1_200_000_000, at(2026, 9, 7, 1), at(2026, 10, 1, 21, 30), 1130.0),
     ]
+    # Claude Code reports a running session's tokens when its turn ends: equal totals while it runs
+    k = syncs.index(t)
+    rows.append(sess('session_01TURN001', 'Long turn: rebuild the index', 'owner/long-turn', ['running', 'running', 'idle'][k], ['working', 'working', 'completed'][k],
+                     [500_000_000, 500_000_000, 620_000_000][k], at(2026, 10, 2, 1), [t, t, at(2026, 10, 4, 0, 20)][k], [500.0, 500.0, 620.0][k]))
+    rows.append(sess('session_01PEND001', 'Pending turn: migrate the archive', 'owner/pending-turn', ['idle', 'running', 'running'][k], ['completed', 'working', 'working'][k],
+                     80_000_000, at(2026, 10, 2, 1), [at(2026, 10, 3, 22), t, t][k], 80.0))
     put('syncs', str(int(t.timestamp())), {'at': iso(t), 'src': 'routine', 'sessions': rows, 'quota': quota(t)})
 put('projects', 'atlas-port', {'name': 'Atlas port', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': ['session_01ATLAS01'], 'repos': ['owner/atlas-port'], 'color': 1})
 put('projects', 'harbor-docs', {'name': 'Harbor docs', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': ['session_01HARBOR1', 'session_01HARBOR2'], 'repos': ['owner/harbor-docs'], 'color': 2})
