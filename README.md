@@ -73,7 +73,7 @@ The text makes the person's Claude do these steps once:
 
 1. Read every session of the account with `list_sessions`, and write one `syncs` document and, on the first reading of each UTC day, one `daily` entry to the person's private subtree.
 2. Check that the document exists.
-3. Create a routine that runs every hour with the same sync as its prompt. One fresh session runs each time.
+3. Create a routine that runs every hour with the same sync as its prompt. The routine wakes the session that made it, so that session must stay alive.
 4. Report what it did.
 
 The text sends session ids, titles, status, model, times, repositories, token counts and cost. It sends no messages, transcripts, task summaries or file contents.
@@ -85,6 +85,10 @@ A person who opens the board sees their own usage, and a **Set up my Claude** bu
 ## The hourly sync
 
 A routine sends `sync` to the usage-sync session at minute 26 of every hour. The session follows `docs/SYNC.md` and writes `syncs/<epoch>`. `CLAUDE.md` holds the values, so the procedure survives a context reset.
+
+- The routine wakes one session that stays alive. A routine that starts a fresh session each hour does not work: fresh routine sessions do not get the Claude Code Remote tools, so they cannot call `list_sessions`.
+- To stop the sync, disable the routine in claude.ai Routines.
+- One test run cost about $0.11 at API list prices.
 
 ## If the live read is blocked
 
