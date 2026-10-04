@@ -33,6 +33,7 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   const heads = await headsOf(p);
   const col = (n) => heads.indexOf(n);
   const R = await rows(p);
+  check('density: the table has no Share column, which repeated the Tokens column', heads.length > 5 && !heads.includes('SHARE'), heads.join(','));
   const atlas = R['owner/atlas-port'], harbor = R['owner/harbor-docs'], model = R['owner/quarterly-model'];
   check('owner: the running project shows measured use in the last hour', atlas && atlas[col('1 H')] !== '—', JSON.stringify(atlas));
   check('owner: the idle project with 9 B lifetime tokens shows no use in the last hour', harbor && harbor[col('1 H')] === '—', JSON.stringify(harbor));

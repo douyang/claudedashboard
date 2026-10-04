@@ -507,6 +507,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   let quotaDoc = null;               // meta/quota as sessions wrote it
   let limitTypes = {};               // the latest report of each limit window, by type
   const SLOTS = 16;                    // project colour slots, --s1 to --s16
+  const SHOW_SHARE = false;            // the table's Share bar repeated the Tokens column; hidden, code kept
   let projSlot = new Map();          // project name -> colour slot 1-16, 0 for Other
   let live = null, liveAt = 0, liveErr = 'wait';
   let fStatus = 'all', fProject = 'all', fWhere = 'all', fPerson = 'all', showAll = false;
@@ -1496,7 +1497,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     const tbl = $('ptable');
     tbl.textContent = '';
     const thead = document.createElement('tr');
-    for (const [txt, r, note] of [['Project', 0], ...(multi ? [['Person', 0]] : []), ['Tokens', 1, 'tokens'], ['Share', 0], ['Cost', 1, 'cost'], ['1 h', 1], ['24 h', 1, 'measured'],
+    for (const [txt, r, note] of [['Project', 0], ...(multi ? [['Person', 0]] : []), ['Tokens', 1, 'tokens'], ...(SHOW_SHARE ? [['Share', 0]] : []), ['Cost', 1, 'cost'], ['1 h', 1], ['24 h', 1, 'measured'],
       ['Projected', 1, 'projection'], ['Sessions', 1], ['Last use', 0], ['Last activity', 0]]) {
       const th = document.createElement('th'); th.append(txt); if (note) th.append(fn(note)); if (r) th.className = 'r'; thead.append(th);
     }
@@ -1522,9 +1523,11 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       if (multi) { const wc2 = document.createElement('span'); wc2.className = 'who'; wc2.textContent = ownerName(p.owner); td(wc2); }
       const tv = document.createElement('span'); tv.append(p.sess.length ? `${tk(p.tok)}${p.partial ? '+' : ''}` : '—');
       td(tv, 'r');
-      const sh = document.createElement('span'); sh.className = 'share';
-      const si = document.createElement('i'); si.style.width = `${tot ? ((100 * p.tok) / tot).toFixed(1) : 0}%`; si.style.background = p.color; sh.append(si);
-      td(sh);
+      if (SHOW_SHARE) {
+        const sh = document.createElement('span'); sh.className = 'share';
+        const si = document.createElement('i'); si.style.width = `${tot ? ((100 * p.tok) / tot).toFixed(1) : 0}%`; si.style.background = p.color; sh.append(si);
+        td(sh);
+      }
       td(p.cost ? `${p.costEst ? '≈' : ''}${money(p.cost)}` : '—', 'r');
       td(p.v1 ? tk(p.v1) : '—', 'r');
       td(p.v24 ? tk(p.v24) : '—', 'r');
