@@ -1,0 +1,7 @@
+{
+ "status": "allowed",
+ "type": "five_hour",
+ "resetsAt": "2026-10-04T03:00:00Z",
+ "overage": false,
+ "updatedAt": "2026-10-04T00:23:00Z"
+}

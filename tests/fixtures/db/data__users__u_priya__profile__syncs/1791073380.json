@@ -1,0 +1,21 @@
+{
+ "at": "2026-10-04T00:23:00Z",
+ "src": "routine",
+ "sessions": [
+  {
+   "id": "session_01PRIYA01",
+   "title": "Grant figure pipeline",
+   "status": "idle",
+   "bucket": "completed",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-01T09:00:00Z",
+   "updatedAt": "2026-10-02T01:00:00Z",
+   "tok": 77000000,
+   "out": 855555,
+   "usd": 95.0,
+   "repos": [
+    "priya/figures"
+   ]
+  }
+ ]
+}
