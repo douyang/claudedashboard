@@ -16,6 +16,34 @@
    "repos": [
     "priya/figures"
    ]
+  },
+  {
+   "id": "session_01PRIYA02",
+   "title": "Figure tweaks",
+   "status": "idle",
+   "bucket": "completed",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T09:00:00Z",
+   "updatedAt": "2026-10-03T01:00:00Z",
+   "tok": 12000000,
+   "out": 133333,
+   "usd": 14.0,
+   "repos": [
+    "Priya/Figures"
+   ]
+  },
+  {
+   "id": "session_01PRIYA03",
+   "title": "Untracked scratch work",
+   "status": "idle",
+   "bucket": "completed",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-03T09:00:00Z",
+   "updatedAt": "2026-10-03T10:00:00Z",
+   "tok": 5000000,
+   "out": 55555,
+   "usd": 6.0,
+   "repos": []
   }
  ]
 }

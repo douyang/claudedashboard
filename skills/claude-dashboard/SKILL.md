@@ -33,7 +33,19 @@ The board shows each person's usage next to the others. What a person writes sta
 5. Keep each write small. Use `update` to merge fields. Use one `batch` when you write more than two documents.
 6. Never write message text, transcripts, file contents or secrets. Write counts, titles and links.
 
-## 1. At the start: register the project
+## 1. At the start: name and register the project
+
+### The project name
+
+The name follows the first rule that applies:
+
+1. The session has a repository: the name is `owner/repo` of its first repository. A cloud session lists it in `session_context.sources` (from `get_session`). A local session reads it with `git remote get-url origin`.
+2. The session has no repository, and its work is in a folder (a Cowork project, or a local session outside a repository): the name is the name of that folder, the last part of its path.
+3. Neither applies: the name is the project's own name, as the user says it.
+
+Use the same name in `projects.name`, `jobs.project` and `sessions.project`. The board groups by this rule, not by a free label. A session that touched several repositories belongs to its first repository. A project that had another name keeps that name in `aliases`.
+
+### Register
 
 1. Read the registry: `ArtifactData list` on collection `projects`.
 2. Find your project by `name` or `aliases`. If a job row uses another name for the same project, add that name to `aliases`.
@@ -41,11 +53,12 @@ The board shows each person's usage next to the others. What a person writes sta
 
 | Field | Value |
 |---|---|
-| `name` | The project name that the user uses. |
+| `name` | The project name from the rule above. |
 | `where` | `cloud` for a Claude Code cloud session (web, iOS, desktop app remote). `local` for Cowork and for a CLI or IDE session on the user's computer. |
 | `surface` | For example `Claude Code · cloud`, `Claude Code · CLI`, `Cowork`. |
 | `sessions` | An array with your session id. |
-| `repos` | `owner/repo` strings, if any. |
+| `repos` | `owner/repo` strings, if any. The first one names the project. |
+| `folder` | The folder name, when the project has no repository. |
 | `artifacts` | `https://claude.ai/artifact/...` links, if any. |
 | `status` | `active`. Use `paused` or `done` only when the user says so. |
 | `color` | Leave it out. The board owner assigns the colour slots (1 to 8). |
@@ -88,7 +101,7 @@ Close each row when its work ends: `status: done` and `finishedAt`. A row left `
 3. `set` or `update` `sessions/<session id>`:
 
 ```json
-{ "title": "<session title>", "project": "<registry name>", "where": "cloud",
+{ "title": "<session title>", "project": "<registry name>", "repos": ["owner/repo"], "where": "cloud",
   "surface": "Claude Code · cloud", "status": "running",
   "createdAt": "<created_at>", "updatedAt": "<now>",
   "tok": 123456789, "out": 456789, "usd": 12.34, "src": "ccr" }
@@ -114,6 +127,7 @@ These sessions do not appear in `list_sessions`, so their report is the only rec
 - If the session can read its own usage (for example `/cost` in the CLI), write `sessions/<your id>` with `tok`, `out`, `usd` and `src: "report"`, and append snapshots as above.
 - If it cannot, write `sessions/<your id>` with what you can measure, for example subagent token counts, plus `partial: true` and a `note` that says what the figure counts. Do not estimate the rest.
 - Set `where: "local"` and `surface: "Cowork"` or `"Claude Code · CLI"`.
+- Write `repos` when the session has a repository. Write `folder` (the folder name) when it has none.
 
 ## 4. The account limit
 

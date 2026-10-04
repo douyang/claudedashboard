@@ -29,15 +29,31 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   const heads = await p.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].innerText.split('\t').map((x) => x.trim()));
   const col = (n) => heads.indexOf(n);
   const R = await rows(p);
-  const atlas = R['Atlas port'], harbor = R['Harbor docs'], model = R['Quarterly model'];
+  const atlas = R['owner/atlas-port'], harbor = R['owner/harbor-docs'], model = R['owner/quarterly-model'];
   check('owner: the running project shows measured use in the last hour', atlas && atlas[col('LAST HOUR')] !== '—', JSON.stringify(atlas));
   check('owner: the idle project with 9 B lifetime tokens shows no use in the last hour', harbor && harbor[col('LAST HOUR')] === '—', JSON.stringify(harbor));
   check('owner: the idle project shows no use in 24 h', harbor && harbor[col('24 H')] === '—', JSON.stringify(harbor));
   check('owner: the project idle for two days shows no use in 24 h', model && model[col('24 H')] === '—', JSON.stringify(model));
   check('owner: last token use of the two-day idle project is in hours', model && /\d+ h ago/.test(model[col('LAST TOKEN USE')]), JSON.stringify(model));
   const pills = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((c) => [c.querySelector('h2').innerText.trim(), c.querySelector('.pill').innerText.trim()])));
-  check('owner: the running project reads Working now', /^working now$/i.test(pills['Atlas port']), JSON.stringify(pills));
-  check('owner: the idle project reads Idle', /^idle$/i.test(pills['Harbor docs']), JSON.stringify(pills));
+  check('owner: the running project reads Working now', /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
+  check('owner: the idle project reads Idle', /^idle$/i.test(pills['owner/harbor-docs']), JSON.stringify(pills));
+
+  /* ---- names: a project is named after its repository, else its folder, else its own name ---- */
+  const cards = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((c) => [c.querySelector('h2').innerText.trim(), c.innerText])));
+  check('names: a registry project shows its repository, not its old label', !!atlas && !R['Atlas port'] && !R['Harbor docs'] && !R['Quarterly model'], Object.keys(R).join(' | '));
+  check('names: a job row that uses the old label keeps its project', /Import the 2024 archive/.test(cards['owner/atlas-port'] || ''), Object.keys(cards).join(' | '));
+  check('names: two registry entries with one repository are one project, whatever the case',
+    !!harbor && !R['Harbor notes'] && !R['Owner/Harbor-Docs'] && harbor[col('SESSIONS')].startsWith('2') && /Outline the migration notes/.test(cards['owner/harbor-docs'] || ''), JSON.stringify(harbor));
+  check('names: a Cowork project with a folder and no repository is named after the folder',
+    !!R.Studio && !R['Studio work'] && /^local$/i.test(R.Studio[col('RUNS')]) && R.Studio[col('TOKENS')] === '12 M+', JSON.stringify(R.Studio));
+  check('names: a Cowork session with a folder and no registry entry forms a project named after the folder',
+    !!R['Field notes'] && /^local$/i.test(R['Field notes'][col('RUNS')]) && /^3(\.0)? M\+$/.test(R['Field notes'][col('TOKENS')]), JSON.stringify(R['Field notes']));
+  check('names: repository names that differ in case are one project',
+    !!R['priya/figures'] && !R['Priya/Figures'] && R['priya/figures'][col('SESSIONS')].startsWith('2'), JSON.stringify(R['priya/figures']));
+  check('names: a session with no repository and no folder keeps its own name', !!R['Untracked scratch work (not in the registry)'], Object.keys(R).join(' | '));
+  const own = await p.evaluate(() => [...document.querySelectorAll('.proj-card h2 .own')].map((e) => e.innerText));
+  check('names: the owner of a repository reads in a lighter tone', own.length > 0 && own.includes('owner/'), own.join(','));
   const kp = await p.evaluate(() => document.getElementById('kpis').innerText);
   check('owner: the 24 h figure says how much of the window it measured', /measured .* of 24 h/.test(kp), kp);
   check('owner: tokens used before the first reading are stated, not placed in an hour', /used before the first reading/.test(kp), kp);
@@ -91,7 +107,7 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('history: All tokens counts the session that Claude Code no longer lists', /no longer listed/.test(kp2), kp2.split('\n').slice(0, 3).join(' | '));
   check('history: Last 30 days comes from the ledger', /LAST 30 DAYS\n[\d.]+ [MB]/.test(kp2), kp2);
   const rows2 = await rows(p);
-  check('history: the project of the removed session stays in the table with its tokens', rows2['retired-experiment'] && rows2['retired-experiment'][col('TOKENS')] === '405 M', JSON.stringify(rows2['retired-experiment']));
+  check('history: the project of the removed session stays in the table with its tokens', rows2['owner/retired-experiment'] && rows2['owner/retired-experiment'][col('TOKENS')] === '405 M', JSON.stringify(rows2['owner/retired-experiment']));
   for (const range of ['720', 'all']) {
     await p.click(`button[data-key="density-range:${range}"]`);
     await p.waitForTimeout(250);
@@ -114,7 +130,7 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('csv: a title that starts with = cannot start a spreadsheet formula', daily.includes('"\'=SUM(1,1) test"') && !/(^|,)=SUM/m.test(daily));
   check('csv: growth is blank at a first reading and exact after', /2026-09-30,David C,session_01HARBOR1,[^\n]*,8600000000,,/.test(daily) && /2026-10-01,David C,session_01HARBOR1,[^\n]*,8800000000,200000000,/.test(daily));
   const hlines = hourly.trim().split('\r\n');
-  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 12 + 6 + 1, `${hlines.length} lines`);
+  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 12 + 6 + 3, `${hlines.length} lines`);
   check('csv: the hourly file names each person', /,Drew,/.test(hourly) && /,Priya,/.test(hourly) && /,David C,/.test(hourly));
   await s.close();
 }
@@ -133,6 +149,19 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('ledger only: 30 d draws the days from the ledger', segs > 0, String(segs));
   await s.close();
   fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- a saved project filter whose project was renamed must not empty the board ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', width: 1100 });
+  const stored = await s.page.evaluate(() => { try { localStorage.setItem('cad.project', 'A label from before the rename'); return true; } catch (e) { return false; } });
+  if (stored) {
+    await s.page.reload();
+    await s.page.waitForTimeout(900);
+    const n = await s.page.evaluate(() => document.querySelectorAll('.proj-card').length);
+    check('names: a saved project filter that no longer exists does not empty the board', n > 0, String(n));
+  } else console.log('SKIP  names: this browser blocks localStorage for file pages');
+  await s.close();
 }
 
 /* ---- a person's view ---- */

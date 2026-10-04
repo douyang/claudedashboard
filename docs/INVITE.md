@@ -43,12 +43,12 @@ Follow "THE SYNC" at the end of this text. It writes the first document to the b
 3. If it does not exist, call create_trigger (server claude-code-remote) with these settings:
    - name: "Claude board hourly sync"
    - cron_expression: "0 * * * *"
-   - create_new_session_on_fire: true
    - initiation: "human_request"
-   - notifications: {}
    - prompt: the full text of "THE SYNC", unchanged.
-4. If you have no create_trigger tool, tell {{NAME}} to create a scheduled task in the Claude app. The task runs every hour and its prompt is the text of "THE SYNC". Do not skip this silently.
-5. Call list_triggers again. Confirm that the routine is enabled. Note its next_run_at.
+4. Do not set create_new_session_on_fire or notifications. The routine then wakes this session every hour. A routine that starts a fresh session gets no list_sessions tool, so the sync would fail there.
+5. If you have set_session_title, rename this session to "Claude board usage sync". Tell {{NAME}}: "Keep this session. Do not archive or delete it. The hourly update runs in it."
+6. If you have no create_trigger tool, tell {{NAME}} to create a scheduled task in the Claude app. The task runs every hour and its prompt is the text of "THE SYNC". Do not skip this silently.
+7. Call list_triggers again. Confirm that the routine is enabled. Note its next_run_at.
 
 ## Step 4. Show {{NAME}} on the board
 

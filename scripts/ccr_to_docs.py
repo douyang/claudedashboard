@@ -71,7 +71,7 @@ def main():
             pts = list((old or {}).get('data', old or {}).get('pts', [])) if old else []
             if not pts or pts[-1][1] != tok:
                 pts.append([at, tok])
-            tick = {'sid': s['id'], 'project': sid_proj.get(s['id'], s.get('title', '')), 'day': day, 'pts': pts[-200:],
+            tick = {'sid': s['id'], 'project': sid_proj.get(s['id']) or (doc['repos'][0] if doc['repos'] else s.get('title', '')), 'day': day, 'pts': pts[-200:],
                     'out': doc['out'], 'usd': doc['usd'], 'src': 'ccr', 'updatedAt': dt.datetime.utcfromtimestamp(at).strftime('%Y-%m-%dT%H:%M:%SZ')}
             writes.append(entry('ticks', f"{s['id']}~{day}", tick, existing, a.out_dir))
     for i in range(0, len(writes), 50):

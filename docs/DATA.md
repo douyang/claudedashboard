@@ -20,22 +20,34 @@ The registry. One document per project.
 
 | Field | Meaning |
 |---|---|
-| `name` | The project name on the board. |
+| `name` | The project's own name. The board shows the first repository instead, else `folder`, else this name. Job rows that use this name keep their project. |
 | `aliases` | Other names that job rows use for this project. |
 | `where` | `cloud` or `local`. When absent, the board derives it from the sessions and job surfaces. |
 | `surface` | For example `Claude Code · cloud` or `Cowork`. |
 | `sessions` | Session ids that belong to the project. |
-| `repos`, `artifacts` | Links shown on the project card. |
+| `repos` | `owner/repo` strings. The first one names the project on the board. All appear as links on the card. |
+| `folder` | The folder name of a project that has no repository, for example a Cowork project. |
+| `artifacts` | Links shown on the project card. |
 | `status` | `active`, `paused` or `done`. `paused` and `done` make the project inactive. |
 | `pinned` | `true` keeps the project active. |
 | `color` | A fixed colour slot, 1 to 8. A project without one draws in grey as Other. Eight is the most colours a chart can keep apart for readers with colour-vision deficiency. |
 | `lastActivityAt` | Set by a reporting session. A registry edit does not set it. |
 
-A session that no project lists is grouped by its first repository. Without a repository it forms a project named by its title.
+### How the board names a project
+
+The first rule that applies to a session:
+
+1. A registry document lists the session in `sessions`: the session belongs to that project.
+2. The session has a repository: it belongs to the project of its first repository.
+3. The session has a `folder`: it belongs to the project of that folder.
+4. The session has a `project` field: that name.
+5. Otherwise the session forms a project named by its title.
+
+The title of a registry project is its first repository, else its `folder`, else its `name`. Repository names compare without regard to case, and the registry's spelling wins. Registry documents with the same title are one project. The old `name` and every alias still reach the project, so older job rows keep it.
 
 ## `sessions/<session id>`
 
-One document per session. `tok` counts input, cache reads, cache writes and output. `usd` is the cost at API list prices. `partial: true` marks a floor. When the Claude Code Remote connector answers, the live figures replace the stored ones for the board owner's cloud sessions.
+One document per session. `repos` (`owner/repo` strings) and `folder` decide the project, as above. `tok` counts input, cache reads, cache writes and output. `usd` is the cost at API list prices. `partial: true` marks a floor. When the Claude Code Remote connector answers, the live figures replace the stored ones for the board owner's cloud sessions.
 
 ## `syncs/<epoch seconds>`
 

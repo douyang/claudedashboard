@@ -5,7 +5,12 @@ The board owner has three projects that mirror three real situations:
   Atlas port     runs now; its tokens grow between every hourly sync
   Harbor docs    idle: 9 B lifetime tokens, nothing moves between syncs, its session updated 80 min ago
   Quarterly model idle for two days: 1.2 B lifetime tokens
-Drew and Priya each have a private subtree that only they and the owner read.
+The owner's registry entries keep their old labels, to show that the board names a project after its repository.
+Harbor notes shares Harbor docs' repository, spelled in another case: one project. Studio is a Cowork project that has a
+folder and no repository, and Field notes is a Cowork session with a folder and no registry entry. Long name has a very
+long repository name, to check phone width.
+Drew and Priya each have a private subtree that only they and the owner read. Priya has two spellings of one repository
+and one session with no repository and no folder.
 The owner also has a daily ledger for 30 Sep to 2 Oct. It holds a session that the newest sync no longer lists,
 and two titles that stress the CSV export (a comma and a quote, and a leading "=").
 Oct 3 has hourly readings and no ledger entry, so the page must fill it.
@@ -45,6 +50,16 @@ for t, g in zip(syncs, grow):
 put('projects', 'atlas-port', {'name': 'Atlas port', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': ['session_01ATLAS01'], 'repos': ['owner/atlas-port'], 'color': 1})
 put('projects', 'harbor-docs', {'name': 'Harbor docs', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': ['session_01HARBOR1', 'session_01HARBOR2'], 'repos': ['owner/harbor-docs'], 'color': 2})
 put('projects', 'quarterly-model', {'name': 'Quarterly model', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': ['session_01MODEL01'], 'repos': ['owner/quarterly-model'], 'color': 3})
+put('projects', 'harbor-notes', {'name': 'Harbor notes', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': [], 'repos': ['Owner/Harbor-Docs'], 'color': 4})
+put('projects', 'studio', {'name': 'Studio work', 'where': 'local', 'surface': 'Cowork', 'sessions': ['cowork-studio'], 'folder': 'Studio', 'color': 5})
+put('projects', 'long-name', {'name': 'Long name', 'where': 'cloud', 'surface': 'Claude Code · cloud', 'sessions': [], 'pinned': True,
+                              'repos': ['owner/an-unusually-long-repository-name-that-must-wrap-on-a-phone']})
+put('sessions', 'cowork-studio', {'label': 'Cowork · studio', 'where': 'local', 'surface': 'Cowork', 'tok': 12_000_000, 'out': 80_000, 'partial': True,
+                                  'note': 'a floor', 'updatedAt': '2026-10-04T00:10:00Z', 'src': 'report'})
+put('sessions', 'cowork-notes', {'label': 'Cowork · field notes', 'where': 'local', 'surface': 'Cowork', 'folder': 'Field notes', 'tok': 3_000_000, 'out': 20_000,
+                                 'partial': True, 'note': 'a floor', 'updatedAt': '2026-10-04T00:05:00Z', 'src': 'report'})
+put('jobs', 'harbor-outline', {'project': 'Harbor notes', 'label': 'Outline the migration notes', 'status': 'queued', 'surface': 'Claude Code · cloud',
+                               'updatedAt': '2026-10-04T00:20:00Z'})
 put('jobs', 'atlas-import', {'project': 'Atlas port', 'label': 'Import the 2024 archive', 'status': 'running', 'surface': 'Claude Code · cloud', 'total': 10, 'done': 4,
                              'unit': 'files', 'startedAt': '2026-10-03T22:30:00Z', 'updatedAt': '2026-10-04T00:20:00Z', 'estSec': 14400, 'tokEst': 600_000_000})
 put('jobs', 'atlas-schema', {'project': 'Atlas port', 'label': 'Schema draft', 'status': 'done', 'surface': 'Claude Code · cloud', 'startedAt': '2026-10-03T20:00:00Z',
@@ -76,6 +91,8 @@ put('join', 'u_drew', {'name': 'Drew', 'joinedAt': '2026-10-03T22:10:00Z', 'seen
 
 # Priya: one sync; the owner sees it, Drew does not
 put('data__users__u_priya__profile__syncs', '1791073380', {'at': '2026-10-04T00:23:00Z', 'src': 'routine',
-    'sessions': [sess('session_01PRIYA01', 'Grant figure pipeline', 'priya/figures', 'idle', 'completed', 77_000_000, at(2026, 10, 1, 9), at(2026, 10, 2, 1), 95.0)]})
+    'sessions': [sess('session_01PRIYA01', 'Grant figure pipeline', 'priya/figures', 'idle', 'completed', 77_000_000, at(2026, 10, 1, 9), at(2026, 10, 2, 1), 95.0),
+                 sess('session_01PRIYA02', 'Figure tweaks', 'Priya/Figures', 'idle', 'completed', 12_000_000, at(2026, 10, 2, 9), at(2026, 10, 3, 1), 14.0),
+                 {**sess('session_01PRIYA03', 'Untracked scratch work', 'x/y', 'idle', 'completed', 5_000_000, at(2026, 10, 3, 9), at(2026, 10, 3, 10), 6.0), 'repos': []}]})
 put('join', 'u_priya', {'name': 'Priya', 'joinedAt': '2026-10-03T22:40:00Z', 'seenAt': '2026-10-03T22:40:00Z'})
 print('wrote', ROOT)

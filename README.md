@@ -52,6 +52,18 @@ The board owner's own collections (`jobs`, `projects`, `sessions`, `syncs`, `tic
 
 A person needs edit access to the board (Share menu, Contributor). The page sends no data from one person to another. The database refuses a read or write outside a person's own subtree.
 
+## How a project is named
+
+The board names a project after its repository: `owner/repo` of the first repository of the project or of its sessions.
+
+- A project without a repository takes the name of its folder, for example a Cowork project.
+- A project with neither keeps its own name.
+- Two registry entries with the same repository are one project. Repository names compare without regard to case.
+- A session that touched several repositories belongs to its first repository. A registry entry can pin it to another project through `sessions`.
+- An older name stays valid as an alias. Job rows that use it keep their project.
+
+`docs/DATA.md` lists the rules in order.
+
 ## How the figures are measured
 
 - A rate counts only tokens that two readings at most 3 hours apart place in time. The page spreads them evenly between the two readings.
