@@ -50,6 +50,9 @@ A get_session answer holds a task summary; add-local keeps only the row fields.
 `turn` is {since, tok, out, calls, lastAt, lastMsg, pts, partial}: the tokens
 of the turns that the reported total does not hold yet (output is a floor until
 a turn ends), and [epoch seconds, tokens so far] points, one per 10 minutes.
+partial marks a floor: the read stopped before it reached the end of the
+previous turn or the last call that the previous reading counted, at the page
+cap, at a page that holds no event list, or where the log ended first.
 PREV.json, the newest sync document already on the board, lets the count
 continue from where the last reading stopped. Claude Code adds an ended turn
 to the reported total late, sometimes hours late, so while that total stays
@@ -91,12 +94,19 @@ STATE = '/tmp/turns.json'
 
 
 def load_page(path):
-    """One list_events answer: (events, has_more, first_id)."""
-    txt = open(path).read()
+    """One list_events answer: (events, has_more, first_id). events is None when the file holds no event list,
+    for example an error answer or a copy that broke off."""
+    txt = open(path, encoding='utf-8', errors='replace').read()
     i = txt.find('{"ccr"')
-    d, _ = json.JSONDecoder().raw_decode(txt[i if i >= 0 else txt.find('{'):])
-    c = d.get('ccr') or d
-    return c.get('data') or [], bool(c.get('has_more')), c.get('first_id')
+    i = i if i >= 0 else txt.find('{')
+    try:
+        d = json.JSONDecoder().raw_decode(txt[i:])[0] if i >= 0 else None
+    except ValueError:
+        d = None
+    c = (d.get('ccr') or d) if isinstance(d, dict) else None
+    if not isinstance(c, dict) or not isinstance(c.get('data'), list):
+        return None, False, None
+    return c['data'], bool(c.get('has_more')), c.get('first_id')
 
 
 def turns_plan(sync_path, prev_path):
@@ -130,7 +140,7 @@ def turns_add(sid, page_path):
     st['pages'] += 1
     prev = st['prev'] or {}
     stop = False
-    for e in sorted(events, key=lambda x: x.get('created_at') or '', reverse=True):
+    for e in sorted(events or [], key=lambda x: x.get('created_at') or '', reverse=True):
         at = e.get('created_at') or ''
         if 'result' in e:                       # the end of a turn
             if not prev:                        # no carried counts: the reported total holds that turn
@@ -150,11 +160,13 @@ def turns_add(sid, page_path):
         tok = sum(int(u.get(k) or 0) for k in ('input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens'))
         old = st['calls'].get(mid)
         st['calls'][mid] = [min(at, old[0]) if old else at, max(tok, old[1] if old else 0), max(int(u.get('output_tokens') or 0), old[2] if old else 0)]
-    go = more and not stop and st['pages'] < TURN_CAP
-    if more and not stop and not go:
+    go = events is not None and more and bool(first) and not stop and st['pages'] < TURN_CAP
+    # A read that stops early leaves calls out: at the page cap, at a page with no event list, or where the log
+    # ends before the last call that the previous reading counted. The count is then a floor.
+    if not stop and not go and (events is None or more or prev):
         st['partial'] = True
     json.dump(state, open(STATE, 'w'))
-    print(json.dumps({'more': go, 'before_id': first if go else None}))
+    print(json.dumps({'more': go, 'before_id': first if go else None, 'partial': st['partial']}))
 
 
 def turns_merge(sync_path):

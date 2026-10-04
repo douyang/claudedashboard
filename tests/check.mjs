@@ -275,6 +275,35 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   py('turns-merge', path.join(dir, 'cap.json'));
   const t3 = JSON.parse(fs.readFileSync(path.join(dir, 'cap.json'), 'utf8')).sessions[0].turn;
   check('events: a turn longer than 30 pages stops after 30 and reads as a floor', n === 30 && t3.partial === true && t3.calls === 30 && t3.tok === 30 * 17, JSON.stringify([n, t3.calls, t3.tok, t3.partial]));
+  /* a page that holds no event list (a copy that broke off, an error answer) ends the read, keeps the calls before it,
+     marks the count as a floor, and is still deleted */
+  fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'bad.json'));
+  page('b1.txt', [ev('2026-10-04T05:25:00Z', 'b1', 0)], true, 'cb1');
+  const b1 = py('turns-add', 'session_A', path.join(dir, 'b1.txt'));
+  fs.writeFileSync(path.join(dir, 'b2.txt'), '{"ccr": {"data": [{"created_at": "2026-10-04T05:2');
+  const b2 = py('turns-add', 'session_A', path.join(dir, 'b2.txt'));
+  py('turns-merge', path.join(dir, 'bad.json'));
+  const tb = JSON.parse(fs.readFileSync(path.join(dir, 'bad.json'), 'utf8')).sessions[0].turn;
+  fs.writeFileSync(path.join(dir, 'bad2.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'bad2.json'));
+  fs.writeFileSync(path.join(dir, 'b3.txt'), 'The tool answered: {"error": "upstream timeout"}');
+  const b3 = py('turns-add', 'session_A', path.join(dir, 'b3.txt'));
+  check('events: a page with no event list ends the read, keeps the calls before it, reads as a floor, and is deleted',
+    b1.more === true && b1.partial === false && b2.more === false && b2.partial === true && b3.more === false && b3.partial === true
+      && !fs.existsSync(path.join(dir, 'b2.txt')) && !fs.existsSync(path.join(dir, 'b3.txt')) && !!tb && tb.partial === true && tb.calls === 1 && tb.tok === 17,
+    JSON.stringify([b1, b2, b3, tb]));
+  /* the events end before the read reaches the last call that the previous reading counted: calls are missing */
+  fs.writeFileSync(path.join(dir, 'gap.json'), JSON.stringify({ ...sync, at: '2026-10-04T09:35:00Z', sessions: [sync.sessions[0]] }));
+  const planG = py('turns-plan', path.join(dir, 'gap.json'), '--prev', path.join(dir, 'fourth.json'));
+  page('g1.txt', [ev('2026-10-04T09:30:00Z', 'g9', 900)], false, 'cg1');
+  const g1 = py('turns-add', 'session_A', path.join(dir, 'g1.txt'));
+  py('turns-merge', path.join(dir, 'gap.json'));
+  const tg = JSON.parse(fs.readFileSync(path.join(dir, 'gap.json'), 'utf8')).sessions[0].turn;
+  check('events: events that end before the last counted call read as a floor; a read that reaches it does not',
+    JSON.stringify(planG.sessions) === '["session_A"]' && g1.more === false && g1.partial === true && !!tg && tg.partial === true && !!t4 && tg.tok === t4.tok + 917
+      && !t4.partial && !t3a.partial && !t2.partial && !turn.partial,
+    JSON.stringify([planG, g1, tg && tg.tok, t4 && t4.tok, [t4 && t4.partial, t3a.partial, t2.partial, turn.partial]]));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
