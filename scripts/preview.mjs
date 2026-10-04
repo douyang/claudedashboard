@@ -130,8 +130,10 @@ export async function open(opts = {}) {
   const liveData = opts.liveData || null;
   await page.addInitScript(stub, { docs, viewer: opts.viewer || 'owner', uid: opts.uid || 'u_drew', name: opts.name || 'Drew', live: opts.live || 'blocked_by_policy', liveData });
   await page.goto(pathToFileURL(path.resolve(opts.page || 'dashboard/index.html')).href);
-  /* the reset that the artifact page adds around the file when it is published */
-  await page.addStyleTag({ content: ':root{color-scheme:light;box-sizing:border-box}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}' });
+  /* the reset that the artifact page adds around the file when it is published. It sits in the head, before the
+     page's own styles, so the page's rules win as they do on the published page */
+  await page.evaluate((css) => { const st = document.createElement('style'); st.textContent = css; document.head.prepend(st); },
+    ':root{color-scheme:light;box-sizing:border-box}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}');
   await page.waitForTimeout(opts.wait ?? 900);
   return { page, ctx, browser, problems, nowMs, close: () => browser.close() };
 }

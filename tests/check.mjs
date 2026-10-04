@@ -16,25 +16,29 @@ const DB = new URL('./fixtures/db', import.meta.url).pathname;
 const NOW = '2026-10-04T00:25:00Z';
 let failed = 0;
 const check = (name, ok, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  ${detail}`}`); if (!ok) failed += 1; };
-const rows = (page) => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#ptable tr')].slice(1).map((r) => {
+const rows = (page) => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#ptable tr')].slice(1).filter((r) => !r.classList.contains('sep')).map((r) => {
   const c = [...r.children].map((x) => x.innerText.trim().replace(/\s+/g, ' '));
-  return [c[0].replace(/ · inactive$/, ''), c];
+  const tt = r.querySelector('.tt');
+  return [tt ? tt.innerText.trim() : c[0], c];
 })));
+const headsOf = (page) => page.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].querySelectorAll('th').length
+  ? [...[...document.querySelectorAll('#ptable tr')][0].querySelectorAll('th')].map((th) => (th.firstChild ? th.firstChild.textContent : '').trim().toUpperCase()) : []);
+const notesText = (page) => page.evaluate(() => (document.getElementById('notes-list') || {}).innerText || '');
 
 /* ---- owner view ---- */
 {
   const s = await open({ db: DB, now: NOW, viewer: 'owner', width: 1100 });
   const p = s.page;
   check('owner: page loads without errors', s.problems.length === 0, s.problems.join(' | '));
-  const heads = await p.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].innerText.split('\t').map((x) => x.trim()));
+  const heads = await headsOf(p);
   const col = (n) => heads.indexOf(n);
   const R = await rows(p);
   const atlas = R['owner/atlas-port'], harbor = R['owner/harbor-docs'], model = R['owner/quarterly-model'];
-  check('owner: the running project shows measured use in the last hour', atlas && atlas[col('LAST HOUR')] !== '—', JSON.stringify(atlas));
-  check('owner: the idle project with 9 B lifetime tokens shows no use in the last hour', harbor && harbor[col('LAST HOUR')] === '—', JSON.stringify(harbor));
+  check('owner: the running project shows measured use in the last hour', atlas && atlas[col('1 H')] !== '—', JSON.stringify(atlas));
+  check('owner: the idle project with 9 B lifetime tokens shows no use in the last hour', harbor && harbor[col('1 H')] === '—', JSON.stringify(harbor));
   check('owner: the idle project shows no use in 24 h', harbor && harbor[col('24 H')] === '—', JSON.stringify(harbor));
   check('owner: the project idle for two days shows no use in 24 h', model && model[col('24 H')] === '—', JSON.stringify(model));
-  check('owner: last token use of the two-day idle project is in hours', model && /\d+ h ago/.test(model[col('LAST TOKEN USE')]), JSON.stringify(model));
+  check('owner: last token use of the two-day idle project is in hours or days', model && /^\d+ (h|d)$/.test(model[col('LAST USE')]), JSON.stringify(model));
   const pills = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((c) => [c.querySelector('h2').innerText.trim(), c.querySelector('.pill').innerText.trim()])));
   check('owner: the running project reads Working now', /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
   check('owner: the idle project reads Idle', /^idle$/i.test(pills['owner/harbor-docs']), JSON.stringify(pills));
@@ -46,21 +50,21 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   check('names: two registry entries with one repository are one project, whatever the case',
     !!harbor && !R['Harbor notes'] && !R['Owner/Harbor-Docs'] && harbor[col('SESSIONS')].startsWith('2') && /Outline the migration notes/.test(cards['owner/harbor-docs'] || ''), JSON.stringify(harbor));
   check('names: a Cowork project with a folder and no repository is named after the folder',
-    !!R.Studio && !R['Studio work'] && /^local$/i.test(R.Studio[col('RUNS')]) && R.Studio[col('TOKENS')] === '12 M+', JSON.stringify(R.Studio));
+    !!R.Studio && !R['Studio work'] && /\blocal\b/i.test(R.Studio[0]) && R.Studio[col('TOKENS')] === '12 M+', JSON.stringify(R.Studio));
   check('names: a Cowork session with a folder and no registry entry forms a project named after the folder',
-    !!R['Field notes'] && /^local$/i.test(R['Field notes'][col('RUNS')]) && /^3(\.0)? M\+$/.test(R['Field notes'][col('TOKENS')]), JSON.stringify(R['Field notes']));
+    !!R['Field notes'] && /\blocal\b/i.test(R['Field notes'][0]) && /^3(\.0)? M\+$/.test(R['Field notes'][col('TOKENS')]), JSON.stringify(R['Field notes']));
   check('names: repository names that differ in case are one project',
     !!R['priya/figures'] && !R['Priya/Figures'] && R['priya/figures'][col('SESSIONS')].startsWith('3'), JSON.stringify(R['priya/figures']));
-  check('names: a session with no repository and no folder keeps its own name', !!R['Untracked scratch work (not in the registry)'], Object.keys(R).join(' | '));
+  check('names: a session with no repository and no folder keeps its own name', !!R['Untracked scratch work'] && /not in registry/i.test(R['Untracked scratch work'][0]), Object.keys(R).join(' | '));
   /* ---- reader: the session that takes the hourly reading runs because it reads; that is not work ---- */
   check('reader: the session that took the reading does not make its project work', /^idle$/i.test(pills['priya/figures']) && /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
   const sl = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'priya/figures'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
-  check('reader: its row says that it took the reading, and the count shows no running session', /Took the latest hourly reading/.test(sl) && !/running/i.test(sl.split('\n')[0]), sl.slice(0, 200));
+  check('reader: its row says that it took the reading, and the count shows no running session', /Took the hourly reading/.test(sl) && !/running/i.test(sl.split('\n')[0]), sl.slice(0, 200));
   /* ---- turns: Claude Code reports a running session's tokens only when its turn ends ---- */
   const lt = R['owner/long-turn'];
-  check('turns: the tokens of a finished turn spread over the readings it ran through', !!lt && /^[56]\d M$/.test(lt[col('LAST HOUR')]), JSON.stringify(lt));
+  check('turns: the tokens of a finished turn spread over the readings it ran through', !!lt && /^[56]\d M$/.test(lt[col('1 H')]), JSON.stringify(lt));
   const pn = await p.evaluate(() => (document.getElementById('pending-note') || {}).innerText || '');
-  check('turns: a turn that still runs is named as not counted yet', /Not counted yet/.test(pn) && /owner\/pending-turn/.test(pn) && /not changed since/.test(pn), pn);
+  check('turns: a turn that still runs is named as not counted yet', /Not counted yet/.test(pn) && /owner\/pending-turn/.test(pn) && /unchanged since/.test(pn), pn);
   const hatch = await p.evaluate(() => document.querySelectorAll('#density-plot rect.pending').length);
   check('turns: the chart hatches the running turn instead of showing zero', hatch > 0, String(hatch));
   const prow = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
@@ -68,10 +72,27 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   const own = await p.evaluate(() => [...document.querySelectorAll('.proj-card h2 .own')].map((e) => e.innerText));
   check('names: the owner of a repository reads in a lighter tone', own.length > 0 && own.includes('owner/'), own.join(','));
   const kp = await p.evaluate(() => document.getElementById('kpis').innerText);
-  check('owner: the 24 h figure says how much of the window it measured', /measured .* of 24 h/.test(kp), kp);
-  check('owner: tokens used before the first reading are stated, not placed in an hour', /used before the first reading/.test(kp), kp);
+  const k24 = await p.evaluate(() => { const d = [...document.querySelectorAll('#kpis .kpi')].find((x) => /^last 24 h/i.test(x.querySelector('.k').textContent)); return d ? d.innerText : ''; });
+  check('owner: the 24 h figure says how much of the window it measured', /\d+% measured/.test(k24), k24);
+  const nt = await notesText(p);
+  check('owner: tokens used before the first reading are stated, not placed in an hour', /untimed/.test(kp) && /before the first reading/.test(nt), kp);
   const note = await p.evaluate(() => { const n = document.getElementById('livenote'); return { text: n.innerText, warn: n.classList.contains('warn') }; });
-  check('owner: a blocked live read is explained and does not warn', /live read is off/.test(note.text) && !note.warn, JSON.stringify(note));
+  check('owner: a blocked live read is explained and does not warn', /live read off/.test(note.text) && !note.warn && /blocks the Claude Code Remote tool/.test(nt), JSON.stringify(note));
+  /* ---- density: each caveat once, in numbered notes; no sentence that repeats a figure ---- */
+  const fns = await p.evaluate(() => [...document.querySelectorAll('sup.fn')].map((x) => [x.dataset.note, x.innerText.trim(), (x.querySelector('a') || {}).getAttribute ? x.querySelector('a').getAttribute('href') : '']));
+  const lis = await p.evaluate(() => [...document.querySelectorAll('#notes-list li')].map((li) => li.id));
+  const firstSeen = []; for (const [k] of fns) if (!firstSeen.includes(k)) firstSeen.push(k);
+  check('notes: each superscript carries the number of its note, in page order, and every note is cited',
+    fns.length > 0 && fns.every(([k, n, href]) => +n === firstSeen.indexOf(k) + 1 && href === `#note-${k}`) && JSON.stringify(lis) === JSON.stringify(firstSeen.map((k) => `note-${k}`)), JSON.stringify({ fns: fns.slice(0, 6), lis }));
+  const bodyText = await p.evaluate(() => document.body.innerText);
+  check('density: no narration and no sentence that repeats the chips', !/Every project, its sessions|projects are working now\.|Measured, last 24 h|Across projects|The hourly sync reads them/.test(bodyText),
+    (bodyText.match(/Every project, its sessions|projects are working now\.|Measured, last 24 h|Across projects|The hourly sync reads them/) || [''])[0]);
+  const words = (bodyText.match(/\S+/g) || []).length;
+  check('density: the owner view of the fixtures stays under 1,400 words (1,690 before the rewrite)', words < 1400, String(words));
+  const qrow = await p.evaluate(() => { const r = document.querySelector('.row.is-queued'); return r ? { one: r.classList.contains('one'), bar: !!r.querySelector('.bar'), tail: (r.querySelector('.tail') || {}).innerText || '' } : null; });
+  check('density: a queued job takes one line, with its figures at the right and no empty bar', !!qrow && qrow.one && !qrow.bar && /queued/.test(qrow.tail), JSON.stringify(qrow));
+  const sel = await p.evaluate(() => { const x = document.querySelector('#f-project select'); return x ? x.options.length : 0; });
+  check('density: the project filter is one dropdown', sel > 3, String(sel));
   const people = await p.evaluate(() => [...document.querySelectorAll('#people tr')].slice(1).map((r) => r.children[0].innerText.replace('Rename', '').trim()));
   check('owner: the people table lists everyone', people.join(',') === 'David C,Drew,Priya', people.join(','));
   await p.click('button[data-key="f-person:u_drew"]');
@@ -118,14 +139,15 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   }
   const kp2 = await p.evaluate(() => document.getElementById('kpis').innerText);
   check('history: All tokens counts the session that Claude Code no longer lists', /no longer listed/.test(kp2), kp2.split('\n').slice(0, 3).join(' | '));
-  check('history: Last 30 days comes from the ledger', /LAST 30 DAYS\n[\d.]+ [MB]/.test(kp2), kp2);
+  check('history: Last 30 days comes from the ledger', /LAST 30 D\n[\d.]+ [MB]/.test(kp2), kp2);
   const rows2 = await rows(p);
   check('history: the project of the removed session stays in the table with its tokens', rows2['owner/retired-experiment'] && rows2['owner/retired-experiment'][col('TOKENS')] === '405 M', JSON.stringify(rows2['owner/retired-experiment']));
   for (const range of ['720', 'all']) {
     await p.click(`button[data-key="density-range:${range}"]`);
     await p.waitForTimeout(250);
-    const g = await p.evaluate(() => ({ cap: document.getElementById('density-cap').innerText, sub: document.getElementById('density-sub').innerText, segs: document.querySelectorAll('#density-plot .seg').length }));
-    check(`history: the ${range === 'all' ? 'All' : '30 d'} range shows tokens per day from the ledger`, /tokens per day/.test(g.cap) && g.segs > 0 && /ledger/.test(g.sub), JSON.stringify(g).slice(0, 220));
+    const g = await p.evaluate(() => ({ h: document.getElementById('density-h').innerText, cap: document.getElementById('density-cap').innerText, sub: document.getElementById('density-sub').innerText,
+      ledger: !!document.querySelector('#density-sub sup[data-note="ledger"]'), segs: document.querySelectorAll('#density-plot .seg').length }));
+    check(`history: the ${range === 'all' ? 'All' : '30 d'} range shows tokens per day from the ledger`, /^per day$/i.test(g.h) && /day bars/.test(g.cap) && /\/day/.test(g.sub) && g.segs > 0 && g.ledger, JSON.stringify(g).slice(0, 260));
     const tall = await p.evaluate(() => { const svg = document.querySelector('#density-plot svg'); const h = svg.viewBox.baseVal.height; const st = {}; for (const x of svg.querySelectorAll('.seg')) st[x.dataset.i] = (st[x.dataset.i] || 0) + x.getBBox().height; return Math.max(0, ...Object.values(st)) / h; });
     check(`history: the tallest ${range === 'all' ? 'All' : '30 d'} bar reaches into the plot, not a sliver at its base`, tall > 0.4, tall.toFixed(2));
   }
@@ -159,10 +181,10 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
     fs.writeFileSync(path.join(dir, 'syncs', `${Date.parse(at) / 1000}.json`), JSON.stringify({ at, src: 'routine', sessions: [{ ...lt, updatedAt: at }] }));
   }
   const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
-  const heads = await s.page.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].innerText.split('\t').map((x) => x.trim()));
+  const heads = await headsOf(s.page);
   const r = (await rows(s.page))['owner/long-turn'], c = (n) => heads.indexOf(n);
   check('turns: a turn longer than 3 h that every reading saw running places its tokens over the turn',
-    !!r && r[c('24 H')] === '120 M' && /^2\d M$/.test(r[c('LAST HOUR')]), JSON.stringify(r));
+    !!r && r[c('24 H')] === '120 M' && /^2\d M$/.test(r[c('1 H')]), JSON.stringify(r));
   await s.close();
   fs.rmSync(dir, { recursive: true, force: true });
 }
@@ -237,15 +259,15 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
     pts: [[sec('2026-10-03T23:30:00Z'), 5_000_000], [sec('2026-10-03T23:50:00Z'), 30_000_000], [sec('2026-10-04T00:20:00Z'), 60_000_000]] };
   fs.writeFileSync(f, JSON.stringify(d));
   const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
-  const heads = await s.page.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].innerText.split('\t').map((x) => x.trim()));
+  const heads = await headsOf(s.page);
   const c = (n) => heads.indexOf(n);
   const r = (await rows(s.page))['owner/pending-turn'];
   const notes = await s.page.evaluate(() => ({ turns: (document.getElementById('turns-note') || {}).innerText || '', pend: (document.getElementById('pending-note') || {}).innerText || '' }));
   check('events: the running turn adds its tokens to the session', !!r && r[c('TOKENS')] === '140 M', JSON.stringify(r));
-  check('events: the turn places its tokens in the hours they were used', !!r && /^5\d M$/.test(r[c('LAST HOUR')]), JSON.stringify(r));
+  check('events: the turn places its tokens in the hours they were used', !!r && /^5\d M$/.test(r[c('1 H')]), JSON.stringify(r));
   check('events: the figures name the turn read from events, and not as not counted', /Includes 60 M/.test(notes.turns) && /owner\/pending-turn/.test(notes.turns) && !/owner\/pending-turn/.test(notes.pend), JSON.stringify(notes));
   const row = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
-  check('events: its session row says how much the turn used so far', /60 M so far, from its events/.test(row), row.slice(0, 200));
+  check('events: its session row says how much the turn used so far', /60 M so far/.test(row), row.slice(0, 200));
   await s.close();
   fs.rmSync(dir, { recursive: true, force: true });
 }
@@ -260,11 +282,11 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
     await s.close();
     return out;
   };
-  const rate = '[\\d.]+(?: [kMB])?\\/h while read';
+  const rate = '[\\d.]+(?: [kMB])?\\/h';
   const a = await tiles(DB);
   const h5 = a.wins.find((x) => /^5-hour/i.test(x)) || '', d7 = a.wins.find((x) => /^7-day/i.test(x)) || '';
-  check('windows: the 5-hour tile says how much of the window the readings cover, and the rate while read', /measured/.test(h5) && new RegExp(`Readings cover 1 h 57 min of it: ${rate}`).test(h5) && /≈ \$\d[\d,]* at API list prices/.test(h5), JSON.stringify(h5));
-  check('windows: the 7-day rate is per hour of reading, and says so', new RegExp(`Readings cover 1 h 57 min of the 7 days: ${rate}`).test(d7) && /Hourly readings start/.test(d7) && !/mean across/.test(d7), JSON.stringify(d7));
+  check('windows: the 5-hour tile says how much of the window the readings measured, the rate, and the cost', new RegExp(`1 h 57 min measured · ${rate} · ≈\\$\\d[\\d,]*`).test(h5), JSON.stringify(h5));
+  check('windows: the 7-day rate is per hour of reading, and says so', new RegExp(`1 h 57 min measured · ${rate}`).test(d7) && /Readings since/.test(d7) && !/mean across/.test(d7), JSON.stringify(d7));
   check('windows: no hint asks for a field that Claude Code does not report', !/post quota/.test(a.body), (a.body.match(/.*post quota.*/) || [''])[0]);
   /* a new window that no reading reaches yet, and a snapshot after the newest reading */
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-win-'));
@@ -274,8 +296,8 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   fs.writeFileSync(path.join(dir, 'ticks', 'session_01ATLAS01~2026-10-04.json'), JSON.stringify({ sid: 'session_01ATLAS01', day: '2026-10-04', pts: [[Date.parse('2026-10-04T00:24:30Z') / 1000, 405_000_000]], src: 'ccr' }));
   const b = await tiles(dir);
   const g5 = b.wins.find((x) => /^5-hour/i.test(x)) || '';
-  check('windows: a window that no reading reaches yet says so, instead of tokens at a rate of zero', /No reading yet/.test(g5) && /The next hourly reading, due about .+, measures it/.test(g5) && !/ 0\/h|cover 0 s/.test(g5), JSON.stringify(g5));
-  check('windows: it then shows the 5 h before it', /The 5 h before it: [\d.]+(?: [kMB])? measured, ≈ \$[\d,]+; readings cover 1 h 57 min/.test(g5), JSON.stringify(g5));
+  check('windows: a window that no reading reaches yet says so, instead of tokens at a rate of zero', /No reading yet/.test(g5) && /Next reading about/.test(g5) && !/ 0\/h|0 s measured/.test(g5), JSON.stringify(g5));
+  check('windows: it then shows the 5 h before it', /Prior 5 h: [\d.]+(?: [kMB])? · ≈\$[\d,]+ · 1 h 57 min measured/.test(g5), JSON.stringify(g5));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

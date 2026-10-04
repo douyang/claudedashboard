@@ -1,6 +1,6 @@
 ---
 name: "david-dev-style"
-description: "David's house style for building and changing software: any web app, tool, dashboard, or repo, not one project. Use it WHENEVER you develop or change an application or repository for David, even a small edit that he does not name: UI or product copy, a feature, data or a schema, code cleanup, a deploy, or a PR. It sets product framing (the user's real job, mobile and desktop), copy rules (no AI slop, no reflexive hedges), data integrity (never fabricate data, record provenance and verification), the build, validate, and ship discipline (deploy model, non-destructive production edits, validation before push, current docs and screenshots, branch, PR, merge), reporting every project and its token usage to the Claude dashboard, and the 80% ASD-STE100 writing profile for all dev prose: replies, PRs, commits, code comments, docs, and UI sentences. Use it on \"clean up this copy\", \"remove the AI slop\", \"make it work on mobile\", \"add this feature\", \"update the schema\", \"ship it\", or any edit to one of his apps or repos."
+description: "David's style for building software: any web app, tool, dashboard, or repo. Use it WHENEVER you develop or change an application or repository for David, even a small edit that he does not name: UI, a feature, data, schema, code cleanup, a deploy, or a PR. It sets product framing (the user's real job, mobile and desktop), copy rules (no AI slop, no reflexive hedges), data integrity (never fabricate data, record provenance and verification), the build, validate, and ship discipline (deploy model, non-destructive production edits, validation before push, current docs and screenshots, branch, PR, merge), reporting every project and its token usage to the Claude dashboard, and the 80% ASD-STE100 writing profile for all dev prose: replies, PRs, commits, code comments, docs, and UI sentences. Use it on \"clean up this copy\", \"remove the AI slop\", \"make it work on mobile\", \"add this feature\", \"update the schema\", \"ship it\", or any edit to one of his apps or repos."
 ---
 
 # Building software the way David likes it
@@ -88,6 +88,13 @@ UI labels can be fragments. UI sentences, such as errors and empty states, follo
 - Short, concrete labels that the user already uses.
 - Real numbers and provenance, not adjectives.
 
+**Make each view readable at a glance:**
+- **Show a state with a color and a label, not a sentence.** A green `Allowed` pill, a `local` tag, or a coverage meter reads faster than a sentence. Pair each color with a label, so that color is never the only signal.
+- **State each fact once.** If a chip, a tile, or a table shows a number, do not repeat the number in a sentence.
+- **Give figures short labels.** Let the units carry the meaning: `3.97 B · $1,185 · 24 h 445 M`, not `Tokens 3.97 B, Cost $1,185, Last 24 hours 445 M`.
+- **Put caveats and methods in numbered notes at the bottom.** Mark each place that a note applies to with a superscript number that links to the note. Number the notes in the order of their first appearance. Keep a caveat inline only if the user must act on it now.
+- **Fold repeated rows.** A queued or finished item takes one line. Show a progress bar only for an item that has a count.
+
 **Example: a summary subtitle**
 Slop: `A comprehensive overview of your entire pipeline at a glance`
 Craft: `12 systems · 4 active`
@@ -95,6 +102,10 @@ Craft: `12 systems · 4 active`
 **Example: an empty state**
 Slop: `No items right now! You're all caught up. Great job! 🎉`
 Craft: `No open items.`
+
+**Example: a usage tile**
+Slop: `867 M · $709 · 140 M/h · measured 6 h 10 min of 24 h`, then a paragraph on how the board measures tokens.
+Craft: `867 M`, then `≈$304 · 140 M/h`, then `26% measured¹`, with a thin meter. Note 1 at the bottom of the page explains the method.
 
 When David says "remove AI slop", "deveneer", or "craft pass", apply this standard. Read every string as a skeptical domain expert. Delete each part that the expert would reject. Apply the same standard to chat replies, PR bodies, and docs.
 

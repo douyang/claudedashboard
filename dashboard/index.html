@@ -39,7 +39,7 @@ body { background: var(--paper); color: var(--ink); font: 400 15px/1.5 var(--san
 /* long paths and ids in reports must wrap on a phone instead of widening the page */
 .label, .note, .blocked, .line, .ask .q, .ask .p, .proj-name { overflow-wrap: anywhere; }
 .eyebrow { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-h1 { margin: 4px 0 0; font: 400 clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)/1.1 var(--serif); text-wrap: balance; }
+h1 { margin: 0; font: 400 clamp(1.55rem, 1.3rem + 1vw, 2rem)/1.1 var(--serif); text-wrap: balance; }
 .sub { margin: 6px 0 0; color: var(--ink-2); max-width: 62ch; }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
@@ -58,14 +58,15 @@ h1 { margin: 4px 0 0; font: 400 clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)/1.1 var(--
 .note-line { border-top: 1px solid var(--rule); padding-top: 9px; color: var(--ink-3); }
 
 /* the top lines: the project that ends last and the job with the most work left */
-.outlook { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
-.ol-row { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 3px 14px; align-items: baseline; }
+.outlook { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.ol-row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 3px 14px; align-items: baseline; }
 .ol-k { font: 500 0.68rem/1.3 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
-.ol-v { display: grid; gap: 2px; min-width: 0; }
-.ol-name { font: 500 1.12rem/1.3 var(--serif); color: var(--ink); overflow-wrap: anywhere; }
+.ol-v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.ol-name { font: 500 1.04rem/1.3 var(--serif); color: var(--ink); overflow-wrap: anywhere; }
 .ol-name a { color: inherit; }
 .ol-when { color: var(--ink-2); font-size: 0.9rem; }
 .ol-when b { color: var(--ink); font-weight: 600; }
+.ol-when a { color: var(--ink-2); }
 .ol-why { color: var(--ink-3); font-size: 0.84rem; }
 .ol-why.waits { color: var(--wait); }
 .ol-x { margin: 0; color: var(--ink-3); font-size: 0.84rem; }
@@ -94,12 +95,15 @@ button.close:disabled { opacity: 0.55; cursor: default; }
 .close-err { color: var(--flag); font-size: 0.82rem; flex-basis: 100%; }
 
 /* filters -------------------------------------------------------------- */
-.filters { display: grid; gap: 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
 .filters .set { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .filters .lab { font: 500 0.68rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-right: 2px; }
 button.f { font: 500 0.78rem/1 var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 6px 11px; cursor: pointer; }
 button.f:hover { border-color: var(--ink-3); color: var(--ink); }
 button.f[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper-2); }
+select.fsel { font: 500 0.78rem/1.2 var(--sans); color: var(--ink); background: var(--paper-2); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 10px; max-width: 100%; min-width: 0; cursor: pointer; }
+select.fsel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#f-project { min-width: 0; max-width: 100%; }
 
 /* projects ------------------------------------------------------------- */
 .proj-card { border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-2); padding: 14px 16px 6px; display: grid; gap: 10px; margin-bottom: 16px; }
@@ -317,30 +321,65 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
 .srow .tag { color: var(--wait); font-size: 0.78rem; margin-left: 6px; }
 .srow .sn { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; text-align: right; }
 .srow .sub { grid-column: 2 / 4; color: var(--ink-3); font-size: 0.78rem; }
+
+/* dense layout: the name and the clock on one line, grouped chips, meters, notes at the bottom */
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.clock { margin: 0; color: var(--ink-3); font-size: 0.84rem; }
+.clock b { color: var(--ink-2); font-weight: 500; }
+.grp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tally { gap: 8px 22px; }
+.grp > .lab { font: 500 0.64rem/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.lim { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid currentColor; font-size: 0.82rem; }
+.lim b { font: 600 0.68rem/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; }
+.lim .lw { color: var(--ink-2); }
+.lim.ok { color: var(--ok); } .lim.caution { color: var(--wait); } .lim.alert { color: var(--flag); }
+.meter { display: block; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; margin-top: 2px; }
+.meter i { display: block; height: 100%; background: var(--ink-3); opacity: 0.7; }
+sup.fn { font: 500 0.66em/0 var(--sans); margin-left: 1px; vertical-align: super; }
+sup.fn a { color: var(--accent); text-decoration: none; padding: 0 1px; }
+sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
+.notes { display: grid; gap: 6px; }
+.notes h2 { margin: 0; font: 500 0.72rem/1.2 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.notes ol { margin: 0; padding-left: 1.5em; display: grid; gap: 3px; font-size: 0.8rem; color: var(--ink-2); max-width: 78ch; }
+.notes li { padding-left: 2px; scroll-margin-top: 16px; }
+.notes li:target { background: var(--paper-3); outline: 1px solid var(--rule); border-radius: 3px; }
+.run { color: var(--ok); }
+.tag { font: 600 0.58rem/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; border-radius: 3px; padding: 2px 4px; border: 1px solid currentColor; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+.tag.local { color: var(--local); } .tag.both { color: var(--ink-2); } .tag.unreg { color: var(--ink-3); }
+.sdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-left: 6px; vertical-align: 1px; }
+.ptable tr.sep td { padding-top: 12px; font: 500 0.62rem/1.2 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
+.kmore { color: var(--ink-3); font-size: 0.78rem; }
+.lgv { color: var(--ink-3); margin-left: 4px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.lgk { display: inline-block; width: 14px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.lgk.band { background: var(--accent-soft); opacity: 0.7; }
+.lgk.hatch { background: repeating-linear-gradient(135deg, var(--ink-3) 0 1.5px, transparent 1.5px 4px); opacity: 0.6; }
+.row.one { grid-template-columns: minmax(0, 1fr); gap: 3px; padding: 7px 0; }
+.row .tail { margin-left: auto; color: var(--ink-3); font-size: 0.8rem; }
+.row .tail + button.close { margin-left: 10px; }
+.row .tail b { color: var(--ink-2); font-weight: 500; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.row.one .note { font-size: 0.82rem; }
 </style>
 
 <main class="wrap">
-  <header>
-    <p class="eyebrow">Across projects, sessions and surfaces</p>
-    <h1>Claude activity dashboard</h1>
-    <p class="sub">Every project, its sessions and jobs, and the tokens they use. Cloud and local work in one place.</p>
+  <header class="top">
+    <h1>Claude activity</h1>
+    <p class="clock" id="clockline"></p>
   </header>
 
   <section class="summary" aria-label="Everything on the board">
     <div class="outlook" id="outlook" hidden></div>
     <div class="tally" id="tally"></div>
-    <p class="line" id="headline">Waiting for the first report.</p>
-    <p class="line" id="clockline"></p>
+    <p class="line" id="headline" hidden></p>
     <div class="usage" id="usage" hidden></div>
     <div class="line note-line" id="board-note" hidden></div>
   </section>
 
   <section class="usebox" id="usebox" aria-label="Token usage">
-    <h2>Token usage and velocity</h2>
+    <h2>Tokens</h2>
     <div class="kpis" id="kpis"><p class="live-note">Loading session usage.</p></div>
     <div class="density-in" id="density" hidden>
       <div>
-        <h2 class="sec-h" id="density-h">Tokens per hour</h2>
+        <h2 class="sec-h" id="density-h">Per hour</h2>
         <p class="dsub" id="density-sub"></p>
       </div>
       <div class="dwin" id="density-win"></div>
@@ -367,7 +406,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   <section class="askband" id="askband" aria-label="Waiting on you" hidden></section>
 
   <nav class="filters" aria-label="Filters">
-    <div class="set"><button type="button" class="scope" id="scope" data-key="scope" aria-pressed="false">Show all projects</button><span class="live-note" id="scope-note"></span></div>
+    <div class="set"><button type="button" class="scope" id="scope" data-key="scope" aria-pressed="false">Show all</button><span class="live-note" id="scope-note"></span></div>
     <div class="set" id="f-person" role="group" aria-label="Person" hidden><span class="lab">Person</span></div>
     <div class="set" id="f-where" role="group" aria-label="Where it runs"><span class="lab">Runs</span></div>
     <div class="set" id="f-status" role="group" aria-label="Status"><span class="lab">Show</span></div>
@@ -397,7 +436,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   </section>
 
   <details class="howto">
-    <summary>Posting from another Claude session</summary>
+    <summary>Fields for reporting sessions</summary>
     <div class="body">
       <p>Every Claude session that works on a project reports here through this artifact's database. The <b>claude-dashboard</b> skill holds the full procedure. Reuse a document id to update a record in place.</p>
       <p><b>Who reads what.</b> The board owner's collections below are readable and writable by the board owner only. Every other person writes to their own private subtree, <span class="num">data/users/me/profile/</span> followed by the collection name (<span class="num">projects</span>, <span class="num">sessions</span>, <span class="num">jobs</span>, <span class="num">ticks</span>, <span class="num">syncs</span>). The board resolves <span class="num">me</span> to the writer. Only that person and the board owner read the subtree. The document <span class="num">data/users/me/profile</span> holds the person's limit state in the field <span class="num">quota</span>, with the same fields as <span class="num">meta/quota</span>. A person who opens the board lists themselves in <span class="num">join/&lt;their id&gt;</span> (<span class="num">name</span>, <span class="num">joinedAt</span>, <span class="num">seenAt</span>; the board owner adds <span class="num">label</span>). The collections that follow have the same fields in every subtree.</p>
@@ -424,9 +463,10 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     </div>
   </details>
 
-  <p class="foot">
-    A project is working now when a session runs or a running job reported in the last 30 minutes. It is active when it is working, has an open job, or had any report in the last 72 hours; an active project that is not working reads Idle. A project marked paused or done is inactive; a pinned project stays active. Token figures count every token the model reads or writes, cached context included; most are cache reads, which cost about a tenth of new input. Cost is at API list prices, as Claude Code reports it, rounded to whole dollars. The figure at the end of the open jobs adds each open job's tokEst less its tokens so far; a job with a time estimate and no tokEst runs at the project's current rate; a job with neither is not counted and the line says so. Its cost uses the project's own dollars per token. Cloud sessions come from an hourly sync and, where the page may use the Claude Code Remote connector, from a live read every 10 minutes. Cowork and local CLI sessions appear only when they report, and a report marked partial is a floor. A rate counts only tokens that two readings at most 3 hours apart place in time, spread evenly between them. Tokens used before the first reading, or between readings further apart, count in the totals and in no hour. Windows end at the newest reading and say how much of them the readings cover. Times are in your clock.
-  </p>
+  <section class="notes" id="notes" aria-label="Notes" hidden>
+    <h2>Notes</h2>
+    <ol id="notes-list"></ol>
+  </section>
 </main>
 
 <!-- assets:start -->
@@ -530,6 +570,55 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
   const tokLeft = (x) => (isLive(x) ? Math.max(0, num(x.j.tokEst) - num(x.j.tok)) : 0);
   const LIMIT = { allowed: ['Allowed', 'ok'], allowed_warning: ['Near the limit', 'caution'], rejected: ['Limit reached', 'alert'] };
   const WINDOW = { five_hour: '5-hour', seven_day: '7-day', seven_day_opus: '7-day Opus', seven_day_sonnet: '7-day Sonnet' };
+
+  /* Notes: every caveat and every method sits once in a numbered list at the bottom. A superscript marks each
+     place a note applies; numberNotes() numbers them in page order after each render. */
+  const NOTES = {
+    limit: 'Claude Code reports the limit state and the reset time, not the share used. The 5-hour window runs from its reset less 5 h.',
+    working: 'Working: a session runs, or a running job reported in the last 30 min. The session that takes the hourly reading does not count. Active: working, an open job, or activity in the last 72 h. Paused or done: inactive. Pinned: active.',
+    tokens: 'Tokens: everything the model reads or writes, cached context included. Most are cache reads, at about a tenth of the price of new input.',
+    partial: '+ and partial: the session reported only what it could measure, so the figure is a floor. Cowork and local CLI sessions appear only when they report.',
+    cost: 'Cost: API list prices as Claude Code reports them, in whole dollars. ≈: measured tokens times each session\'s reported dollars per token, or the account average for a project that reports no cost.',
+    measured: 'Measured: the tokens between two readings at most 3 h apart, spread evenly between them. A turn that every hourly reading saw running spreads over the whole turn, up to 24 h. A rate divides the measured tokens by the measured time. Windows end at the newest reading.',
+    ledger: '30 d and longer ranges also read the daily ledger: readings at most 26 h apart. A ledger pair puts its tokens in the UTC day of the earlier reading.',
+    projection: 'Projected: each open job adds its tokEst less its tokens so far. A job with a time estimate and no tokEst runs at the project\'s current rate. A job with neither adds nothing.',
+    turns: 'Running turns: the hourly sync reads the token counts and times of each model call from the session\'s events, never text. Output tokens arrive when the turn ends.',
+    pending: 'Not counted yet: a running turn with no event counts. Claude Code reports its tokens when it ends, and the board then spreads them over the turn. The chart hatches it.',
+    reader: 'The session that takes the hourly reading runs because it reads, so it does not count as work. Its tokens and cost count.',
+    jobrows: 'Job rows: the tokens that the project\'s job rows report themselves.',
+    clock: 'Times are in your clock.',
+  };
+  const noteDyn = new Map();      // notes whose text carries figures from this render
+  let noteSig = '';
+  /** A superscript that points to a note at the bottom. */
+  function fn(key) {
+    const sup = document.createElement('sup'); sup.className = 'fn'; sup.dataset.note = key;
+    const a = document.createElement('a'); a.href = `#note-${key}`; sup.append(a);
+    return sup;
+  }
+  /** Number the superscripts in page order, and list each note once in that order. */
+  function numberNotes() {
+    const order = [];
+    for (const sup of document.querySelectorAll('sup.fn')) {
+      const k = sup.dataset.note;
+      if (!NOTES[k] && !noteDyn.has(k)) { sup.remove(); continue; }
+      let n = order.indexOf(k) + 1;
+      if (!n) { order.push(k); n = order.length; }
+      const a = sup.firstChild; a.textContent = String(n); a.setAttribute('aria-label', `Note ${n}`);
+    }
+    const texts = order.map((k) => noteDyn.get(k) || NOTES[k]);
+    const sig = JSON.stringify([order, texts]);
+    if (sig === noteSig) return;
+    noteSig = sig;
+    const ol = $('notes-list');
+    ol.textContent = '';
+    order.forEach((k, i) => { const li = document.createElement('li'); li.id = `note-${k}`; li.textContent = texts[i]; ol.append(li); });
+    $('notes').hidden = !order.length;
+  }
+  /** A share of a window as a whole percent, never 0 for a little. */
+  const pct = (part, whole) => { const v = whole > 0 ? (100 * part) / whole : 0; return v > 0 && v < 1 ? '<1%' : `${Math.round(Math.min(100, v))}%`; };
+  /** Time ago, short: 14 min, 7 h, 3 d. */
+  const agoShort = (ms) => { const s = (Date.now() - ms) / 1000; return s < 90 ? 'now' : s < 5400 ? `${Math.round(s / 60)} min` : s < 172800 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86400)} d`; };
   const projectTitle = (j) => canon(ownerOf(j), j.project || j.group || 'Unfiled');
   const projectOf = (j) => qual(ownerOf(j), projectTitle(j));
   const groupOf = (j) => (j.project ? (j.group || '') : '');
@@ -986,6 +1075,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
 
   function render() {
     const now = Date.now();
+    noteDyn.clear();
     if (armed && now - armedAt >= ARM_MS) armed = null;
     /* the board rebuilds every second: keep keyboard focus on the same control */
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
@@ -1011,27 +1101,29 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     tally.textContent = '';
     const nActive = projects.filter((p) => p.active).length;
     const nWorking = projects.filter((p) => p.working).length;
-    for (const [cls, k, v] of [
-      ['running', 'Running', by('running')], ['waiting', 'Waiting on a person', all.filter(unanswered).length],
-      ['', 'Queued', by('queued')], ['done', 'Done', by('done')],
-      ['bad', 'Stopped', by('failed') + by('stopped')], ['running', 'Working now', nWorking], ['', 'Active, 72 h', nActive], ['', 'All projects', projects.length],
-    ]) {
-      if (!v && (cls === 'bad' || k === 'Waiting on a person')) continue;
-      const el = document.createElement('span'); el.className = `tile ${cls}`;
-      const n = document.createElement('span'); n.className = 'n'; n.textContent = v;
-      const l = document.createElement('span'); l.className = 'k'; l.textContent = k;
-      el.append(n, l); tally.append(el);
-    }
+    const limits = (fPerson === 'all' ? accounts : [fPerson]).map((o) => [o, quotaFor(o)]).filter(([, q]) => q && q.status);
+    if (limits.length) { const g = document.createElement('span'); g.className = 'grp'; for (const [o, q] of limits) g.append(limitPill(o, q, now)); tally.append(g); }
+    const grp = (label, items, note) => {
+      const g = document.createElement('span'); g.className = 'grp';
+      const l = document.createElement('span'); l.className = 'lab'; l.textContent = label; if (note) l.append(fn(note)); g.append(l);
+      for (const [cls, k, v] of items) {
+        if (v === null) continue;
+        const el = document.createElement('span'); el.className = `tile ${cls}`;
+        const n = document.createElement('span'); n.className = 'n'; n.textContent = v;
+        const kk = document.createElement('span'); kk.className = 'k'; kk.textContent = k;
+        el.append(n, kk);
+        g.append(el);
+      }
+      tally.append(g);
+    };
+    const nAsk = all.filter(unanswered).length, nBad = by('failed') + by('stopped');
+    grp('Projects', [['running', 'working', nWorking], ['', 'active', nActive], ['', 'total', projects.length]], 'working');
+    grp('Jobs', [['running', 'running', by('running')], ['waiting', 'waiting on you', nAsk || null], ['', 'queued', by('queued')], ['done', 'done', by('done')], ['bad', 'stopped', nBad || null]]);
 
     const head = $('headline');
     const open = projects.filter((p) => p.r.active > 0);
-    const wk = `${nWorking} ${nWorking === 1 ? 'project is' : 'projects are'} working now`;
-    if (!all.length && !projects.length) head.textContent = 'Nothing on the board yet.';
-    else if (!open.length) head.textContent = `${wk}. No open jobs. ${nActive} of ${projects.length} projects had activity in the last 72 h.`;
-    else {
-      const moving = open.filter((p) => p.items.some((x) => x.s.status === 'running'));
-      head.textContent = `${wk}. ${open.length} ${open.length === 1 ? 'project has' : 'projects have'} open jobs, ${moving.length} running. ${nActive} of ${projects.length} projects had activity in the last 72 h.`;
-    }
+    head.hidden = !!(all.length || projects.length);
+    if (!head.hidden) head.textContent = 'Nothing on the board yet.';
 
     /* Top of the board: the project that ends last, and the job with the most work left. */
     const ol = $('outlook');
@@ -1039,23 +1131,27 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     if (open.length) {
       const pr0 = [...open].sort((a, b) => b.r.left - a.r.left)[0];
       const pr = pr0.r, why = slack(pr);
-      if (pr.left > 0) {
-        olRow(ol, 'Slowest project', pr0.name, why
-          ? ['Finishes after ', strong(when(now + pr.left * 1000)), `, in ${dur(pr.left)} or more`]
-          : ['Finishes about ', strong(when(now + pr.left * 1000)), `, in ${dur(pr.left)}`],
-        why, null, pr.asks ? 'waits' : '');
-      } else {
-        olRow(ol, 'Slowest project', 'No finish time yet',
-          [`No open project has an estimate: ${open.map((p) => p.name).join(', ')}.`], '', null, '');
-      }
       const longest = all.filter((x) => isLive(x) && x.s.known && x.s.left > 0).sort((a, b) => b.s.left - a.s.left)[0];
-      if (longest) {
-        const { j, s } = longest;
-        const line = s.status === 'running'
-          ? ['Finishes about ', strong(when(now + s.left * 1000)), `, in ${dur(s.left)}`]
-          : [strong(dur(s.left)), ' of work, queued'];
-        if (s.total) line.push(` · ${n0(s.proj)} of ${n0(s.total)} ${j.unit || 'steps'}`);
-        olRow(ol, 'Longest job', j.label || j.id || 'Job', line, projectOf(j), j.link, '');
+      const jobBits = ({ j, s: js }) => {
+        const out = [' · '];
+        if (typeof j.link === 'string' && /^https:\/\//.test(j.link)) { const a = document.createElement('a'); a.href = j.link; a.rel = 'noopener'; a.textContent = j.label || j.id || 'Job'; out.push(a); }
+        else out.push(j.label || j.id || 'Job');
+        if (js.total) out.push(` · ${n0(js.proj)}/${n0(js.total)} ${j.unit || 'steps'}`);
+        return out;
+      };
+      const together = longest && projectOf(longest.j) === pr0.name && Math.abs(longest.s.left - pr.left) < 60;
+      if (pr.left > 0) {
+        olRow(ol, 'Last to finish', pr0.name, [strong(when(now + pr.left * 1000)), ` · ${dur(pr.left)}${why ? ' or more' : ''}`, ...(together ? jobBits(longest) : [])],
+          why, null, pr.asks ? 'waits' : '');
+      } else {
+        olRow(ol, 'Last to finish', 'No estimate', [`${open.length} open: ${open.map((p) => p.name).join(', ')}`], '', null, '');
+      }
+      if (longest && !together) {
+        const { j, s: js } = longest;
+        const line = js.status === 'running' ? [strong(when(now + js.left * 1000)), ` · ${dur(js.left)}`] : [strong(dur(js.left)), ' of work, queued'];
+        if (js.total) line.push(` · ${n0(js.proj)}/${n0(js.total)} ${j.unit || 'steps'}`);
+        line.push(` · ${projectOf(j)}`);
+        olRow(ol, 'Longest job', j.label || j.id || 'Job', line, '', j.link, '');
       }
       ol.hidden = false;
     } else ol.hidden = true;
@@ -1066,10 +1162,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const dot = document.createElement('span'); dot.className = 'livedot';
     const lastBeat = Math.max(0, ...all.map((x) => x.s.updated || 0), board ? t(board.updatedAt) : 0, liveAt || 0);
     if (lastBeat && (now - lastBeat) / 1000 > 3 * STALE_SEC) dot.className = 'livedot cold';
-    cl.append(dot, 'now ');
     const c2 = document.createElement('b'); c2.className = 'num'; c2.textContent = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    cl.append(c2);
-    if (lastBeat) cl.append(` · last report ${ago(lastBeat)}`);
+    cl.append(dot, c2);
+    if (lastBeat) cl.append(` · report ${ago(lastBeat)}`);
 
     /* Anything waiting on a person, hoisted out of the list so it is not missed. */
     const asks = all.filter(unanswered);
@@ -1098,16 +1193,17 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       ab.hidden = false;
     } else ab.hidden = true;
 
-    limitLines(now, (fPerson === 'all' ? accounts : [fPerson]).map((o) => [o, quotaFor(o)]).filter(([, q]) => q && q.status));
+    limitLines(now, limits);
     const u = usagePanel(projects, sess, now, all, sessAll, ids);
-    summary(projects, sess, all, u);
+    summary();
+    void u;
 
     /* filters */
     const sc = $('scope');
     sc.setAttribute('aria-pressed', String(showAll));
-    sc.textContent = showAll ? 'Show active only' : 'Show all projects';
+    sc.textContent = showAll ? 'Active only' : 'Show all';
     const hiddenP = projects.filter((p) => !p.active).length;
-    $('scope-note').textContent = showAll ? `${projects.length} projects shown` : `${hiddenP} inactive ${hiddenP === 1 ? 'project' : 'projects'} and finished jobs hidden`;
+    $('scope-note').textContent = showAll ? '' : `${hiddenP} inactive · finished jobs hidden`;
     const wc = (k) => projects.filter((p) => (showAll || p.active) && (p.whereKey === k || (k !== 'all' && p.whereKey === 'both'))).length;
     const fp = $('f-person');
     const showBtn = isOwnerView ? canEdit : !!viewerUid;
@@ -1126,12 +1222,12 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     }
     $('invite').hidden = !(showBtn && inviteOpen);
     if (!$('invite').hidden && !inviteReady) { inviteReady = true; fillInvite(true); }
-    chips('f-where', [['all', 'Cloud and local'], ['cloud', `Cloud (${wc('cloud')})`], ['local', `Local (${wc('local')})`]],
+    chips('f-where', [['all', 'All'], ['cloud', `Cloud ${wc('cloud')}`], ['local', `Local ${wc('local')}`]],
       fWhere, (v) => { fWhere = v; keep('cad.where', v); render(); });
-    chips('f-status', [['all', 'Everything'], ['live', 'Live'], ['running', 'Running'], ['waiting', 'Waiting'], ['queued', 'Queued'], ['done', 'Done']],
+    chips('f-status', [['all', 'All'], ['live', 'Open'], ['running', 'Running'], ['waiting', 'Waiting'], ['queued', 'Queued'], ['done', 'Done']],
       fStatus, (v) => { fStatus = v; keep('cad.status', v); render(); });
     const listed = projects.filter((p) => (showAll || p.active) && whereMatch(p));
-    chips('f-project', [['all', 'All projects'], ...listed.map((p) => [p.name, p.name])],
+    pickList('f-project', [['all', `All ${listed.length}`], ...listed.map((p) => [p.name, p.name])],
       fProject, (v) => { fProject = v; keep('cad.project', v); render(); });
 
     /* Active-only hides finished rows too. Answered-but-open rows stay so the writer sees to them. */
@@ -1153,6 +1249,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     $('empty').hidden = shown > 0;
     if (!shown) $('empty').textContent = projects.length ? 'No project matches these filters.' : 'Nothing on the board yet. Each project appears here when a session reports to it.';
 
+    numberNotes();
     if (focusKey) {
       const el = [...document.querySelectorAll('[data-key]')].find((n) => n.dataset.key === focusKey);
       if (el && el !== document.activeElement && !el.disabled) el.focus({ preventScroll: true });
@@ -1160,32 +1257,35 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     void byName;
   }
 
-  /** The limit of each account in scope, as last reported. Claude Code reports a limit's state and reset time, not the share used. */
+  /** The limit state of one account as a coloured pill: the state, the window and its reset. */
+  function limitPill(owner, q, now) {
+    const [word, cls] = LIMIT[q.status] || [String(q.status), 'caution'];
+    const el = document.createElement('span'); el.className = `lim ${cls}`;
+    const b = document.createElement('b'); b.textContent = word;
+    const w = document.createElement('span'); w.className = 'lw';
+    const reset = t(q.resetsAt), seen = t(q.updatedAt);
+    w.textContent = `${multi ? `${ownerName(owner)} · ` : ''}${WINDOW[q.type] || (q.type ? String(q.type) : '')} limit`
+      + (reset ? (reset > now ? ` · resets ${when(reset)} (${dur((reset - now) / 1000)})` : ` · reset due ${when(reset)}`) : '')
+      + (q.overage ? ' · overage' : '') + (seen && now - seen > 3600000 ? ` · reported ${ago(seen)}` : '');
+    el.append(b, w, fn('limit'));
+    if (seen) el.title = `Reported ${ago(seen)}`;
+    return el;
+  }
+  /** A line only when a limit needs attention. The state itself is the pill at the top. */
   function limitLines(now, lines) {
     const us = $('usage');
     us.textContent = '';
-    const line = (key, parts, cls) => {
-      const p = document.createElement('p'); if (cls) p.className = cls;
-      const k = document.createElement('span'); k.className = 'uk'; k.textContent = key;
-      p.append(k, ...parts); us.append(p);
-    };
     for (const [owner, q] of lines) {
-      const [word, cls] = LIMIT[q.status] || [String(q.status), 'caution'];
-      const win = WINDOW[q.type] || (q.type ? String(q.type) : '');
-      const st = document.createElement('b'); st.className = cls; st.textContent = word;
-      const parts = [win ? `${win} window: ` : '', st];
-      const reset = t(q.resetsAt);
-      if (reset) parts.push(reset > now ? ` · resets ${when(reset)}, in ${dur((reset - now) / 1000)}` : ` · reset due ${when(reset)}`);
-      if (q.overage) parts.push(' · using overage');
-      if (q.updatedAt) parts.push(` · reported ${ago(t(q.updatedAt))}`);
-      line(multi ? `Claude limit · ${ownerName(owner)}` : 'Claude limit', parts);
-      if (q.status !== 'allowed') line('Notice', [q.status === 'rejected' ? 'Claude Code reports the limit reached. Work pauses until the reset.' : 'Claude Code reports usage near the limit. Long jobs can stop before the reset.'], q.status === 'rejected' ? 'alert' : 'caution');
+      if (q.status === 'allowed') continue;
+      const p = document.createElement('p'); p.className = q.status === 'rejected' ? 'alert' : 'caution';
+      p.textContent = `${multi ? `${ownerName(owner)}: ` : ''}${q.status === 'rejected' ? 'Limit reached. Work pauses until the reset.' : 'Near the limit. Long jobs can stop before the reset.'}`;
+      us.append(p);
     }
     us.hidden = !us.childNodes.length;
   }
 
   /** Totals, velocity, projections, the chart and the table by project. Returns the figures the summary line uses. */
-  let srcWord = '', srcWordLong = '';
+  let srcJobs = false;   // no session readings: the chart spreads each job's tokens over its own run
   let covFn = () => 0;   // milliseconds of a time range that two readings at most 3 h apart cover
   let readEnd = 0, readFirst = 0;   // the newest reading, and the oldest hourly reading, of the people in view
   function usagePanel(projects, sess, now, all, sessAll, ids) {
@@ -1257,49 +1357,54 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       moreAll += more; moreUsd += more * perTok; openAll += open;
     }
 
+    /* cost of measured tokens: each session's reported dollars per token, over the tokens that it reported */
+    const rateOf = sess.map((s) => { const base = s.tok - (s.inTurn || 0); return base > 0 && s.usd > 0 ? s.usd / base : 0; });
+    const winUsd = (a, b, gap = FINE_SEC) => pts.reduce((acc, p, i) => acc + alloc(p, a, b, gap).fine * rateOf[i], 0);
     const k = $('kpis');
     k.textContent = '';
-    const kpi = (label, value, sub) => {
+    const kpi = (label, value, lines, meter) => {
       const d = document.createElement('div'); d.className = 'kpi';
+      const l = document.createElement('span'); l.className = 'k';
+      l.append(...[].concat(label));
       const v = document.createElement('span'); v.className = 'v'; v.textContent = value;
-      const l = document.createElement('span'); l.className = 'k'; l.textContent = label;
       d.append(l, v);
-      if (sub) { const s = document.createElement('span'); s.className = 's'; s.textContent = sub; d.append(s); }
+      if (meter) {
+        const m = document.createElement('span'); m.className = 'meter'; m.setAttribute('aria-hidden', 'true');
+        const mi = document.createElement('i'); mi.style.width = `${Math.min(100, (100 * meter[0]) / meter[1]).toFixed(1)}%`; m.append(mi); d.append(m);
+      }
+      for (const line of lines) if (line && [].concat(line).length) { const sp2 = document.createElement('span'); sp2.className = 's'; sp2.append(...[].concat(line)); d.append(sp2); }
       k.append(d);
     };
+    const usdLine = (v) => (v >= 0.5 ? `≈${money(v)}` : '');
     if (!sess.length) {
       const p = document.createElement('p'); p.className = 'live-note';
-      p.textContent = 'No session usage yet. Cloud sessions appear after the hourly sync or a live read; Cowork and CLI sessions appear when they report.';
+      p.textContent = 'No session usage yet.';
       k.append(p);
     } else {
       const goneN = sess.filter((s) => s.gone).length;
-      kpi('All tokens', tk(tot), `${sess.length} sessions${part ? ` · ${part} partial` : ''}${goneN ? ` · ${goneN} no longer listed` : ''} · since each began`);
-      kpi('Cost, API prices', money(usd), `output ${tk(out)}`);
+      if (unplacedTot > 0) noteDyn.set('untimed', `Untimed: ${tk(unplacedTot)} of the ${tk(tot)} tokens fall before the first reading, or between readings more than 3 h apart. They count in the totals and the cost, and in no hour.`);
+      kpi(['All tokens', fn('tokens')], tk(tot), [
+        [`${sess.length} sessions`, ...(part ? [` · ${part} partial`, fn('partial')] : []), goneN ? ` · ${goneN} no longer listed` : ''],
+        unplacedTot > 0 ? [`${tk(unplacedTot)} untimed`, fn('untimed')] : '',
+      ]);
+      kpi(['Cost', fn('cost')], money(usd), [`${tk(out)} output`]);
       const rate = (w, c) => (c > 0 ? `${tk(w / (c / H))}/h` : '');
-      kpi('Last hour', c1 > 0 ? tk(w1) : '—', c1 > 0 ? `to ${clock(T)}${c1 < 0.9 * H ? ` · measured ${dur(c1 / 1000)}` : ''}` : 'no two readings in this hour yet');
-      kpi('Last 24 h', c24 > 0 ? tk(w24) : '—', c24 > 0 ? `${money(w24 * acctRate)} · ${rate(w24, c24)} · measured ${dur(c24 / 1000)} of 24 h` : 'not measured yet');
-      kpi('Last 7 days', c7 > 0 ? tk(w7) : '—', c7 > 0 ? `${money(w7 * acctRate)} · measured ${dur(c7 / 1000)} of 7 days` : 'not measured yet');
-      kpi('Last 30 days', c30 > 0 ? tk(w30) : '—', c30 > 0 ? `${money(w30 * acctRate)} · from the daily ledger and hourly readings · measured ${dur(c30 / 1000)} of 30 days` : 'the ledger has no two readings yet');
-      kpi('At end of open jobs', openAll ? `${tk(tot + moreAll)}` : '—', openAll ? `+${tk(moreAll)} · ${money(usd + moreUsd)} est.` : 'no open jobs');
-      if (unplacedTot > 0) {
-        const n = document.createElement('p'); n.className = 'live-note'; n.style.gridColumn = '1 / -1'; n.style.margin = '0';
-        n.textContent = `${tk(unplacedTot)} of the ${tk(tot)} tokens were used before the first reading, or between readings more than 3 h apart. They count in All tokens and cost, and in no hourly rate.`;
-        k.append(n);
-      }
+      const meas = (c, span) => [`${pct(c, span)} measured`, fn('measured')];
+      kpi('Last hour', c1 > 0 ? tk(w1) : '—', c1 > 0 ? [`to ${clock(T)}`, c1 < 0.9 * H ? meas(c1, H) : ''] : ['no reading pair yet'], c1 > 0 ? [c1, H] : null);
+      kpi('Last 24 h', c24 > 0 ? tk(w24) : '—', c24 > 0 ? [[usdLine(winUsd(T - 24 * H, T)), ` · ${rate(w24, c24)}`], meas(c24, 24 * H)] : ['not measured yet'], c24 > 0 ? [c24, 24 * H] : null);
+      kpi('Last 7 d', c7 > 0 ? tk(w7) : '—', c7 > 0 ? [usdLine(winUsd(T - 168 * H, T)), meas(c7, 168 * H)] : ['not measured yet'], c7 > 0 ? [c7, 168 * H] : null);
+      kpi('Last 30 d', c30 > 0 ? tk(w30) : '—', c30 > 0 ? [[usdLine(winUsd(T - 720 * H, T, DAILY_GAP_SEC)), fn('ledger')], meas(c30, 720 * H)] : ['no ledger pair yet'], c30 > 0 ? [c30, 720 * H] : null);
+      kpi(['Projected', fn('projection')], openAll ? tk(tot + moreAll) : '—', openAll ? [`+${tk(moreAll)} · ${money(usd + moreUsd)}`] : ['no open jobs']);
       const inT = sess.filter((s) => s.inTurn > 0 && s.status === 'running');
       if (inT.length) {
         const n = document.createElement('p'); n.className = 'live-note'; n.id = 'turns-note'; n.style.gridColumn = '1 / -1'; n.style.margin = '0';
-        n.textContent = `Includes ${tk(inT.reduce((a, s) => a + s.inTurn, 0))} from ${inT.length === 1 ? 'a turn that still runs' : `${inT.length} turns that still run`}, in ${[...new Set(inT.map((s) => nameOf(s)))].join(', ')}. `
-          + 'The hourly sync reads them from the sessions\' events: token counts and times only. Their output tokens arrive when each turn ends.';
+        n.append(`Includes ${tk(inT.reduce((a, s) => a + s.inTurn, 0))} from ${inT.length === 1 ? 'a running turn' : `${inT.length} running turns`}: ${[...new Set(inT.map((s) => nameOf(s)))].join(', ')}`, fn('turns'));
         k.append(n);
       }
       if (pend.length) {
         const n = document.createElement('p'); n.className = 'live-note warn'; n.id = 'pending-note'; n.style.gridColumn = '1 / -1'; n.style.margin = '0';
-        const names = [...new Set(pend.map((s) => nameOf(s)))];
         const first = Math.min(...pend.map((s) => pendingBy.get(s.id)));
-        n.textContent = `Not counted yet: ${pend.length === 1 ? 'a running session' : `${pend.length} running sessions`} in ${names.join(', ')}. `
-          + `${pend.length === 1 ? 'Its total has' : 'Their totals have'} not changed since ${when(first)}. Claude Code reports the tokens of a turn when the turn ends. `
-          + 'The board then spreads them over the turn.';
+        n.append(`Not counted yet: ${[...new Set(pend.map((s) => nameOf(s)))].join(', ')} · total unchanged since ${when(first)}`, fn('pending'));
         k.append(n);
       }
     }
@@ -1324,42 +1429,53 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
         }
       }
     });
-    srcWord = 'Measured: the tokens between two readings at most 3 h apart, spread evenly over the time between them. A turn that the hourly readings saw running spreads its tokens over the whole turn.';
-    srcWordLong = 'Measured: the tokens between two readings at most 26 h apart. Hourly readings keep their own time. The daily ledger places a day\'s tokens in the UTC day of the earlier reading.';
-    if (!sp.length && !spL.length) { sp = spans(all); spL = sp; srcWord = sp.length ? 'Job rows only, each job spread evenly across its own run.' : ''; srcWordLong = srcWord; }
+    srcJobs = false;
+    if (!sp.length && !spL.length) { sp = spans(all); spL = sp; srcJobs = sp.length > 0; }
     density(sp, spL, now, pend.map((s) => [pendingBy.get(s.id), T]));
 
     /* table by project: every project, inactive ones dimmed, whatever the filters below say */
     const tbl = $('ptable');
     tbl.textContent = '';
     const thead = document.createElement('tr');
-    for (const [txt, r] of [['Project', 0], ...(multi ? [['Person', 0]] : []), ['Runs', 0], ['Tokens', 1], ['Share', 0], ['Cost', 1], ['Last hour', 1], ['24 h', 1], ['At end of open jobs', 1], ['Sessions', 1], ['Last token use', 0], ['Last activity', 0]]) {
-      const th = document.createElement('th'); th.textContent = txt; if (r) th.className = 'r'; thead.append(th);
+    for (const [txt, r, note] of [['Project', 0], ...(multi ? [['Person', 0]] : []), ['Tokens', 1, 'tokens'], ['Share', 0], ['Cost', 1, 'cost'], ['1 h', 1], ['24 h', 1, 'measured'],
+      ['Projected', 1, 'projection'], ['Sessions', 1], ['Last use', 0], ['Last activity', 0]]) {
+      const th = document.createElement('th'); th.append(txt); if (note) th.append(fn(note)); if (r) th.className = 'r'; thead.append(th);
     }
     tbl.append(thead);
     const list = [...projects].sort((a, b) => (b.active - a.active) || b.tok - a.tok || b.lastAct - a.lastAct);
+    const cols = thead.children.length;
+    let sepDone = false;
     for (const p of list) {
+      if (!p.active && !sepDone) {
+        sepDone = true;
+        const sr = document.createElement('tr'); sr.className = 'sep';
+        const sc = document.createElement('td'); sc.colSpan = cols; sc.textContent = `Inactive · ${list.filter((x) => !x.active).length}`; sr.append(sc); tbl.append(sr);
+      }
       const tr = document.createElement('tr'); if (!p.active) tr.className = 'dim';
       const td = (txt, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; if (txt instanceof Node) c.append(txt); else c.textContent = txt; tr.append(c); return c; };
       const nm = document.createElement('span');
       const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = p.color;
-      nm.append(sw, titleNode(p.title), `${p.unreg ? ' (not in the registry)' : ''}${p.active ? '' : ' · inactive'}`);
+      nm.append(sw, titleNode(p.title));
+      if (p.working) { const dt = document.createElement('span'); dt.className = 'sdot'; dt.title = 'Working now'; nm.append(dt); }
+      if (p.whereKey === 'local' || p.whereKey === 'both') { const tg = document.createElement('span'); tg.className = `tag ${p.whereKey}`; tg.textContent = WHERE_WORD[p.whereKey]; nm.append(' ', tg); }
+      if (p.unreg) { const tg = document.createElement('span'); tg.className = 'tag unreg'; tg.textContent = 'not in registry'; nm.append(' ', tg); }
       td(nm, 'pn');
       if (multi) { const wc2 = document.createElement('span'); wc2.className = 'who'; wc2.textContent = ownerName(p.owner); td(wc2); }
-      const wb = document.createElement('span');
-      if (p.whereKey) { wb.className = `where ${p.whereKey === 'both' ? 'both' : p.whereKey}`; wb.textContent = WHERE_WORD[p.whereKey]; }
-      td(wb);
-      td(p.sess.length ? `${tk(p.tok)}${p.partial ? '+' : ''}` : '—', 'r');
+      const tv = document.createElement('span'); tv.append(p.sess.length ? `${tk(p.tok)}${p.partial ? '+' : ''}` : '—');
+      td(tv, 'r');
       const sh = document.createElement('span'); sh.className = 'share';
       const si = document.createElement('i'); si.style.width = `${tot ? ((100 * p.tok) / tot).toFixed(1) : 0}%`; si.style.background = p.color; sh.append(si);
       td(sh);
       td(p.cost ? `${p.costEst ? '≈' : ''}${money(p.cost)}` : '—', 'r');
       td(p.v1 ? tk(p.v1) : '—', 'r');
       td(p.v24 ? tk(p.v24) : '—', 'r');
-      td(!p.est.open ? '—' : p.est.more > 0 ? `${tk(p.est.tok)} · ${money(p.est.usd)}${p.est.noEst ? ` (+${p.est.noEst} unestimated)` : ''}` : `no estimate (${p.est.open} ${p.est.open === 1 ? 'job' : 'jobs'})`, 'r');
-      td(p.sess.length ? `${p.sess.length}${p.runSess ? ` (${p.runSess} running)` : ''}` : 'none reported', 'r');
-      td(p.lastMoved ? ago(p.lastMoved) : '—');
-      td(p.lastAct ? ago(p.lastAct) : '—');
+      td(!p.est.open ? '—' : p.est.more > 0 ? `${tk(p.est.tok)} · ${money(p.est.usd)}${p.est.noEst ? ` +${p.est.noEst}?` : ''}` : `${p.est.open} unestimated`, 'r');
+      const sv = document.createElement('span');
+      if (!p.sess.length) sv.textContent = '—';
+      else { sv.append(String(p.sess.length)); if (p.runSess) { const rn = document.createElement('span'); rn.className = 'run'; rn.textContent = ` · ${p.runSess} running`; sv.append(rn); } }
+      td(sv, 'r');
+      td(p.lastMoved ? agoShort(p.lastMoved) : '—');
+      td(p.lastAct ? agoShort(p.lastAct) : '—');
       tbl.append(tr);
     }
 
@@ -1375,9 +1491,9 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     needs_reauth: 'Reconnect Claude Code Remote in claude.ai Settings → Connectors to turn on the live read.',
     server_not_connected: 'Add Claude Code Remote in claude.ai Settings → Connectors to turn on the live read.',
     selection_required: 'Choose which Claude Code Remote connector this page uses.',
-    blocked_by_policy: 'The live read is off: your organization blocks the Claude Code Remote tool list_sessions for pages. The hourly sync reads the same figures, and the running turns from their events.',
-    approval_required: 'The live read is off: Claude Code Remote asks for approval on each call, which pages cannot give.',
-    not_in_manifest: 'The live read is turned off for this page.',
+    blocked_by_policy: 'Live read off: your organization blocks the Claude Code Remote tool list_sessions for pages. The hourly sync gives the same figures, and the running turns from their events.',
+    approval_required: 'Live read off: Claude Code Remote asks for approval on each call, which pages cannot give.',
+    not_in_manifest: 'Live read off for this page.',
     shape: 'Claude Code Remote answered in a form this page does not read.',
   };
   /** Say where cloud usage comes from and how fresh it is. Warn only when a person has to act. */
@@ -1391,17 +1507,15 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const bits = syncs.sort((a, b) => ownerOf(a) === DEFAULT_OWNER ? -1 : ownerOf(b) === DEFAULT_OWNER ? 1 : 0).map((d) => {
       const age = (now - t(d.at)) / 1000, o = ownerOf(d);
       if (age > SYNC_LATE_SEC) late = true;
-      return `${multi ? `${ownerName(o)} ` : ''}${ago(t(d.at))} (${d.sessions.length} ${d.sessions.length === 1 ? 'session' : 'sessions'}${age > SYNC_LATE_SEC ? ', late' : ''})`;
+      return `${multi ? `${ownerName(o)} ` : ''}${ago(t(d.at))} · ${d.sessions.length} ${d.sessions.length === 1 ? 'session' : 'sessions'}${age > SYNC_LATE_SEC ? ' · late' : ''}`;
     });
-    const line1 = [];
-    if (!liveErr && live) line1.push(`Cloud sessions read live from Claude Code Remote ${ago(liveAt)}; next read in about ${Math.max(1, Math.round((liveAt + LIVE_MS - now) / 60000))} min.`);
-    if (bits.length) line1.push(`Hourly sync: ${bits.join(', ')}.`);
-    else line1.push('No hourly sync has reported yet. Cloud sessions appear after the first sync; Cowork and CLI sessions appear when they report.');
-    ln.append(line1.join(' '));
+    if (!liveErr && live) ln.append(`Live read ${ago(liveAt)} · next in ${Math.max(1, Math.round((liveAt + LIVE_MS - now) / 60000))} min · `);
+    ln.append(bits.length ? `Sync ${bits.join('; ')}` : 'No hourly sync yet');
     const quiet = QUIET.has(liveErr);
     if (liveErr && !live) {
       const msg = LIVE_MSG[liveErr] || (liveErr === 'wait' || liveErr === 'none' || liveErr === 'skip' ? '' : `The live read from Claude Code Remote failed (code ${liveErr}).`);
-      if (msg) ln.append(` ${msg}`);
+      if (msg && quiet) { noteDyn.set('live', msg); ln.append(' · live read off', fn('live')); }
+      else if (msg) ln.append(` · ${msg}`);
     }
     if (late || !bits.length || (liveErr && !quiet && liveErr !== 'shape' ? true : liveErr === 'shape')) ln.classList.add('warn');
     if (!late && bits.length && quiet) ln.classList.remove('warn');
@@ -1490,42 +1604,23 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') done(true); else if (ev.key === 'Escape') done(false); });
   }
 
-  /** The line under the summary: the top token users in the last 24 h, and what is moving now. */
-  function summary(projects, sess, all, u) {
+  /** The notes that sessions wrote for the board, folded. The figures sit in the strip and the tiles. */
+  function summary() {
     const bn = $('board-note');
     bn.textContent = '';
-    const top = projects.filter((p) => p.v24 > 0).sort((a, b) => b.v24 - a.v24).slice(0, 3);
-    const l1 = document.createElement('p'); l1.className = 'sumline';
-    const lead = document.createElement('span'); lead.className = 'lead'; lead.textContent = 'Measured, last 24 h';
-    l1.append(lead);
-    if (top.length) top.forEach((p, i) => {
-      const perTok = p.tok > 0 && p.usd > 0 ? p.usd / p.tok : u.acctRate;   // dollars per token
-      const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = p.color;
-      const b = document.createElement('b'); b.textContent = p.name;
-      l1.append(i ? ' · ' : '', sw, b, ` ${tk(p.v24)}${perTok ? `, ${money(p.v24 * perTok)}` : ''}`);
-    });
-    else l1.append('No measured token use yet. Rates start once two readings at most 3 h apart exist.');
-    const run = sess.filter(working);
-    const runP = new Set(run.map(sessionProject));
-    const by = (st) => all.filter((x) => x.s.status === st).length;
-    const asks = all.filter(unanswered).length;
-    const l2 = document.createElement('p'); l2.className = 'sumline';
-    const lead2 = document.createElement('span'); lead2.className = 'lead'; lead2.textContent = 'Now';
-    l2.append(lead2, `${run.length} ${run.length === 1 ? 'session' : 'sessions'} running in ${runP.size} ${runP.size === 1 ? 'project' : 'projects'} · ${by('running')} jobs running, ${by('queued')} queued · ${asks} ${asks === 1 ? 'question' : 'questions'} open`);
-    bn.append(l1, l2);
     const qn = quota && typeof quota.notice === 'string' ? quota.notice : '';
     if ((board && board.note) || qn) {
       const d = document.createElement('details'); d.className = 'fullnote';
       if (fullOpen) d.open = true;
       d.addEventListener('toggle', () => { fullOpen = d.open; });
       const sm = document.createElement('summary'); sm.dataset.key = 'fullnote';
-      sm.textContent = board && board.updatedAt ? `Latest session notes, ${ago(t(board.updatedAt))}` : 'Latest session notes';
+      sm.textContent = board && board.updatedAt ? `Session notes · ${ago(t(board.updatedAt))}` : 'Session notes';
       d.append(sm);
       if (board && board.note) { const p = document.createElement('p'); p.textContent = board.note; d.append(p); }
-      if (qn) { const p = document.createElement('p'); p.textContent = `Limit note: ${qn}`; d.append(p); }
+      if (qn) { const p = document.createElement('p'); p.textContent = `Limit: ${qn}`; d.append(p); }
       bn.append(d);
     }
-    bn.hidden = false;
+    bn.hidden = !bn.childNodes.length;
   }
   let fullOpen = false;
 
@@ -1614,7 +1709,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     if (!sp.length) {
       /* nothing measured at this resolution: keep the range buttons so a longer range is one tap away */
       $('density-plot').textContent = ''; $('density-legend').textContent = ''; $('density-cap').textContent = ''; $('density-table').textContent = '';
-      $('density-sub').textContent = long ? 'The ledger has no two readings at most 26 h apart yet.' : 'No tokens measured in the hourly readings. Pick a longer range to read the daily ledger.';
+      $('density-sub').textContent = long ? 'No ledger pair at most 26 h apart yet.' : 'No measured tokens in the hourly readings. Pick a longer range for the daily ledger.';
       dsig = '';
       windows(spH, now);
       return;
@@ -1649,13 +1744,14 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     sub.textContent = '';
     const covMs = (long ? covLongFn : covFn)(from, to), covH = covMs / HOUR;
     const U = long ? '/day' : '/h';
-    sub.append(long ? srcWordLong : srcWord, ' ');
+    $('density-h').textContent = long ? 'Per day' : 'Per hour';
     const b1 = document.createElement('b'); b1.textContent = tk(total);
     const b2 = document.createElement('b'); b2.textContent = tk(covH > 0 ? (total / covH) * (long ? 24 : 1) : 0);
     const b3 = document.createElement('b'); b3.textContent = tk(peak);
-    sub.append(b1, ` measured in the ${dur(hrs * 3600)} range, which readings cover for ${dur(covMs / 1000)}`);
-    if (covH > 0) sub.append(' — mean ', b2, U);
-    sub.append(', peak ', b3, U, ' in a ', dstep === 1 ? '1-hour' : `${dstep}-hour`, ' bucket.');
+    if (srcJobs) sub.append('Job rows only. ');
+    sub.append(b1, ` in ${long ? `${(hrs / 24).toFixed(hrs >= 240 ? 0 : 1)} d` : dur(hrs * 3600)}`);
+    if (covH > 0) sub.append(' · mean ', b2, U);
+    sub.append(' · peak ', b3, U, ` · ${pct(covMs, hrs * HOUR)} measured`, fn(long ? 'ledger' : 'measured'));
   }
 
   function drawPlot(plot, bars, step, w, pendSpans = []) {
@@ -1754,11 +1850,17 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     for (const k2 of shownKeys) {
       const it = document.createElement('span');
       const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = `var(--s${projSlot.get(k2) || '-other'})`;
-      it.append(sw, k2);
+      const val = document.createElement('span'); val.className = 'lgv'; val.textContent = tk(seen.get(k2));
+      it.append(sw, k2, val);
       lg.append(it);
     }
-    $('density-cap').textContent = `tokens per ${perDay ? 'day' : 'hour'} · ${step === 1 ? '1-hour' : `${step}-hour`} buckets`
-      + (shaded ? ' · shaded: the current 5-hour window' : '') + (hatched ? ' · hatched: a running turn that Claude Code has not reported yet' : '') + ' · times in your clock';
+    const cap = $('density-cap');
+    cap.textContent = '';
+    cap.append(perDay ? `${step / 24 === 1 ? '1-day' : `${step / 24}-day`} bars` : `${step}-h bars`);
+    const key = (cls, text) => { const kk = document.createElement('span'); kk.className = `lgk ${cls}`; cap.append(' · ', kk, text); };
+    if (shaded) key('band', 'current 5-h window');
+    if (hatched) { key('hatch', 'not counted yet'); cap.append(fn('pending')); }
+    cap.append(fn('clock'));
     plot.append(svg);
 
     /* a tooltip on the bar under the pointer, and a table view underneath */
@@ -1833,27 +1935,30 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     }
     const tile = (key, value, lines) => {
       const el = document.createElement('div'); el.className = 'win';
-      const k = document.createElement('div'); k.className = 'wk'; k.textContent = key;
+      const k = document.createElement('div'); k.className = 'wk'; k.append(...[].concat(key));
       const v = document.createElement('div'); v.className = 'wv'; v.textContent = value;
       el.append(k, v);
       for (const [text, cls] of lines) {
-        if (!text) continue;
-        const p = document.createElement('div'); p.className = cls || 'wl'; p.textContent = text;
+        const parts = [].concat(text).filter((x) => x !== '' && x != null);
+        if (!parts.length) continue;
+        const p = document.createElement('div'); p.className = cls || 'wl'; p.append(...parts);
         el.append(p);
       }
       host.append(el);
     };
     const end = readEnd || now;                                    // the newest reading
-    const rateOf = (a, b) => inRange(sp, a, b) / (covFn(a, b) / HOUR);
+    const perHour = (a, b) => inRange(sp, a, b) / (covFn(a, b) / HOUR);
     /* cost: each session's reported dollars per token times its measured tokens */
     const usdIn = (a, b) => {
       const v = inRange(sp, a, b, (x) => x.tok * (x.r || 0));
       const some = sp.some((x) => !x.r && x.tok > 0 && x.b > a && x.a < b);
-      return v >= 0.5 ? `≈ ${money(v)}${some ? ' or more' : ''}` : '';
+      return v >= 0.5 ? `≈${money(v)}${some ? '+' : ''}` : '';
     };
-    const cost = (a, b) => [usdIn(a, b) && `${usdIn(a, b)} at API list prices`];
+    const measured = (a, b) => {
+      const c = covFn(a, b), u = usdIn(a, b);
+      return [`${dur(c / 1000)} measured · ${tk(perHour(a, b))}/h${u ? ` · ${u}` : ''}`, fn('measured')];
+    };
     const [word, cls] = quota && quota.status ? LIMIT[quota.status] || [String(quota.status), 'caution'] : ['', ''];
-    const asOf = quota && t(quota.updatedAt) ? ` ${ago(t(quota.updatedAt))}` : '';
 
     /* 5 hours: the window that Claude Code reports, from its reset less 5 h; else the 5 h to the newest reading */
     const r5 = quota && quota.type === 'five_hour' ? t(quota.resetsAt) : 0;
@@ -1861,42 +1966,56 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const a5 = open5 ? r5 - 5 * HOUR : end - 5 * HOUR;
     const b5 = Math.max(a5, Math.min(end, open5 ? r5 : end));
     const cov5 = covFn(a5, b5), used5 = inRange(sp, a5, b5);
-    const l5 = [[open5 ? `${when(a5)} to ${when(r5)}, resets in ${dur((r5 - now) / 1000)}`
-      : r5 ? `The window that Claude Code reported ended ${when(r5)}. Shown: the 5 h to the newest reading.`
-      : 'The 5 h to the newest reading. Claude Code reported no 5-hour reset.']];
+    const l5 = [[open5 ? `${when(a5)}–${when(r5)} · resets in ${dur((r5 - now) / 1000)}`
+      : r5 ? `Reported window ended ${when(r5)}. Shown: the 5 h to the newest reading.` : 'The 5 h to the newest reading']];
     if (cov5 > 0) {
-      l5.push([`Readings cover ${dur(cov5 / 1000)} of it: ${tk(rateOf(a5, b5))}/h while read`]);
-      l5.push(cost(a5, b5));
-      if (open5 && cov5 >= HOUR) l5.push([`About ${tk(used5 + rateOf(a5, b5) * ((r5 - b5) / HOUR))} by the reset at this rate`]);
+      l5.push([measured(a5, b5)]);
+      if (open5 && cov5 >= HOUR) l5.push([`about ${tk(used5 + perHour(a5, b5) * ((r5 - b5) / HOUR))} by the reset at this rate`]);
     } else {
       const next = end + HOUR;
-      l5.push([`The next hourly reading${next > now ? `, due about ${when(next)},` : ''} measures it.`]);
+      l5.push([next > now ? `Next reading about ${clock(next)}` : 'No reading in this window yet']);
     }
     if (open5) {
       const pa = a5 - 5 * HOUR, pb = Math.min(a5, end), covP = pb > pa ? covFn(pa, pb) : 0;
       const uP = usdIn(pa, pb);
-      if (covP > 0) l5.push([`The 5 h before it: ${tk(inRange(sp, pa, pb))} measured${uP ? `, ${uP}` : ''}; readings cover ${dur(covP / 1000)}`]);
+      if (covP > 0) l5.push([`Prior 5 h: ${tk(inRange(sp, pa, pb))}${uP ? ` · ${uP}` : ''} · ${dur(covP / 1000)} measured`]);
     }
-    const pct = quota && +quota.pct > 0 ? +quota.pct : 0, cap = num(quota && quota.limitTok);
-    if (pct) l5.push([`share ${pct.toFixed(0)}% reported`]);
-    else if (cap) l5.push([`cap ${tk(cap)} reported — ${((used5 / cap) * 100).toFixed(0)}% of it measured here`]);
-    if (word && quota.type === 'five_hour') l5.push([`${word}, as Claude Code reported${asOf}.${pct || cap ? '' : ' It reports no share of the limit.'}`, `wstate ${cls}`]);
-    tile('5-hour window', cov5 > 0 ? `${tk(used5)} measured` : 'No reading yet', l5);
+    const share = quota && +quota.pct > 0 ? +quota.pct : 0, cap = num(quota && quota.limitTok);
+    if (share) l5.push([`${share.toFixed(0)}% of the limit used, as reported`]);
+    else if (cap) l5.push([`cap ${tk(cap)} reported · ${((used5 / cap) * 100).toFixed(0)}% measured here`]);
+    tile(['5-hour window', fn('limit')], cov5 > 0 ? tk(used5) : 'No reading yet', l5);
 
     /* 7 days: the trailing week to the newest reading */
     const a7 = end - 168 * HOUR;
     const cov7 = covFn(a7, end), used7 = inRange(sp, a7, end);
-    const l7 = [[cov7 > 0 ? `Readings cover ${dur(cov7 / 1000)} of the 7 days: ${tk(rateOf(a7, end))}/h while read` : 'No two readings at most 3 h apart in the last 7 days.']];
-    if (cov7 > 0) l7.push(cost(a7, end));
-    if (readFirst > a7) l7.push([`Hourly readings start ${when(readFirst)}, so they cover all 7 days from ${when(readFirst + 168 * HOUR)} if they continue.`]);
+    const l7 = [[cov7 > 0 ? measured(a7, end) : 'No two readings at most 3 h apart in 7 days']];
+    if (readFirst > a7) l7.push([`Readings since ${when(readFirst)}`]);
     const reset7 = quota ? t(quota.weekResetsAt) : 0;
-    if (reset7) l7.push([reset7 > now ? `resets ${when(reset7)}, in ${dur((reset7 - now) / 1000)}` : `reset due ${when(reset7)}`]);
+    if (reset7) l7.push([reset7 > now ? `resets ${when(reset7)} (${dur((reset7 - now) / 1000)})` : `reset due ${when(reset7)}`]);
     const wp = quota && +quota.weekPct > 0 ? +quota.weekPct : 0;
-    if (wp) l7.push([`share ${wp.toFixed(0)}% reported`]);
-    if (word && quota.type && String(quota.type).indexOf('seven_day') === 0) l7.push([`${word}, as Claude Code reported${asOf}`, `wstate ${cls}`]);
-    tile('7-day window', cov7 > 0 ? `${tk(used7)} measured` : 'No readings yet', l7);
+    if (wp) l7.push([`${wp.toFixed(0)}% of the limit used, as reported`]);
+    if (word && quota.type && String(quota.type).indexOf('seven_day') === 0) l7.push([word, `wstate ${cls}`]);
+    tile('7-day window', cov7 > 0 ? tk(used7) : 'No readings yet', l7);
   }
 
+  /** A long list of choices as one dropdown. The options rebuild only when they change, so an open list stays open. */
+  function pickList(id, opts, cur, pick) {
+    const host = $(id);
+    let sel = host.querySelector('select');
+    if (!sel) {
+      sel = document.createElement('select'); sel.className = 'fsel'; sel.dataset.key = `${id}:list`;
+      sel.setAttribute('aria-label', host.getAttribute('aria-label') || id);
+      sel.addEventListener('change', () => pick(sel.value));
+      host.append(sel);
+    }
+    const sig = JSON.stringify(opts);
+    if (sel.dataset.sig !== sig) {
+      sel.dataset.sig = sig; sel.textContent = '';
+      for (const [v, text] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = text; sel.append(o); }
+    }
+    const want = opts.some(([v]) => v === cur) ? cur : 'all';
+    if (sel.value !== want) sel.value = want;
+  }
   function chips(id, opts, cur, pick) {
     const host = $(id);
     host.querySelectorAll('button').forEach((b) => b.remove());
@@ -1916,7 +2035,7 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const d = document.createElement('details'); d.className = 'sessions'; d.open = openSess.has(p.name);
     d.addEventListener('toggle', () => { if (d.open) openSess.add(p.name); else openSess.delete(p.name); });
     const sm = document.createElement('summary'); sm.dataset.key = `sess:${p.name}`;
-    sm.textContent = `Sessions (${p.sess.length})${p.runSess ? `, ${p.runSess} running` : ''}`;
+    sm.textContent = `${p.sess.length} ${p.sess.length === 1 ? 'session' : 'sessions'}${p.runSess ? ` · ${p.runSess} running` : ''}`;
     d.append(sm);
     const list = document.createElement('div'); list.className = 'srows';
     const rows = [...p.sess].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -1931,15 +2050,18 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       if (s.status !== 'running' && SESSION_TAG[s.bucket]) { const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = SESSION_TAG[s.bucket]; st.append(tg); }
       const sn = document.createElement('span'); sn.className = 'sn'; sn.textContent = s.tok ? `${tk(s.tok)}${s.usd ? ` · ${money(s.usd)}` : ''}` : '—';
       const sub = document.createElement('span'); sub.className = 'sub';
-      const word = s.gone ? 'No longer listed by Claude Code' : s.reader && s.status === 'running' ? 'Took the latest hourly reading'
-        : pendingBy.has(s.id) ? `Running a turn; total unchanged since ${when(pendingBy.get(s.id))}`
-        : s.inTurn && s.status === 'running' ? `Running a turn${s.turnSince ? ` since ${when(s.turnSince)}` : ''}: ${s.turnFloor ? 'at least ' : ''}${tk(s.inTurn)} so far, from its events`
-        : s.status === 'running' ? 'Running now' : s.status === 'archived' ? 'Archived' : s.status === 'idle' ? 'Idle' : (s.status || 'Idle');
-      sub.textContent = `${word}${s.updatedAt ? ` · session updated ${ago(s.updatedAt)}` : ''}${s.where === 'local' ? ' · reported by the session' : ''}`;
+      const word = s.gone ? 'No longer listed by Claude Code' : s.reader && s.status === 'running' ? 'Took the hourly reading'
+        : pendingBy.has(s.id) ? `Turn running · total unchanged since ${when(pendingBy.get(s.id))}`
+        : s.inTurn && s.status === 'running' ? `Turn${s.turnSince ? ` since ${when(s.turnSince)}` : ''} · ${s.turnFloor ? 'at least ' : ''}${tk(s.inTurn)} so far`
+        : s.status === 'running' ? 'Running' : s.status === 'archived' ? 'Archived' : s.status === 'idle' ? 'Idle' : (s.status || 'Idle');
+      sub.append(`${word}${s.updatedAt ? ` · updated ${ago(s.updatedAt)}` : ''}${s.where === 'local' ? ' · self-reported' : ''}`);
+      if (s.reader && s.status === 'running') sub.append(fn('reader'));
+      else if (pendingBy.has(s.id)) sub.append(fn('pending'));
+      else if (s.inTurn && s.status === 'running') sub.append(fn('turns'));
       r.append(dot, st, sn, sub);
       list.append(r);
     }
-    if (rows.length > 12) { const m = document.createElement('p'); m.className = 'live-note'; m.style.margin = '6px 0 0'; m.textContent = `and ${rows.length - 12} older ${rows.length - 12 === 1 ? 'session' : 'sessions'}`; list.append(m); }
+    if (rows.length > 12) { const m = document.createElement('p'); m.className = 'live-note'; m.style.margin = '6px 0 0'; m.textContent = `+${rows.length - 12} older`; list.append(m); }
     d.append(list);
     return d;
   }
@@ -1952,6 +2074,13 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     return el;
   }
 
+  /** A surface as a short coloured label: Cloud, Cowork, CLI. */
+  function surfaceTag(sf) {
+    const w = whereOfSurface(sf);
+    const short = /cowork/i.test(sf) ? 'Cowork' : /\bcli\b|terminal/i.test(sf) ? 'CLI' : /\bide\b/i.test(sf) ? 'IDE' : w === 'cloud' ? 'Cloud' : String(sf).replace(/^Claude Code · /i, '');
+    return [short, w || 'both'];
+  }
+
   function card(p, rows, now) {
     const r = p.r;
     const el = document.createElement('section'); el.className = `proj-card${p.active ? '' : ' inactive'}`;
@@ -1962,16 +2091,23 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     const hsw = document.createElement('span'); hsw.className = 'sw'; hsw.style.background = p.color;
     h.append(hsw, titleNode(p.title));
     const tags = document.createElement('div'); tags.className = 'proj-tags';
-    if (p.whereKey) { const w = document.createElement('span'); w.className = `where ${p.whereKey}`; w.textContent = WHERE_WORD[p.whereKey]; tags.append(w); }
+    const seenTag = new Set();
+    for (const sf of p.surfaces.length ? p.surfaces : [WHERE_WORD[p.whereKey] || '']) {
+      if (!sf) continue;
+      const [short, w] = surfaceTag(sf);
+      if (seenTag.has(short)) continue;
+      seenTag.add(short);
+      const b = document.createElement('span'); b.className = `where ${w}`; b.textContent = short; b.title = sf; tags.append(b);
+    }
     if (multi) { const w2 = document.createElement('span'); w2.className = 'who'; w2.textContent = ownerName(p.owner); tags.append(w2); }
     const pill = document.createElement('span'); pill.className = `pill ${p.working ? 'on' : 'off'}`;
     pill.textContent = p.active ? (p.working ? 'Working now' : 'Idle') : (p.doc && p.doc.status === 'done' ? 'Done' : p.doc && p.doc.status === 'paused' ? 'Paused' : 'Inactive');
-    pill.title = p.working ? 'A session or job runs now.' : p.active ? 'Nothing runs now. The project had activity in the last 72 h.' : 'No activity in the last 72 h.';
+    pill.title = p.working ? 'A session or job runs now.' : p.active ? 'Nothing runs now. Activity in the last 72 h.' : 'No activity in the last 72 h.';
     tags.append(pill);
-    if (p.items.length) { const pct = document.createElement('span'); pct.className = 'proj-pct'; pct.textContent = `${Math.floor(r.pfrac * 100)}%`; tags.append(pct); }
+    if (r.active) { const pc = document.createElement('span'); pc.className = 'proj-pct'; pc.textContent = `${Math.floor(r.pfrac * 100)}%`; pc.title = 'Share of the job work done'; tags.append(pc); }
     top.append(h, tags);
     head.append(top);
-    if (p.items.length) {
+    if (r.active) {
       const bar = document.createElement('div'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
       const pi = document.createElement('i'); pi.className = 'proj'; pi.style.width = `${(r.pfrac * 100).toFixed(2)}%`;
       const d = document.createElement('i'); d.className = 'done'; d.style.width = `${(r.frac * 100).toFixed(2)}%`;
@@ -1979,43 +2115,31 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       bar.append(pi, d);
       head.append(bar);
     }
-    const meta = document.createElement('div'); meta.className = 'proj-meta';
-    for (const s of p.surfaces) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = s; meta.append(b); }
-    const say = document.createElement('span');
-    if (!p.items.length) say.textContent = 'No job rows';
-    else if (r.settled && r.end) say.textContent = `Jobs finished ${when(r.end)}`;
-    else if (!r.active) say.textContent = 'No open jobs';
-    else if (!r.known) say.textContent = `${r.active} open, no finish time yet`;
-    else say.textContent = `Finishes about ${clock(now + r.left * 1000)}, in ${dur(r.left)}`;
-    meta.append(say);
-    if (p.lastAct) { const la = document.createElement('span'); la.textContent = `Last activity ${ago(p.lastAct)}`; meta.append(la); }
-    head.append(meta);
 
+    /* one line of figures: values carry their units, so most need no label */
     const use = document.createElement('div'); use.className = 'proj-use';
-    const bit = (k, v) => { const s = document.createElement('span'); s.append(`${k} `); const b = document.createElement('b'); b.className = 'num'; b.textContent = v; s.append(b); use.append(s); };
+    const bit = (k, v, ...extra) => { const sp2 = document.createElement('span'); if (k) sp2.append(`${k} `); const b = document.createElement('b'); b.className = 'num'; b.textContent = v; sp2.append(b, ...extra); use.append(sp2); return sp2; };
+    if (r.active && r.known && r.left > 0) bit('ends', `${clock(now + r.left * 1000)} · ${dur(r.left)}`);
+    else if (r.active && !r.known) bit('', `${r.active} open`, ' · no estimate');
+    else if (r.settled && r.end) bit('jobs done', when(r.end));
     if (p.sess.length) {
-      bit('Tokens', `${tk(p.tok)}${p.partial ? ' or more' : ''}`);
-      bit('Last token use', p.lastMoved ? ago(p.lastMoved) : 'not measured');
-      if (p.cost) bit(p.costEst ? 'Cost, estimated' : 'Cost', `${p.costEst ? '≈' : ''}${money(p.cost)}`);
-      if (p.v1) bit('Last hour', `${tk(p.v1)}/h`);
+      bit('', `${tk(p.tok)}${p.partial ? '+' : ''}`, ...(p.partial ? [fn('partial')] : []));
+      if (p.cost) bit('', `${p.costEst ? '≈' : ''}${money(p.cost)}`, ...(p.costEst ? [fn('cost')] : []));
+      if (p.v1) bit('1 h', tk(p.v1));
       if (p.v24) bit('24 h', tk(p.v24));
-      bit('Sessions', `${p.sess.length}${p.runSess ? `, ${p.runSess} running` : ''}`);
     } else {
-      const s = document.createElement('span'); s.textContent = 'No session usage reported'; use.append(s);
+      const sp2 = document.createElement('span'); sp2.textContent = 'No usage reported'; use.append(sp2);
     }
     const jt = p.items.reduce((a, x) => a + num(x.j.tok), 0);
-    if (jt) bit('Job rows', `${tk(jt)} on ${p.items.filter((x) => num(x.j.tok) > 0).length} of ${p.items.length}`);
+    if (jt) bit('jobs', `${tk(jt)} on ${p.items.filter((x) => num(x.j.tok) > 0).length}/${p.items.length}`, fn('jobrows'));
+    if (p.lastMoved) bit('used', ago(p.lastMoved));
+    if (p.lastAct && (!p.lastMoved || p.lastAct - p.lastMoved > 600000)) bit('active', ago(p.lastAct));
     head.append(use);
     if (p.est && p.est.open && p.est.more > 0) {
       const pe = document.createElement('div'); pe.className = 'proj-proj';
       const b1 = document.createElement('b'); b1.textContent = tk(p.est.tok);
       const b2 = document.createElement('b'); b2.textContent = money(p.est.usd);
-      pe.append('At the end of the open jobs, about ', b1, ' tokens and ', b2,
-        ` (${p.est.open} open ${p.est.open === 1 ? 'job' : 'jobs'}, +${tk(p.est.more)}${p.est.noEst ? `; ${p.est.noEst} without an estimate, not counted` : ''}).`);
-      head.append(pe);
-    } else if (p.est && p.est.open) {
-      const pe = document.createElement('div'); pe.className = 'proj-proj';
-      pe.textContent = `${p.est.open} open ${p.est.open === 1 ? 'job' : 'jobs'} without a token or time estimate, so no projection.`;
+      pe.append('Projected ', b1, ' · ', b2, ` · +${tk(p.est.more)} for ${p.est.open} open ${p.est.open === 1 ? 'job' : 'jobs'}${p.est.noEst ? `, ${p.est.noEst} unestimated` : ''}`, fn('projection'));
       head.append(pe);
     }
 
@@ -2042,20 +2166,23 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
       const hn = document.createElement('p'); hn.className = 'hidden-note';
       const b = document.createElement('button'); b.type = 'button'; b.dataset.key = `more:${p.name}`; b.textContent = 'Show all';
       b.addEventListener('click', () => { showAll = true; keep('cad.all', '1'); render(); });
-      hn.append(`${hid} finished ${hid === 1 ? 'job' : 'jobs'} hidden. `, b);
+      hn.append(`${hid} finished hidden · `, b);
       el.append(hn);
     }
     return el;
   }
 
+  /* A job row. A running or waiting job gets its note, a bar when it has a count, and a line of figures.
+     Queued, done and stopped jobs take one line, their figures at the right. */
   function row(x, now) {
     const { j, s } = x;
-    const el = document.createElement('article'); el.className = `row is-${s.status}`;
-    const head = document.createElement('div'); head.className = 'head';
-    const chip = document.createElement('span');
     /* A row still marked waiting but carrying an answer is a half-updated row.
        Say "Answered" so the state reads true and the writer can see to move it. */
     const answeredOpen = s.status === 'waiting' && s.answered;
+    const one = !answeredOpen && (s.status === 'queued' || s.status === 'done' || s.status === 'failed' || s.status === 'stopped');
+    const el = document.createElement('article'); el.className = `row is-${s.status}${one ? ' one' : ''}`;
+    const head = document.createElement('div'); head.className = 'head';
+    const chip = document.createElement('span');
     chip.className = `chip ${answeredOpen ? 'answered' : s.status}`;
     chip.textContent = answeredOpen ? 'Answered' : STATUS[s.status];
     const label = document.createElement('span'); label.className = 'label';
@@ -2065,61 +2192,74 @@ details.sessions summary { cursor: pointer; color: var(--ink-2); font-size: 0.86
     } else label.textContent = text;
     head.append(chip, label);
     if (j.surface && !j.project) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = j.surface; head.append(b); }
+
+    /* figures with short labels; the unit says what each one is */
+    const bits = [];
+    const add = (k, v, cls) => bits.push([k, v, cls || '']);
+    const unit = j.unit || 'steps';
+    if (s.total) {
+      add('', `${Math.floor(s.pfrac * 100)}%`);
+      add('', `${n0(s.status === 'running' ? s.proj : s.done)}/${n0(s.total)} ${unit}`);
+    }
+    if (s.status === 'running') {
+      if (s.started) add('ran', dur((now - s.started) / 1000));
+      if (s.known) add('ends', `${clock(now + s.left * 1000)} · ${dur(s.left)}`);
+      if (s.updated) add('report', ago(s.updated), s.stale ? 'warn' : '');
+    } else if (s.status === 'done') {
+      if (s.started && s.finished) add('took', dur((s.finished - s.started) / 1000));
+      if (s.finished) add('done', when(s.finished));
+    } else if (s.status === 'queued') {
+      if (s.queuedSince) add('queued', dur((now - s.queuedSince) / 1000));
+      if (s.est) add('est.', dur(s.est));
+    } else if (s.status === 'waiting') {
+      if (!s.answered) add('waiting', dur(s.waitSec), s.waitSec > 14400 ? 'late' : s.waitSec > 3600 ? 'warn' : '');
+      if (s.asked) add('asked', when(s.asked));
+    } else if (s.updated) add('stopped', when(s.finished || s.updated));
+    const tUsed = num(j.tok), tEst = num(j.tokEst);
+    if (tUsed) add('', num(j.tokOut) ? `${tk(tUsed)} (${tk(num(j.tokOut))} out)` : tk(tUsed));
+    if (tEst && s.status !== 'done' && s.status !== 'failed' && s.status !== 'stopped') add('est.', tk(Math.max(tEst, tUsed)), tUsed > tEst ? 'warn' : '');
+    if (s.answered) add('answered after', dur(s.waitSec));
+    const due = Date.parse(typeof j.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.due) ? `${j.due}T00:00:00Z` : '');
+    if (Number.isFinite(due) && s.status !== 'done') {
+      const days = Math.round((due - Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')) / 86400000);
+      const word = days < 0 ? `${day(due)}, ${-days} ${-days === 1 ? 'day' : 'days'} late` : days === 0 ? `${day(due)}, today` : `${day(due)}, in ${days} ${days === 1 ? 'day' : 'days'}`;
+      add('due', word, days < 0 ? 'late' : days <= 2 ? 'warn' : '');
+    }
+    const fill = (host) => {
+      bits.forEach(([k, v, cls], n) => {
+        const sp2 = document.createElement('span'); if (cls) sp2.className = cls;
+        if (n && host.classList.contains('tail')) sp2.append(' · ');
+        if (k) sp2.append(`${k} `);
+        const b = document.createElement('b'); b.className = 'num'; b.textContent = v; sp2.append(b);
+        host.append(sp2);
+      });
+      if (s.answered && typeof j.answer === 'string' && j.answer) { const sp2 = document.createElement('span'); sp2.textContent = `“${j.answer}”`; host.append(sp2); }
+    };
+
+    if (one) {
+      const tail = document.createElement('span'); tail.className = 'tail'; fill(tail); head.append(tail);
+    }
     if (db && (isLive(x) || answeredOpen)) head.append(closer(j, s, 'row'));
-    if (j.note) { const n = document.createElement('span'); n.className = 'note'; n.textContent = j.note; head.append(n); }
+    /* a note that only repeats the status adds nothing */
+    const note = String(j.note || '').replace(s.status === 'queued' ? /^queued\.?\s*/i : /^$/, '').trim();
+    if (note) { const n = document.createElement('span'); n.className = 'note'; n.textContent = note; head.append(n); }
     if (j.blocked && !s.answered && (s.status === 'waiting' || s.status === 'queued')) {
       const n = document.createElement('span'); n.className = 'blocked'; n.textContent = `Waits on: ${j.blocked}`; head.append(n);
     }
     const err = closeError(j);
     if (err) head.append(err);
+    el.append(head);
+    if (one) return el;
 
-    const stats = document.createElement('div'); stats.className = 'stats';
-    const add = (k, v, cls) => { const span = document.createElement('span'); if (cls) span.className = cls; if (k) span.append(`${k} `); const b = document.createElement('b'); b.className = 'num'; b.textContent = v; span.append(b); stats.append(span); };
-    const unit = j.unit || 'steps';
     if (s.total) {
-      add('', `${Math.floor(s.pfrac * 100)}%`);
-      add('', `${n0(s.status === 'running' ? s.proj : s.done)} / ${n0(s.total)} ${unit}`);
+      const bar = document.createElement('div'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
+      const pb = document.createElement('i'); pb.className = 'proj'; pb.style.width = `${(s.pfrac * 100).toFixed(2)}%`;
+      const d = document.createElement('i'); d.className = 'done'; d.style.width = `${(s.frac * 100).toFixed(2)}%`;
+      bar.append(pb, d);
+      el.append(bar);
     }
-    if (s.status === 'running') {
-      if (s.started) add('Elapsed', dur((now - s.started) / 1000));
-      if (s.known) add('Finishes', `${clock(now + s.left * 1000)} (in ${dur(s.left)})`);
-      if (s.updated) add('Report', ago(s.updated), s.stale ? 'warn' : '');
-    } else if (s.status === 'done') {
-      if (s.started && s.finished) add('Took', dur((s.finished - s.started) / 1000));
-      if (s.finished) add('Finished', when(s.finished));
-    } else if (s.status === 'queued') {
-      if (s.queuedSince) add('Queued', dur((now - s.queuedSince) / 1000));
-      if (s.est) add('Expected', dur(s.est));
-    } else if (s.status === 'waiting') {
-      if (!s.answered) add('Waiting', dur(s.waitSec), s.waitSec > 14400 ? 'late' : s.waitSec > 3600 ? 'warn' : '');
-      if (s.asked) add('Asked', when(s.asked));
-    } else if (s.updated) add('Stopped', when(s.finished || s.updated));
-
-    const tUsed = num(j.tok), tEst = num(j.tokEst);
-    if (tUsed) add('Tokens', num(j.tokOut) ? `${tk(tUsed)} (output ${tk(num(j.tokOut))})` : tk(tUsed));
-    if (tEst && s.status !== 'done' && s.status !== 'failed' && s.status !== 'stopped') add(s.status === 'queued' ? 'Est. tokens' : 'Est. at end', tk(Math.max(tEst, tUsed)), tUsed > tEst ? 'warn' : '');
-
-    /* However the row ended up, if a person answered it, say how long they took. */
-    if (s.answered) {
-      add('Answered after', dur(s.waitSec));
-      if (typeof j.answer === 'string' && j.answer) {
-        const span = document.createElement('span'); span.textContent = `“${j.answer}”`; stats.append(span);
-      }
-    }
-
-    const due = Date.parse(typeof j.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.due) ? `${j.due}T00:00:00Z` : '');
-    if (Number.isFinite(due) && s.status !== 'done') {
-      const days = Math.round((due - Date.parse(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')) / 86400000);
-      const word = days < 0 ? `${day(due)}, ${-days} ${-days === 1 ? 'day' : 'days'} late` : days === 0 ? `${day(due)}, today` : `${day(due)}, in ${days} ${days === 1 ? 'day' : 'days'}`;
-      add('Due', word, days < 0 ? 'late' : days <= 2 ? 'warn' : '');
-    }
-
-    const bar = document.createElement('div'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
-    const p = document.createElement('i'); p.className = 'proj'; p.style.width = `${(s.pfrac * 100).toFixed(2)}%`;
-    const d = document.createElement('i'); d.className = 'done'; d.style.width = `${(s.frac * 100).toFixed(2)}%`;
-    bar.append(p, d);
-
-    el.append(head, bar, stats);
+    const stats = document.createElement('div'); stats.className = 'stats'; fill(stats);
+    if (stats.childNodes.length) el.append(stats);
     return el;
   }
 
