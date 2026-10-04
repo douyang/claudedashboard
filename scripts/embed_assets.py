@@ -2,13 +2,14 @@
 """Embed the instruction sources in dashboard/index.html.
 
 The board page builds the "Add a person's Claude" instructions and the skill
-file in the browser. It reads four sources from one JSON block between the
+file in the browser. It reads these sources from one JSON block between the
 markers <!-- assets:start --> and <!-- assets:end -->:
 
   invite  docs/INVITE.md                 the paste-once setup text
   sync    docs/SYNC.md                   the hourly sync procedure
   script  scripts/ccr_sync_doc.py        the script that the sync procedure runs
   skill   skills/claude-dashboard/SKILL.md
+  localUsage  skills/claude-dashboard/scripts/local_usage.py   the script that local sessions run
 
 The files are the source of truth. Do not edit the block by hand.
 
@@ -25,6 +26,7 @@ SOURCES = {
     'sync': 'docs/SYNC.md',
     'script': 'scripts/ccr_sync_doc.py',
     'skill': 'skills/claude-dashboard/SKILL.md',
+    'localUsage': 'skills/claude-dashboard/scripts/local_usage.py',
 }
 START, END = '<!-- assets:start -->', '<!-- assets:end -->'
 

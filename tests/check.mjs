@@ -79,7 +79,8 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   const note = await p.evaluate(() => { const n = document.getElementById('livenote'); return { text: n.innerText, warn: n.classList.contains('warn') }; });
   check('owner: a blocked live read is explained and does not warn', /live read off/.test(note.text) && !note.warn && /blocks the Claude Code Remote tool/.test(nt), JSON.stringify(note));
   /* ---- density: each caveat once, in numbered notes; no sentence that repeats a figure ---- */
-  const fns = await p.evaluate(() => [...document.querySelectorAll('sup.fn')].map((x) => [x.dataset.note, x.innerText.trim(), (x.querySelector('a') || {}).getAttribute ? x.querySelector('a').getAttribute('href') : '']));
+  /* textContent: a superscript in a closed session list carries its number too, but innerText reads it as empty */
+  const fns = await p.evaluate(() => [...document.querySelectorAll('sup.fn')].map((x) => [x.dataset.note, x.textContent.trim(), (x.querySelector('a') || {}).getAttribute ? x.querySelector('a').getAttribute('href') : '']));
   const lis = await p.evaluate(() => [...document.querySelectorAll('#notes-list li')].map((li) => li.id));
   const firstSeen = []; for (const [k] of fns) if (!firstSeen.includes(k)) firstSeen.push(k);
   check('notes: each superscript carries the number of its note, in page order, and every note is cited',
@@ -119,8 +120,9 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   if (saved[0]) {
     const f = path.join(os.tmpdir(), 'check-skill.zip');
     fs.writeFileSync(f, Buffer.from(saved[0].b64, 'base64'));
-    const out = execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile('${f}');assert z.testzip() is None;t=z.read('claude-dashboard/SKILL.md').decode();print(z.namelist()[0]);print('Person: Sam' in t)`]).toString().trim().split('\n');
-    check('invite: the zip is valid, holds the skill, and names the person', out[0] === 'claude-dashboard/SKILL.md' && out[1] === 'True', out.join(' | '));
+    const lu = new URL('../skills/claude-dashboard/scripts/local_usage.py', import.meta.url).pathname;
+    const out = execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile('${f}');assert z.testzip() is None;t=z.read('claude-dashboard/SKILL.md').decode();print(z.namelist()[0]);print('Person: Sam' in t);n='claude-dashboard/scripts/local_usage.py';print(n in z.namelist() and z.read(n)==open('${lu}','rb').read())`]).toString().trim().split('\n');
+    check('invite: the zip is valid, holds the skill and the local usage script, and names the person', out[0] === 'claude-dashboard/SKILL.md' && out[1] === 'True' && out[2] === 'True', out.join(' | '));
   }
 
   /* ---- history: the ledger, sessions that left the listing, long ranges, CSV ---- */
@@ -292,6 +294,69 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   const row = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
   check('events: its session row says how much the turn used so far', /60 M so far/.test(row), row.slice(0, 200));
   await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- local and cloud: the hourly listing decides the place; a local session that stops reporting reads No report ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-local-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const at = (min) => new Date(Date.parse(NOW) - min * 60000).toISOString().replace('.000Z', 'Z');
+  const sec = (iso) => Date.parse(iso) / 1000;
+  const put = (col, id, doc) => fs.writeFileSync(path.join(dir, col, `${id}.json`), JSON.stringify(doc));
+  /* a Cowork session that calls itself cloud, appears in no reading, and stopped reporting 2 h ago */
+  put('sessions', 'session_01GRANTA1', { title: 'Grant A drafts', folder: 'Grant A', where: 'cloud', surface: 'Claude Code · cloud', src: 'report', status: 'running', updatedAt: at(120), createdAt: at(600), partial: true });
+  /* a local session that reports now, with counts and points from its transcript */
+  put('sessions', 'cowork-grant-b', { title: 'Grant B drafts', folder: 'Grant B', where: 'local', surface: 'Cowork', src: 'transcript', status: 'running', updatedAt: at(5), createdAt: at(300),
+    tok: 30_000_000, out: 100_000, calls: 300, since: at(300), lastAt: at(6),
+    pts: [[sec(at(300)) - 1, 0], [sec(at(290)), 5_000_000], [sec(at(50)) - 1, 5_000_000], [sec(at(40)), 20_000_000], [sec(at(6)), 30_000_000]] });
+  for (let i = 1; i <= 6; i += 1) put('sessions', `cowork-extra-${i}`, { title: `Extra ${i}`, folder: `Extra ${i}`, where: 'local', surface: 'Cowork', src: 'report', status: 'idle', updatedAt: at(30 + i), tok: 1_000_000 });
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  check('local: the page loads without errors', s.problems.length === 0, s.problems.join(' | '));
+  const heads = await headsOf(s.page); const c = (n) => heads.indexOf(n);
+  const R = await rows(s.page);
+  const pills = await s.page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.querySelector('.pill').innerText.trim()])));
+  check('local: a session that no reading lists is local, whatever it calls itself', !!R['Grant A'] && /\blocal\b/i.test(R['Grant A'][0]), JSON.stringify(R['Grant A']));
+  check('local: a running report with no newer report for 45 min reads No report, not Working now', /^no report$/i.test(pills['Grant A'] || ''), JSON.stringify(pills));
+  const row = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'Grant A'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
+  check('local: its session row says how long it sent no report', /No report for 2 h/.test(row), row.slice(0, 200));
+  check('local: a fresh local report counts as Working now', /^working now$/i.test(pills['Grant B'] || ''), JSON.stringify(pills));
+  check('local: transcript points place the local tokens in the hours they were used', !!R['Grant B'] && /^2\d M$/.test(R['Grant B'][c('1 H')]) && R['Grant B'][c('24 H')] === '30 M', JSON.stringify(R['Grant B']));
+  check('local: a cloud project keeps its place', !!R['owner/atlas-port'] && !/\blocal\b/i.test(R['owner/atlas-port'][0]), JSON.stringify(R['owner/atlas-port']));
+  /* colours: each project among the 16 with the latest activity has its own colour */
+  const sw = await s.page.evaluate(() => [...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.querySelector('h2 .sw').style.background]));
+  const colored = sw.filter(([, b]) => !/other/.test(b)).map(([, b]) => b);
+  const total = Object.keys(R).length;
+  check('colours: more than 8 projects get distinct colours, and grey only past 16', sw.length > 8 && new Set(colored).size === colored.length
+    && sw.length - colored.length <= Math.max(0, total - 16) && colored.some((b) => /--s(9|1[0-6])\)/.test(b)), JSON.stringify(sw));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the local usage script: counts and times from the session's own transcript, never text ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-lu-'));
+  const S = new URL('../skills/claude-dashboard/scripts/local_usage.py', import.meta.url).pathname;
+  const proj = path.join(dir, 'projects', '-work-grant');
+  fs.mkdirSync(path.join(proj, 'sid-1', 'subagents'), { recursive: true });
+  const a = (ts, id, cr, o) => JSON.stringify({ type: 'assistant', timestamp: ts, message: { id, content: [{ type: 'text', text: 'PRIVATE WORDS' }], usage: { input_tokens: 10, cache_read_input_tokens: cr, cache_creation_input_tokens: 100, output_tokens: o } } });
+  const main = [JSON.stringify({ type: 'user', timestamp: '2026-10-04T10:00:00Z', message: { content: 'PRIVATE PROMPT' } }),
+    a('2026-10-04T10:00:05Z', 'm1', 1000, 5), a('2026-10-04T10:00:06Z', 'm1', 1000, 50), a('2026-10-04T10:04:00Z', 'm2', 2000, 40),
+    JSON.stringify({ type: 'cost-state', modelUsage: { x: { inputTokens: 9000, outputTokens: 90, cacheReadInputTokens: 3000, cacheCreationInputTokens: 200 } }, totalCostUSD: 1.234 }),
+    a('2026-10-04T13:00:00Z', 'm3', 500, 9)].join('\n') + '\n';
+  fs.writeFileSync(path.join(proj, 'sid-1.jsonl'), main);
+  fs.writeFileSync(path.join(proj, 'sid-1', 'subagents', 'agent-1.jsonl'), a('2026-10-04T10:02:00Z', 's1', 300, 8) + '\n');
+  const raw = execFileSync('python3', [S, '--root', dir]).toString();
+  const r = JSON.parse(raw);
+  const t = (iso) => Date.parse(iso) / 1000;
+  check('local script: each model call counts once, subagents included, plus what Claude Code counted that the transcript lost',
+    r.sessionId === 'sid-1' && r.calls === 4 && r.tok === 12909 && r.untimed === 8562 && r.out === 107 && r.usd === 1.23 && r.files === 2, raw);
+  check('local script: the points place each bucket of calls, with the total before a bucket that follows a gap',
+    JSON.stringify(r.pts) === JSON.stringify([[t('2026-10-04T10:00:05Z') - 1, 8562], [t('2026-10-04T10:04:00Z'), 12290], [t('2026-10-04T13:00:00Z') - 1, 12290], [t('2026-10-04T13:00:00Z'), 12909]]), JSON.stringify(r.pts));
+  check('local script: no text leaves the transcript, and the transcript stays unchanged', !/PRIVATE/.test(raw) && fs.readFileSync(path.join(proj, 'sid-1.jsonl'), 'utf8') === main);
+  let code = 0, err = '';
+  try { execFileSync('python3', [S, '--root', path.join(dir, 'none')], { stdio: 'pipe' }); } catch (e) { code = e.status; err = e.stdout.toString(); }
+  check('local script: with no transcript it says so and writes no figure', code === 2 && /no transcript found/.test(err) && !/"tok"/.test(err), `${code} ${err}`);
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

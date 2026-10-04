@@ -22,7 +22,7 @@ The registry. One document per project.
 |---|---|
 | `name` | The project's own name. The board shows the first repository instead, else `folder`, else this name. Job rows that use this name keep their project. |
 | `aliases` | Other names that job rows use for this project. |
-| `where` | `cloud` or `local`. When absent, the board derives it from the sessions and job surfaces. |
+| `where` | `cloud` or `local`. The project's sessions decide its place on the board; this field counts only for a project with no session. |
 | `surface` | For example `Claude Code · cloud` or `Cowork`. |
 | `sessions` | Session ids that belong to the project. |
 | `repos` | `owner/repo` strings. The first one names the project on the board. All appear as links on the card. |
@@ -30,7 +30,7 @@ The registry. One document per project.
 | `artifacts` | Links shown on the project card. |
 | `status` | `active`, `paused` or `done`. `paused` and `done` make the project inactive. |
 | `pinned` | `true` keeps the project active. |
-| `color` | A fixed colour slot, 1 to 8. A project without one draws in grey as Other. Eight is the most colours a chart can keep apart for readers with colour-vision deficiency. |
+| `color` | A fixed colour slot, 1 to 16. Slots 1 to 8 are the eight categorical hues; 9 to 16 are the same hues at a second lightness step, and the 16-slot order passes the palette validator on adjacent pairs in both modes. The 16 projects with the latest activity hold a slot each: a registry colour stays while its project is among them, and a project without one takes the lowest free slot. The rest draw in grey as Other. |
 | `lastActivityAt` | Set by a reporting session. A registry edit does not set it. |
 
 ### How the board names a project
@@ -48,6 +48,8 @@ The title of a registry project is its first repository, else its `folder`, else
 ## `sessions/<session id>`
 
 One document per session. `repos` (`owner/repo` strings) and `folder` decide the project, as above. `tok` counts input, cache reads, cache writes and output. `usd` is the cost at API list prices. `partial: true` marks a floor. When the Claude Code Remote connector answers, the live figures replace the stored ones for the board owner's cloud sessions.
+
+A local session (one that no hourly reading lists) writes this document as its report: `status`, `updatedAt`, and the counts that `skills/claude-dashboard/scripts/local_usage.py` reads from its own transcript, with `src: "transcript"`: `tok`, `out`, `calls`, `untimed` (tokens that Claude Code counted but whose call records the transcript no longer holds), `since`, `lastAt`, `pts` (`[epoch seconds, tokens so far]`: the last total in each 10-minute bucket with model calls, and the total before each bucket that follows a gap), and `usd` and `usdAt` from Claude Code's own cost record when the transcript holds one. The page draws `pts` as readings. The script reads only ids, times and token counts, and the report holds no text.
 
 ## `syncs/<epoch seconds>`
 
@@ -98,5 +100,6 @@ Written by a person when they open the board: `name`, `joinedAt`, `seenAt`. The 
 - **At the end of the open jobs.** Each running or queued job adds its `tokEst` less its `tok`. A job with a time estimate and no `tokEst` adds the project's measured rate times its time left. A job with neither adds nothing, and the board says so. Cost uses the project's own dollars per token.
 - **Working now.** A running session, or a running job that reported in the last 30 minutes. The session that took the newest hourly reading (`by`) does not count: it runs because it reads. Its updates do not count as activity either. Its tokens and cost count as usual.
 - **Active.** Working now, an open job, or any activity in the last 72 hours. `status` and `pinned` override this.
-- **Cloud or local.** The registry `where` first. Else Claude Code cloud sessions and `Claude Code · web` rows count as cloud, and `Cowork` and `CLI` rows count as local.
-- **Colours.** Each project draws in its registry slot in the chart, the table, and on its card. The bars stack in slot order.
+- **Cloud or local.** A session is cloud when an hourly reading or the ledger lists it, or its report came from `get_session` (`src: "ccr"`). Every other session is local: Cowork, CLI, desktop, IDE and scheduled runs, which only their own reports show. A session's own `where` and `surface` do not decide it: a Cowork session can look like a cloud session from inside. A project with sessions takes their place (cloud, local, or both); a project without one takes its registry `where`, else its job rows' surfaces.
+- **Silent local sessions.** A local session that reported `running` and then sent no report for 45 minutes reads "No report for …" and does not count as Working now. Its project reads No report instead of Idle. A local session reports at least every 30 minutes while it works.
+- **Colours.** Each project draws in its slot in the chart, the table, and on its card. The 16 projects with the latest activity hold a slot each: a registry `color` stays while its project is among them, and the others take the free slots, latest activity first. The bars stack in slot order.

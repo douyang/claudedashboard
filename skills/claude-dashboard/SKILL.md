@@ -1,6 +1,6 @@
 ---
 name: "claude-dashboard"
-description: "Report every project to the shared Claude activity dashboard (https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4): the project, its jobs, the session's token usage and cost, and the account limit. Use it in EVERY Cowork session and EVERY Claude Code session (cloud, CLI, desktop, IDE) that does work that takes more than a few minutes or belongs to an ongoing project: code, documents, grants, films, research, data work. Report at the start, at each milestone, at least every 30 minutes while a job runs, and at the end. Use it also when the user says \"ping the dashboard\", \"track this\", \"log tokens\", or \"update the board\"."
+description: "Report every project to the shared Claude activity dashboard (https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4): the project, its jobs, the session's state, token usage and cost, and the account limit. Use it in EVERY Cowork session and EVERY Claude Code session (cloud, CLI, desktop, IDE) that does work that takes more than a few minutes or belongs to an ongoing project: code, documents, grants, films, research, data work. Report at the start, at each milestone, at least every 30 minutes while work runs, when a turn ends and waits on the user, and at the end. Use it also when the user says \"ping the dashboard\", \"track this\", \"log tokens\", or \"update the board\"."
 ---
 
 # Report to the Claude dashboard
@@ -19,7 +19,7 @@ Write with the `ArtifactData` tool on that URL. Load it with ToolSearch (`select
 
 The board shows each person's usage next to the others. What a person writes stays private to that person and to the board owner. The board owner reads everything.
 
-1. Put the collection prefix in front of every collection name below: `projects`, `sessions`, `jobs`, `ticks` and `syncs`. With the prefix `data/users/me/profile/`, the project `clinic-scheduler` is the document `clinic-scheduler` in the collection `data/users/me/profile/projects`.
+1. Put the collection prefix in front of every collection name below: `projects`, `sessions`, `jobs` and `syncs`. With the prefix `data/users/me/profile/`, the project `clinic-scheduler` is the document `clinic-scheduler` in the collection `data/users/me/profile/projects`.
 2. In that prefix, `me` stands for the person whose Claude account runs this session. The board resolves it. Do not replace it with an id.
 3. Write nowhere else. The board rejects a write to another path. If such a write works, stop and tell the person.
 4. Never write a document for another person.
@@ -28,10 +28,29 @@ The board shows each person's usage next to the others. What a person writes sta
 
 1. Never invent a figure. If the session cannot measure its tokens, write no token figure, or write a floor with `partial: true` and a `note` that says what it counts.
 2. Pin every write to an existing document with `if_version` from your last read. If a write fails on a version, read again and redo only your change.
-3. Write only your own documents: your project, your session, your jobs, your snapshot day. Do not edit the documents of other sessions.
+3. Write only your own documents: your project, your session, your jobs. Do not edit the documents of other sessions.
 4. Use UTC timestamps in the form `2026-10-03T23:13:18Z`.
 5. Keep each write small. Use `update` to merge fields. Use one `batch` when you write more than two documents.
 6. Never write message text, transcripts, file contents or secrets. Write counts, titles and links.
+
+## 0. Pick the workflow: cloud or local
+
+Call `get_session` (claude-code-remote MCP server) with no `session_id`. If it is deferred, load it with ToolSearch (`select:mcp__claude-code-remote__get_session`).
+
+| Result | Workflow | Why |
+|---|---|---|
+| It returns this session | **Cloud** | An hourly reading lists the session. The board measures its tokens, state and turns. |
+| The tool is missing, or the call fails | **Local** | No hourly reading can see the session: Cowork, CLI, desktop, IDE, a scheduled run. Only your reports show it. |
+
+Decide by this test only. A Cowork session can run in a container and look like a cloud session, but it has no `get_session` and no hourly reading lists it.
+
+| | Cloud | Local |
+|---|---|---|
+| `where` on the project, the session and each job | `cloud` | `local` |
+| `surface` | `Claude Code · cloud` | `Cowork`, `Claude Code · CLI`, `Claude Code · desktop` or `Claude Code · IDE` |
+| Tokens and state | The hourly reading measures them. Write no session report. | Section 3: a session report with your state and your transcript counts. |
+| When to report | Start, each milestone, every 30 min, end: the job rows. | The same, with a session report each time, and when a turn ends and waits on the user. |
+| Account limit | Section 4. | Skip it: there is no `get_session`. |
 
 ## 1. At the start: name and register the project
 
@@ -54,21 +73,21 @@ Use the same name in `projects.name`, `jobs.project` and `sessions.project`. The
 | Field | Value |
 |---|---|
 | `name` | The project name from the rule above. |
-| `where` | `cloud` for a Claude Code cloud session (web, iOS, desktop app remote). `local` for Cowork and for a CLI or IDE session on the user's computer. |
-| `surface` | For example `Claude Code · cloud`, `Claude Code · CLI`, `Cowork`. |
+| `where` | `cloud` or `local`, from section 0. |
+| `surface` | From section 0. |
 | `sessions` | An array with your session id. |
 | `repos` | `owner/repo` strings, if any. The first one names the project. |
 | `folder` | The folder name, when the project has no repository. |
 | `artifacts` | `https://claude.ai/artifact/...` links, if any. |
 | `status` | `active`. Use `paused` or `done` only when the user says so. |
-| `color` | Leave it out. The board owner assigns the colour slots (1 to 8). |
+| `color` | Leave it out. The board gives a free colour slot to each of the 16 projects with the latest activity. The board owner can pin a slot (1 to 16). |
 | `lastActivityAt` | Now. |
 
 4. If the project exists, `update` it: add your session id to `sessions` if absent, and set `lastActivityAt` to now.
 
 The session id:
-- Claude Code cloud: call `get_session` (claude-code-remote MCP server) with no `session_id`. Use its `id`.
-- Cowork or a local CLI: use a stable id of the form `cowork-<project-slug>` or `cli-<project-slug>-<YYYYMMDD>`. Reuse it for the whole session.
+- Cloud: the `id` that `get_session` returns.
+- Local: your claude.ai session id (`session_...`) if you know it. Else a stable id of the form `cowork-<project-slug>` or `cli-<project-slug>-<YYYYMMDD>`. Reuse it for the whole session.
 
 ## 2. Jobs: one row per task
 
@@ -92,47 +111,41 @@ Write `jobs/<short-id>` for each task that takes more than a few minutes. Reuse 
 
 Close each row when its work ends: `status: done` and `finishedAt`. A row left `running` goes stale after 30 minutes and misleads the board.
 
-## 3. Session usage and snapshots
+## 3. Session state and usage
 
-### Claude Code cloud session
+### Cloud
 
-1. Call `get_session` with no `session_id`.
-2. From `external_metadata.usage`, compute `tok = input_tokens + cache_read_tokens + cache_write_tokens + output_tokens`.
-3. `set` or `update` `sessions/<session id>`:
+The hourly reading writes the totals of every cloud session of the account to `syncs/<epoch seconds>`, and the first reading of each UTC day to `daily/<UTC day>`. It reads the turn that runs from the session's events, and keeps only token counts and times. Write no `sessions/<id>` document. Do not run the sync yourself unless the user asks. Do not read events for a report.
+
+### Local
+
+Only your reports show a local session. Write a session report at each of these times:
+
+- at the start,
+- at each milestone, and at least every 30 minutes while you work,
+- when a turn ends and waits on the user, with `status: "idle"`,
+- at the end, with `status: "idle"` or `"done"`.
+
+The board reads a `running` report older than 45 minutes as No report, and stops counting the project as working.
+
+Each report:
+
+1. Run `python3 <skill folder>/scripts/local_usage.py`. The skill folder is the base directory that the skill names when it loads. The script reads your own transcript and prints one JSON line with counts and times only. It changes no file.
+2. Check the line. The script reads the transcript written most recently, which is yours while you work. If `lastAt` is more than 10 minutes old, or the line has `error`, the script did not find your transcript: go to step 4.
+3. `set` `sessions/<your id>`, with `if_version` when the document exists:
 
 ```json
-{ "title": "<session title>", "project": "<registry name>", "repos": ["owner/repo"], "where": "cloud",
-  "surface": "Claude Code · cloud", "status": "running",
-  "createdAt": "<created_at>", "updatedAt": "<now>",
-  "tok": 123456789, "out": 456789, "usd": 12.34, "src": "ccr" }
+{ "title": "<what this session works on>", "project": "<registry name>", "where": "local", "surface": "Cowork",
+  "folder": "<folder>", "status": "running", "createdAt": "<the first report>", "updatedAt": "<now>",
+  "tok": 0, "out": 0, "calls": 0, "untimed": 0, "since": "<since>", "lastAt": "<lastAt>",
+  "pts": [[1791069198, 0]], "src": "transcript" }
 ```
 
-`usd` is `cost_usd`, rounded to cents. It is the cost at API list prices.
+   Copy `tok`, `out`, `calls`, `untimed`, `since`, `lastAt` and `pts` from the script. Add `usd` and `usdAt` only when the script prints them. Write `repos` instead of `folder` when the session has a repository. The board draws your hours from `pts`.
 
-4. Append one snapshot to `ticks/<session id>~<UTC day>`, for example `ticks/session_01ABC~2026-10-03`. Read it first. If it is absent, `set`:
+4. If the script cannot read your transcript, `set` the same document with no token fields, `partial: true`, and a `note` that names the problem, for example `no transcript found`. Never estimate the tokens.
 
-```json
-{ "sid": "<session id>", "project": "<registry name>", "day": "2026-10-03",
-  "pts": [[1791069198, 123456789]], "out": 456789, "usd": 12.34, "src": "ccr", "updatedAt": "<now>" }
-```
-
-If it exists, `update` with `pts` = the old array plus `[epoch seconds, tok]`, pinned with `if_version`. Skip the snapshot if `tok` did not change. Keep at most one snapshot per 15 minutes.
-
-An hourly routine also writes the totals of every cloud session of the account to `syncs/<epoch seconds>`, and the first reading of each UTC day to `daily/<UTC day>`. The daily ledger keeps usage for good. Your own snapshots add finer detail between the hourly syncs. Do not run that sync yourself unless the user asks.
-
-`get_session` reports a session's tokens only when a turn ends, so a long turn reads as zero until then. The hourly routine covers this: for each running session it reads the events of the current turn and keeps only the token counts and times of each model call. A script takes the counts from each event page and deletes the page. The board stores no text. Do not read events yourself for a report.
-
-### Cowork or a local CLI session
-
-These sessions do not appear in `list_sessions`, so their report is the only record.
-
-- If the session can read its own usage (for example `/cost` in the CLI), write `sessions/<your id>` with `tok`, `out`, `usd` and `src: "report"`, and append snapshots as above.
-- If it cannot, write `sessions/<your id>` with what you can measure, for example subagent token counts, plus `partial: true` and a `note` that says what the figure counts. Do not estimate the rest.
-- Set `where: "local"` and `surface: "Cowork"` or `"Claude Code · CLI"`.
-- Write `repos` when the session has a repository. Write `folder` (the folder name) when it has none. A Cowork session writes the name of the first folder the user selected for it.
-- A Cowork session cannot read its own token counts: it has no `get_session`, and its events refuse requests from the cloud. Write what you can measure with `partial: true`, or no token figure.
-
-## 4. The account limit
+## 4. The account limit (cloud only)
 
 `get_session` also returns `external_metadata.rate_limit_info`. Write it with `update` to the limit document that "Who reports" names. The board owner writes these fields to `meta/quota`. Every other person writes them as one object in the field `quota` of the limit document.
 
@@ -153,15 +166,15 @@ Add `pct`, `limitTok`, `weekResetsAt` or `weekPct` only when the session reads t
 ## 6. At the end
 
 1. Close every job row that you opened.
-2. Write the final session usage and one last snapshot.
+2. Local: write the last session report, with `status: "idle"` or `"done"`.
 3. Set `lastActivityAt` on the project.
 4. If the project is complete and the user agrees, set the project `status` to `done`.
 
 ## Checklist for each report
 
+- [ ] The workflow comes from the `get_session` test, and `where` matches it on the project, the session and each job.
 - [ ] Every collection name starts with the prefix from "Who reports".
 - [ ] Project in the registry, your session id in `sessions`, `lastActivityAt` set.
 - [ ] Job rows current; finished rows closed.
-- [ ] Session usage written (cloud: measured; local: measured or `partial`).
-- [ ] Snapshot appended if `tok` changed and 15 minutes passed.
-- [ ] Account limit written if `get_session` returned a limit state.
+- [ ] Local: session report written, with the state and the script's counts; `idle` when the turn waits on the user.
+- [ ] Cloud: account limit written if `get_session` returned a limit state.

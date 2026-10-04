@@ -25,7 +25,7 @@ A routine message that arrives while this session works on another turn waits un
 
 ## Rules for changes
 
-- `docs/INVITE.md`, `docs/SYNC.md`, `scripts/ccr_sync_doc.py` and `skills/claude-dashboard/SKILL.md` are the source of the text that the page gives to other people. After you edit one, run `python3 scripts/embed_assets.py`.
+- `docs/INVITE.md`, `docs/SYNC.md`, `scripts/ccr_sync_doc.py`, `skills/claude-dashboard/SKILL.md` and `skills/claude-dashboard/scripts/local_usage.py` are the source of the text that the page gives to other people. After you edit one, run `python3 scripts/embed_assets.py`.
 - Never write a rate from tokens that no two readings at most 3 hours apart place in time. The one exception is a turn that every hourly reading in it saw running. The README explains why.
 - The repository is public. Add no real session ids, session titles, transcripts or other people's data. Fixtures are synthetic. `data/projects.json` already lists real project names: treat it as exposed.
 - Run `NODE_PATH=$(npm root -g) node tests/check.mjs` before you publish.
