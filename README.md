@@ -106,7 +106,7 @@ A routine sends `sync` to the usage-sync session at minute 26 of every hour. The
 After the listing, the sync reads the turn that runs now in each running session from its events, through a sub-agent that keeps the cost low. `scripts/ccr_sync_doc.py turns-add` takes only token counts and times from each event page and deletes the page.
 
 - The routine wakes one session that stays alive. A routine that starts a fresh session each hour does not work: fresh routine sessions do not get the Claude Code Remote tools, so they cannot call `list_sessions`.
-- A routine message that arrives while the session works on another turn can be lost. The session then runs the sync at the end of that turn, as `CLAUDE.md` says. The page marks a reading older than 80 minutes as late.
+- A routine message that arrives while the session works on another turn waits until that turn ends. If the newest reading is then more than 70 minutes old, the session runs the sync at the end of the turn, and it skips a late `sync` that arrives less than 30 minutes after a reading. `CLAUDE.md` holds both rules. The page marks a reading older than 80 minutes as late.
 - To stop the sync, disable the routine in claude.ai Routines.
 - One test run cost about $0.11 at API list prices.
 

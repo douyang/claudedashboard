@@ -18,7 +18,10 @@ Do not edit code, open pull requests, publish the artifact, or write other docum
 
 ## Missed syncs
 
-A routine message that arrives while this session works on another turn can be lost. The sync of 06:26 UTC on 4 Oct was lost this way. At the end of every turn that is not a sync, read the newest `syncs` document. If its `at` is more than 70 minutes old, run the sync before the reply, and add its line to the reply.
+A routine message that arrives while this session works on another turn waits until that turn ends. The sync of 06:26 UTC on 4 Oct arrived at 06:52 this way, so the board had no reading from 05:35 to 06:40.
+
+- At the end of every turn that is not a sync, read the newest `syncs` document. If its `at` is more than 70 minutes old, run the sync before the reply, and add its line to the reply.
+- If a `sync` arrives less than 30 minutes after the newest reading, do not run it again. Reply with one line that names that reading.
 
 ## Rules for changes
 
