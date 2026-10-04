@@ -67,6 +67,10 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   const pn = await p.evaluate(() => (document.getElementById('pending-note') || {}).innerText || '');
   check('turns: a turn that still runs is named as not counted yet', /Not counted yet/.test(pn) && /owner\/pending-turn/.test(pn) && /unchanged since/.test(pn), pn);
   const hatch = await p.evaluate(() => document.querySelectorAll('#density-plot rect.pending').length);
+  await (await p.$('#density-plot .seg')).hover();
+  const tipGaps = await p.evaluate(() => [...document.querySelectorAll('.dtip:not([hidden]) .tr')].map((r) => { const k = r.querySelector('.k'), v = r.querySelector('.v'); return k && v ? Math.round(v.getBoundingClientRect().left - k.getBoundingClientRect().right) : -1; }));
+  check('chart: the hover keeps a space between each project name and its rate', tipGaps.length > 0 && tipGaps.every((g) => g >= 6), JSON.stringify(tipGaps));
+  await p.mouse.move(0, 0);
   check('turns: the chart hatches the running turn instead of showing zero', hatch > 0, String(hatch));
   const prow = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
   check('turns: its session row says that the total has not changed', /total unchanged since/.test(prow), prow.slice(0, 200));
