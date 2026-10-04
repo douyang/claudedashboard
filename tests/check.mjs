@@ -211,6 +211,18 @@ const rows = (page) => page.evaluate(() => Object.fromEntries([...document.query
   py('turns-merge', path.join(dir, 'next.json'));
   const t2 = JSON.parse(fs.readFileSync(path.join(dir, 'next.json'), 'utf8')).sessions[0].turn;
   check('events: the next reading continues the turn without counting a call twice', q.more === false && t2.tok === turn.tok + 317 && t2.calls === 4 && t2.since === turn.since, JSON.stringify([q, t2.tok, t2.calls]));
+  /* a turn longer than the page cap: the read stops after 30 pages and marks the turn partial */
+  fs.writeFileSync(path.join(dir, 'cap.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'cap.json'));
+  let n = 0, last = null;
+  do {
+    n += 1;
+    page(`c${n}.txt`, [ev(new Date(Date.parse('2026-10-04T05:29:00Z') - n * 60000).toISOString().replace('.000Z', 'Z'), `k${n}`, 0)], true, `cc${n}`);
+    last = py('turns-add', 'session_A', path.join(dir, `c${n}.txt`));
+  } while (last.more && n < 40);
+  py('turns-merge', path.join(dir, 'cap.json'));
+  const t3 = JSON.parse(fs.readFileSync(path.join(dir, 'cap.json'), 'utf8')).sessions[0].turn;
+  check('events: a turn longer than 30 pages stops after 30 and reads as a floor', n === 30 && t3.partial === true && t3.calls === 30 && t3.tok === 30 * 17, JSON.stringify([n, t3.calls, t3.tok, t3.partial]));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
