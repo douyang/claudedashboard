@@ -315,6 +315,13 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   put('sessions', 'cowork-grant-b', { title: 'Grant B drafts', folder: 'Grant B', where: 'local', surface: 'Cowork', src: 'transcript', status: 'running', updatedAt: at(5), createdAt: at(300),
     tok: 30_000_000, out: 100_000, calls: 300, since: at(300), lastAt: at(6),
     pts: [[sec(at(300)) - 1, 0], [sec(at(290)), 5_000_000], [sec(at(50)) - 1, 5_000_000], [sec(at(40)), 20_000_000], [sec(at(6)), 30_000_000]] });
+  /* a Cowork session whose own report went stale, read by the sync with get_session: generic title, newer state */
+  put('sessions', 'session_01GRANTC1', { title: 'Grant C drafts', folder: 'Grant C', where: 'local', surface: 'Cowork', src: 'report', status: 'running', updatedAt: at(100), createdAt: at(400), partial: true });
+  {
+    const f = path.join(dir, 'syncs', '1791073380.json'), d = JSON.parse(fs.readFileSync(f, 'utf8'));
+    d.sessions.push({ id: 'session_01GRANTC1', title: 'Claude.ai E1 upgraded conversation', status: 'idle', bucket: '', model: '', createdAt: at(400), updatedAt: at(3), tok: 50_000_000, out: 400_000, usd: 20, repos: [], via: 'get' });
+    fs.writeFileSync(f, JSON.stringify(d));
+  }
   for (let i = 1; i <= 6; i += 1) put('sessions', `cowork-extra-${i}`, { title: `Extra ${i}`, folder: `Extra ${i}`, where: 'local', surface: 'Cowork', src: 'report', status: 'idle', updatedAt: at(30 + i), tok: 1_000_000 });
   const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
   check('local: the page loads without errors', s.problems.length === 0, s.problems.join(' | '));
@@ -328,6 +335,9 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   check('local: a fresh local report counts as Working now', /^working now$/i.test(pills['Grant B'] || ''), JSON.stringify(pills));
   check('local: transcript points place the local tokens in the hours they were used', !!R['Grant B'] && /^2\d M$/.test(R['Grant B'][c('1 H')]) && R['Grant B'][c('24 H')] === '30 M', JSON.stringify(R['Grant B']));
   check('local: a cloud project keeps its place', !!R['owner/atlas-port'] && !/\blocal\b/i.test(R['owner/atlas-port'][0]), JSON.stringify(R['owner/atlas-port']));
+  check('local: a Cowork session that get_session read stays local, with its total and its newer state', !!R['Grant C'] && /\blocal\b/i.test(R['Grant C'][0]) && R['Grant C'][c('TOKENS')] === '50 M' && /^idle$/i.test(pills['Grant C'] || ''), JSON.stringify([R['Grant C'], pills['Grant C']]));
+  const rowC = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'Grant C'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
+  check('local: its row keeps the title that the session reported and says the sync read it', /Grant C drafts/.test(rowC) && !/E1 upgraded/.test(rowC) && /read hourly/.test(rowC), rowC.slice(0, 200));
   /* colours: each project among the 16 with the latest activity has its own colour */
   const sw = await s.page.evaluate(() => [...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.querySelector('h2 .sw').style.background]));
   const colored = sw.filter(([, b]) => !/other/.test(b)).map(([, b]) => b);
@@ -362,6 +372,31 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   let code = 0, err = '';
   try { execFileSync('python3', [S, '--root', path.join(dir, 'none')], { stdio: 'pipe' }); } catch (e) { code = e.status; err = e.stdout.toString(); }
   check('local script: with no transcript it says so and writes no figure', code === 2 && /no transcript found/.test(err) && !/"tok"/.test(err), `${code} ${err}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync reads Cowork sessions with get_session: counts only, marked via get ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-get-'));
+  const S = new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname;
+  const py = (...a) => JSON.parse(execFileSync('python3', [S, ...a]).toString().trim().split('\n').pop());
+  fs.writeFileSync(path.join(dir, 'sync.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [{ id: 'session_A', title: 'A', status: 'running', tok: 1000, out: 1, usd: 0, createdAt: '2026-10-04T00:00:00Z', repos: [] }] }));
+  fs.mkdirSync(path.join(dir, 'ses', 'sessions'), { recursive: true });
+  for (const id of ['session_A', 'session_01COWORK', 'cowork-notes']) fs.writeFileSync(path.join(dir, 'ses', 'sessions', `${id}.json`), JSON.stringify({ id, data: {} }));
+  const ids = py('local-ids', path.join(dir, 'sync.json'), path.join(dir, 'ses'));
+  check('get: the sync asks get_session only for reporting sessions that the listing lacks', JSON.stringify(ids.ids) === '["session_01COWORK"]', JSON.stringify(ids));
+  const ans = path.join(dir, 'gs1.txt');
+  fs.writeFileSync(ans, `<other-session nonce="n">\n${JSON.stringify({ ccr: { id: 'session_01COWORK', title: 'Claude.ai E1 upgraded conversation', session_status: 'SESSION_STATUS_RUNNING', created_at: '2026-10-04T01:00:00Z', updated_at: '2026-10-04T05:29:00Z', post_turn_summary: { status_detail: 'PRIVATE SUMMARY' }, external_metadata: { usage: { input_tokens: 10, cache_read_tokens: 900, cache_write_tokens: 80, output_tokens: 10, cost_usd: 1.5 } } } })}\n</other-session>`);
+  const add = py('add-local', path.join(dir, 'sync.json'), '--daily', path.join(dir, 'daily.json'), ans);
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const row = out.sessions.find((r) => r.id === 'session_01COWORK');
+  check('get: add-local adds the Cowork session with its totals, marked via get', add.added === 1 && !!row && row.via === 'get' && row.tok === 1000 && row.usd === 1.5 && row.status === 'running', JSON.stringify([add, row]));
+  check('get: no summary text reaches the reading, and the answer file is deleted', !/PRIVATE/.test(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')) && !fs.existsSync(ans));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  check('get: the ledger entry carries the Cowork session and marks it', daily.cols.includes('via') && daily.rows.some((r) => r[0] === 'session_01COWORK' && r[daily.cols.indexOf('via')] === 'get'), JSON.stringify(daily.cols));
+  const plan = py('turns-plan', path.join(dir, 'sync.json'));
+  check('get: the event step skips Cowork sessions, which refuse a cloud caller', JSON.stringify(plan.sessions) === '["session_A"]', JSON.stringify(plan));
+  fs.rmSync('/tmp/turns.json', { force: true });
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

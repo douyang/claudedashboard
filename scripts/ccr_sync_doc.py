@@ -40,6 +40,13 @@ board stores no text.
   turns-plan SYNC.json [--prev PREV.json]   list the running sessions to read
   turns-add SESSION_ID PAGE_FILE            add one page, newest first; print more and before_id
   turns-merge SYNC.json                     write `turn` into each running session of SYNC.json
+Cowork sessions do not appear in list_sessions, but get_session answers for them by
+id. Two subcommands add them to the reading, each row marked via: get:
+  local-ids SYNC.json SESSIONS_DIR          print the ids of sessions that report to the
+                                            board (saved session documents) and that the listing lacks
+  add-local SYNC.json [--daily DAILY.json] ANSWER_FILE ...
+                                            add each get_session answer as a row; delete the files
+A get_session answer holds a task summary; add-local keeps only the row fields.
 `turn` is {since, tok, out, calls, lastAt, lastMsg, pts, partial}: the tokens
 of the turns that the reported total does not hold yet (output is a floor until
 a turn ends), and [epoch seconds, tokens so far] points, one per 10 minutes.
@@ -50,7 +57,7 @@ the same the count runs on through the ends of turns. The collection decides who
 board owner writes `syncs`; every other person writes
 `data/users/me/profile/syncs`, which only that person and the owner can read.
 """
-import argparse, datetime as dt, json, os, sys, time
+import argparse, datetime as dt, glob, json, os, re, sys, time
 
 PAGE = 100
 
@@ -101,7 +108,7 @@ def turns_plan(sync_path, prev_path):
         prev = {r['id']: r for r in p.get('sessions', []) if isinstance(r, dict) and r.get('id')}
     state = {}
     for r in sync['sessions']:
-        if r['id'] == sync.get('by'):
+        if r['id'] == sync.get('by') or r.get('via') == 'get':     # no events from a Cowork session: they refuse a cloud caller
             continue
         o = prev.get(r['id']) or {}
         # Claude Code adds the tokens of ended turns to the session total late, sometimes hours late. While the
@@ -183,16 +190,58 @@ def turns_merge(sync_path):
     print(json.dumps({'sessions': len([r for r in sync['sessions'] if 'turn' in r]), 'turn_tok': told}))
 
 
+def local_ids(sync_path, ses_dir):
+    """The ids of sessions that report to the board (saved session documents in ses_dir) and that the listing lacks.
+    list_sessions leaves out Cowork sessions, but get_session answers for them by id."""
+    have = {r['id'] for r in json.load(open(sync_path))['sessions']}
+    ids = []
+    for f in sorted(glob.glob(os.path.join(ses_dir, '**', '*.json'), recursive=True)):
+        sid = os.path.basename(f)[:-len('.json')]
+        if re.fullmatch(r'session_[A-Za-z0-9]+', sid) and sid not in have and sid not in ids:
+            ids.append(sid)
+    print(json.dumps({'ids': ids}))
+
+
+def add_local(sync_path, answers, daily_path=None):
+    """Add get_session answers to the reading, each row marked via: get. An answer holds a task summary and other
+    text; the script keeps only the fields of row() and deletes the file."""
+    sync = json.load(open(sync_path))
+    have = {r['id'] for r in sync['sessions']}
+    added = 0
+    for path in answers:
+        txt = open(path).read()
+        os.remove(path)
+        i = txt.find('{"ccr"')
+        if i < 0:
+            i = txt.find('{')
+        try:
+            d, _ = json.JSONDecoder().raw_decode(txt[i:]) if i >= 0 else ({}, 0)
+        except ValueError:
+            continue
+        s = d.get('ccr') if isinstance(d.get('ccr'), dict) else d
+        if not isinstance(s, dict) or not str(s.get('id', '')).startswith('session_') or s['id'] in have:
+            continue
+        r = row(s)
+        r['via'] = 'get'
+        sync['sessions'].append(r)
+        have.add(s['id'])
+        added += 1
+    json.dump(sync, open(sync_path, 'w'), ensure_ascii=False)
+    if daily_path:
+        json.dump(daily_doc(sync), open(daily_path, 'w'), ensure_ascii=False)
+    print(json.dumps({'added': added, 'tok': sum(r['tok'] for r in sync['sessions'] if r.get('via') == 'get')}))
+
+
 def iso(epoch):
     return dt.datetime.fromtimestamp(epoch, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-DAILY_COLS = ['id', 'title', 'status', 'tok', 'out', 'usd', 'createdAt', 'repo']
+DAILY_COLS = ['id', 'title', 'status', 'tok', 'out', 'usd', 'createdAt', 'repo', 'via']
 
 
 def daily_doc(sync):
     """The ledger entry of a UTC day, from one sync document: the totals at that reading."""
-    rows = [[r['id'], r['title'], r['status'], r['tok'], r['out'], r['usd'], r['createdAt'], (r.get('repos') or [''])[0]]
+    rows = [[r['id'], r['title'], r['status'], r['tok'], r['out'], r['usd'], r['createdAt'], (r.get('repos') or [''])[0], r.get('via', '')]
             for r in sync['sessions']]
     return {'day': sync['at'][:10], 'at': sync['at'], 'src': sync.get('src', 'routine'), 'cols': DAILY_COLS, 'rows': rows}
 
@@ -223,6 +272,13 @@ def main():
         return turns_add(sys.argv[2], sys.argv[3])
     if cmd == 'turns-merge':
         return turns_merge(sys.argv[2])
+    if cmd == 'local-ids':
+        return local_ids(sys.argv[2], sys.argv[3])
+    if cmd == 'add-local':
+        args = sys.argv[2:]
+        daily = args[args.index('--daily') + 1] if '--daily' in args else None
+        files = [a for i, a in enumerate(args[1:], 1) if a != '--daily' and args[i - 1] != '--daily']
+        return add_local(args[0], files, daily)
     ap = argparse.ArgumentParser()
     ap.add_argument('paths', nargs='+', help='one or more list_sessions answer files, then the output file')
     ap.add_argument('--at', help='UTC time of the list_sessions read; default now')

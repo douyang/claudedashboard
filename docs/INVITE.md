@@ -17,6 +17,7 @@
 - For each Claude Code cloud session of this account: id, title, status, model, start and update times, repositories, token counts, and the cost at API list prices.
 - The usage-limit state of the account: status, window and reset time.
 - The same totals once a day, as a ledger entry. The ledger keeps usage after a session leaves the listing.
+- For each Cowork session that reports to the board: the same fields, read with get_session by id. The answer holds a task summary; a script keeps only the counts.
 - For each session that runs a turn: the token counts and times of that turn so far. Claude Code reports a turn's tokens only when it ends, so the sync reads them from the session's events. A script takes the counts from each event page and deletes the page.
 - Nothing else. No message text, no task summaries, no file contents.
 
@@ -57,7 +58,7 @@ Tell {{NAME}}: "Open {{BOARD}} once in your browser." The board then lists {{NAM
 
 ## Step 5. Sessions that list_sessions does not show
 
-- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the token-dashboard skill.
+- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the token-dashboard skill. Once a Cowork session reports, the hourly update also reads its totals with get_session.
 - Tell {{NAME}}: "Open the board, press Save skill file, and upload the zip in claude.ai under Settings, Capabilities, Skills." The board page builds the file for {{NAME}}.
 
 ## Step 6. Report
