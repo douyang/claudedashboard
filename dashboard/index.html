@@ -1,7 +1,7 @@
 <title>Claude Activity Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Archivo:wght@400;500;600;700;800&family=Nunito:wght@400;600;700&display=swap">
 <style>
 /* Projects, each holding its own job rows, in the paper-and-graphite palette the
    board started with. One column; filters above; every colour a token. */
@@ -368,6 +368,187 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
 .row.one .note { font-size: 0.82rem; }
 </style>
 
+<style>
+/* =======================================================================
+   SWISS SKIN
+   The Swiss Modern preset of frontend-slides: a white field, black type,
+   one red accent and a visible grid. Archivo 800 carries display text and
+   figures; Nunito carries running text. The skin restyles the board only.
+   The data logic and the markup are the same in both skins.
+   Layout: one column of 2px-ruled panels on a 24px grid. Square corners.
+   Color jobs: red = live work (running, working now, the live dot).
+   Black = calm state (done, allowed). Amber = waits on a person or needs
+   care. Crimson = failed, stopped, late or limit reached. Project colours
+   keep their 16 validated slots, so a project looks the same in both skins.
+   ======================================================================= */
+:root {
+  /* tokens that only Swiss rules read; these Classic values keep them inert */
+  --grid: transparent; --on-accent: #ffffff; --wait-fill: #e0b057; --on-wait: #1f262b;
+  --display: var(--serif); --frame: 2px;
+}
+:root[data-skin="swiss"] {
+  --paper: #ffffff; --paper-2: #ffffff; --paper-3: #f2f2f2;
+  --ink: #000000; --ink-2: #333333; --ink-3: #666666;
+  --rule: #000000; --rule-2: #d9d9d9; --track: #e6e6e6;
+  --accent: #e02d00; --accent-soft: #ffc9b8; --on-accent: #ffffff;
+  --ok: #000000; --flag: #c8102e; --wait: #a15c00; --wait-fill: #f2a93b; --on-wait: #000000;
+  --cloud: #000000; --local: #000000; --spread: #cccccc;
+  --grid: rgba(0, 0, 0, 0.07);
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --serif: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --sans: "Nunito", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="swiss"]:not([data-theme="light"]) {
+    --paper: #0a0a0a; --paper-2: #0a0a0a; --paper-3: #1a1a1a;
+    --ink: #f5f5f5; --ink-2: #cccccc; --ink-3: #9a9a9a;
+    --rule: #f5f5f5; --rule-2: #333333; --track: #2a2a2a;
+    --accent: #ff4a1c; --accent-soft: #5c1e0e; --on-accent: #000000;
+    --ok: #f5f5f5; --flag: #ff5c6c; --wait: #f2a93b; --wait-fill: #f2a93b; --on-wait: #000000;
+    --cloud: #f5f5f5; --local: #f5f5f5; --spread: #3a3a3a;
+    --grid: rgba(255, 255, 255, 0.08);
+    color-scheme: dark;
+  }
+}
+:root[data-skin="swiss"][data-theme="dark"] {
+  --paper: #0a0a0a; --paper-2: #0a0a0a; --paper-3: #1a1a1a;
+  --ink: #f5f5f5; --ink-2: #cccccc; --ink-3: #9a9a9a;
+  --rule: #f5f5f5; --rule-2: #333333; --track: #2a2a2a;
+  --accent: #ff4a1c; --accent-soft: #5c1e0e; --on-accent: #000000;
+  --ok: #f5f5f5; --flag: #ff5c6c; --wait: #f2a93b; --wait-fill: #f2a93b; --on-wait: #000000;
+  --cloud: #f5f5f5; --local: #f5f5f5; --spread: #3a3a3a;
+  --grid: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+
+/* === SWISS: page and header === */
+:root[data-skin="swiss"] body {
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+:root[data-skin="swiss"] header.top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 16px; }
+:root[data-skin="swiss"] header.top::after { content: ""; grid-column: 2; grid-row: 1; width: 30px; height: 30px; background: var(--accent); }
+:root[data-skin="swiss"] header.top .clock { grid-column: 1 / -1; }
+:root[data-skin="swiss"] h1 { font: 800 clamp(2.1rem, 1.6rem + 2.2vw, 3.1rem)/0.95 var(--display); letter-spacing: -0.04em; }
+:root[data-skin="swiss"] .livedot, :root[data-skin="swiss"] .sdot, :root[data-skin="swiss"] .srow .dot { border-radius: 0; }
+:root[data-skin="swiss"] .livedot { background: var(--accent); }
+:root[data-skin="swiss"] .livedot.cold { background: var(--ink-3); }
+
+/* === SWISS: panels — 2px black frames, square corners, no shadow === */
+:root[data-skin="swiss"] .summary, :root[data-skin="swiss"] .usebox, :root[data-skin="swiss"] .proj-card,
+:root[data-skin="swiss"] details.howto, :root[data-skin="swiss"] .invite, :root[data-skin="swiss"] .filters,
+:root[data-skin="swiss"] .notes, :root[data-skin="swiss"] .empty {
+  border: var(--frame) solid var(--ink); border-radius: 0; background: var(--paper-2);
+}
+:root[data-skin="swiss"] .filters { padding: 12px 14px; }
+:root[data-skin="swiss"] .notes { padding: 12px 16px; }
+:root[data-skin="swiss"] .empty { padding: 16px; }
+:root[data-skin="swiss"] .proj-card { border-top-width: 8px; }
+:root[data-skin="swiss"] .proj-card.inactive { background: var(--paper-3); }
+:root[data-skin="swiss"] .askband { border: var(--frame) solid var(--ink); border-top: 8px solid var(--wait-fill); border-radius: 0; background: var(--paper-2); }
+:root[data-skin="swiss"] .askband h2 { justify-self: start; background: var(--wait-fill); color: var(--on-wait); padding: 4px 7px; font: 800 0.7rem/1 var(--display); letter-spacing: 0.08em; }
+:root[data-skin="swiss"] .win { border: 1.5px solid var(--ink); border-radius: 0; background: var(--paper-2); }
+:root[data-skin="swiss"] .outlook { border-bottom: var(--frame) solid var(--ink); }
+
+/* === SWISS: type — Archivo for headings, labels and figures === */
+:root[data-skin="swiss"] .usebox h2, :root[data-skin="swiss"] .sec-h, :root[data-skin="swiss"] .density h2,
+:root[data-skin="swiss"] .invite h2, :root[data-skin="swiss"] .notes h2 {
+  font: 800 0.8rem/1.1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink);
+}
+:root[data-skin="swiss"] .grp > .lab, :root[data-skin="swiss"] .filters .lab, :root[data-skin="swiss"] .kpi .k,
+:root[data-skin="swiss"] .tile .k, :root[data-skin="swiss"] .ol-k, :root[data-skin="swiss"] .win .wk,
+:root[data-skin="swiss"] #export-row .lab, :root[data-skin="swiss"] #density-range .lab, :root[data-skin="swiss"] .ptable th,
+:root[data-skin="swiss"] .usage .uk, :root[data-skin="swiss"] .note-line .lead, :root[data-skin="swiss"] details.dtable th,
+:root[data-skin="swiss"] .invite label, :root[data-skin="swiss"] .group > h3, :root[data-skin="swiss"] .ptable tr.sep td {
+  font-family: var(--display); font-weight: 700;
+}
+:root[data-skin="swiss"] .kpi .v { font: 800 1.7rem/1 var(--display); letter-spacing: -0.03em; }
+:root[data-skin="swiss"] .tile .n { font: 800 1.15rem/1 var(--display); letter-spacing: -0.02em; }
+:root[data-skin="swiss"] .win .wv { font: 800 1.3rem/1.1 var(--display); letter-spacing: -0.02em; }
+:root[data-skin="swiss"] .proj-name { font: 800 1.12rem/1.15 var(--display); letter-spacing: -0.02em; }
+:root[data-skin="swiss"] .ol-name { font-weight: 700; letter-spacing: -0.01em; }
+:root[data-skin="swiss"] .proj-pct { font-weight: 800; }
+:root[data-skin="swiss"] .dsub b, :root[data-skin="swiss"] .proj-proj b, :root[data-skin="swiss"] .row .tail b { font-weight: 700; }
+:root[data-skin="swiss"] .ptable td.pn { font-weight: 700; }
+
+/* === SWISS: KPI cells share 2px rules, as on a ruled grid === */
+:root[data-skin="swiss"] .kpis { gap: 0; padding: 0 2px 2px 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* eight KPI cells: two full columns on a phone, four on a wider screen, so no row stands half empty */
+@media (min-width: 640px) { :root[data-skin="swiss"] .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+:root[data-skin="swiss"] .kpi { border: var(--frame) solid var(--ink); margin: 0 -2px -2px 0; padding: 10px 12px 11px; align-content: start; }
+:root[data-skin="swiss"] .kpis > .live-note { padding-top: 10px; }
+:root[data-skin="swiss"] .meter { height: 4px; }
+:root[data-skin="swiss"] .meter i { background: var(--ink-3); opacity: 1; }
+
+/* === SWISS: states — square chips; fill marks live work and a person's turn === */
+:root[data-skin="swiss"] .tile, :root[data-skin="swiss"] .chip, :root[data-skin="swiss"] .pill, :root[data-skin="swiss"] .lim,
+:root[data-skin="swiss"] .where, :root[data-skin="swiss"] .tag, :root[data-skin="swiss"] .badge, :root[data-skin="swiss"] .who,
+:root[data-skin="swiss"] .sw, :root[data-skin="swiss"] .lgk, :root[data-skin="swiss"] .key, :root[data-skin="swiss"] .bar,
+:root[data-skin="swiss"] .bar i, :root[data-skin="swiss"] .share, :root[data-skin="swiss"] .meter, :root[data-skin="swiss"] .notes li:target {
+  border-radius: 0;
+}
+:root[data-skin="swiss"] .tile { border: 1.5px solid var(--ink); background: var(--paper-2); }
+:root[data-skin="swiss"] .chip { font: 700 0.64rem/1 var(--display); letter-spacing: 0.07em; padding: 4px 6px; border-width: 1.5px; }
+:root[data-skin="swiss"] .chip.running { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:root[data-skin="swiss"] .chip.waiting { background: var(--wait-fill); border-color: var(--wait-fill); color: var(--on-wait); }
+:root[data-skin="swiss"] .pill, :root[data-skin="swiss"] .where, :root[data-skin="swiss"] .tag, :root[data-skin="swiss"] .badge,
+:root[data-skin="swiss"] .who, :root[data-skin="swiss"] .lim b { font-family: var(--display); font-weight: 700; }
+:root[data-skin="swiss"] .pill { padding: 4px 7px; }
+:root[data-skin="swiss"] .pill.on { background: var(--accent); color: var(--on-accent); }
+:root[data-skin="swiss"] .pill.off { border-color: var(--ink-3); }
+:root[data-skin="swiss"] .where.local, :root[data-skin="swiss"] .tag.local { border-style: dashed; }
+:root[data-skin="swiss"] .lim { border-width: 1.5px; }
+:root[data-skin="swiss"] .bar { height: 10px; }
+:root[data-skin="swiss"] .row.is-waiting .bar .done { background: var(--wait-fill); }
+:root[data-skin="swiss"] .run { color: var(--accent); }
+:root[data-skin="swiss"] .sdot, :root[data-skin="swiss"] .srow .dot.running { background: var(--accent); }
+
+/* === SWISS: controls — square, black outline, black fill when on === */
+:root[data-skin="swiss"] button.f, :root[data-skin="swiss"] select.fsel, :root[data-skin="swiss"] button.close,
+:root[data-skin="swiss"] button.scope, :root[data-skin="swiss"] button.act { border-radius: 0; font-family: var(--display); }
+:root[data-skin="swiss"] button.f { border: 1.5px solid var(--ink); color: var(--ink); background: var(--paper-2); font-weight: 600; }
+:root[data-skin="swiss"] button.f[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper-2); }
+:root[data-skin="swiss"] select.fsel { border: 1.5px solid var(--ink); }
+:root[data-skin="swiss"] button.close { border: 1.5px solid var(--ink); color: var(--ink); }
+:root[data-skin="swiss"] button.close.arm { background: var(--ink); color: var(--paper-2); }
+:root[data-skin="swiss"] button.act { background: var(--ink); border-color: var(--ink); color: var(--paper-2); }
+:root[data-skin="swiss"] button.act.alt { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+:root[data-skin="swiss"] .invite input, :root[data-skin="swiss"] .invite textarea { border-radius: 0; border: 1.5px solid var(--ink); background: var(--paper-2); }
+:root[data-skin="swiss"] .invite textarea { font-family: ui-monospace, Menlo, Consolas, monospace; }
+:root[data-skin="swiss"] .ptable input { border-radius: 0 !important; }
+
+/* === SWISS: links and note markers in ink; red stays for live work === */
+:root[data-skin="swiss"] sup.fn a, :root[data-skin="swiss"] .proj-links a, :root[data-skin="swiss"] button.linklike,
+:root[data-skin="swiss"] .hidden-note button { color: var(--ink); }
+:root[data-skin="swiss"] sup.fn a { font-weight: 700; }
+:root[data-skin="swiss"] .proj-links a { text-decoration: underline; text-underline-offset: 2px; }
+
+/* === SWISS: tables === */
+:root[data-skin="swiss"] .ptable th { color: var(--ink); border-bottom: var(--frame) solid var(--ink); }
+:root[data-skin="swiss"] .ptable tr.sep td { border-bottom: var(--frame) solid var(--ink); }
+
+/* === SWISS: chart — black axis, dashed grid, square bar ends, flat tooltip === */
+:root[data-skin="swiss"] .dplot .axis { stroke: var(--ink); stroke-width: 2; }
+:root[data-skin="swiss"] .dplot .grid { stroke: var(--rule-2); stroke-dasharray: 2 3; }
+:root[data-skin="swiss"] .dplot .band { fill: var(--ink); opacity: 0.07; }
+:root[data-skin="swiss"] .dplot .bandedge { stroke: var(--ink-3); stroke-dasharray: 3 3; }
+:root[data-skin="swiss"] .dplot .peak { fill: var(--ink); font-weight: 800; }
+:root[data-skin="swiss"] .lgk.band { background: var(--ink); opacity: 0.14; }
+:root[data-skin="swiss"] .dtip { border: var(--frame) solid var(--ink); border-radius: 0; box-shadow: none; background: var(--paper-2); }
+</style>
+
+<script>
+/* Apply the saved skin before the first paint: Classic by default, Swiss on request.
+   The choice stays in this browser; a blocked store falls back to Classic. */
+(() => {
+  let skin = 'classic';
+  try { if (localStorage.getItem('cad.skin') === 'swiss') skin = 'swiss'; } catch (e) { /* storage blocked: keep the default */ }
+  document.documentElement.dataset.skin = skin;
+})();
+</script>
+
 <main class="wrap">
   <header class="top">
     <h1>Claude activity</h1>
@@ -419,6 +600,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     <div class="set" id="f-where" role="group" aria-label="Where it runs"><span class="lab">Runs</span></div>
     <div class="set" id="f-status" role="group" aria-label="Status"><span class="lab">Show</span></div>
     <div class="set" id="f-project" role="group" aria-label="Project"><span class="lab">Project</span></div>
+    <div class="set" id="skin" role="group" aria-label="Skin"><span class="lab">Skin</span><button type="button" class="f" data-v="classic" data-key="skin:classic" aria-pressed="false">Classic</button><button type="button" class="f" data-v="swiss" data-key="skin:swiss" aria-pressed="false">Swiss</button></div>
   </nav>
 
   <section class="invite" id="invite" aria-label="Add a person's Claude" hidden>
@@ -1768,6 +1950,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     for (const k in attrs) el.setAttribute(k, attrs[k]);
     return el;
   };
+  /** The corner radius of a bar end: 0 in Swiss, whose shapes are square, else 4. */
+  const barR = () => (document.documentElement.dataset.skin === 'swiss' ? 0 : 4);
   /** A bar anchored to the baseline with only its top corners rounded. */
   function barPath(x, y, w, h, r) {
     const rr = Math.max(0, Math.min(r, w / 2, h));
@@ -1892,7 +2076,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
         const h = (ph * (pt.tok / (perDay ? step / 24 : step))) / top;
         if (h <= 0) return;
         const last = j === b2.parts.length - 1;
-        const d = last ? barPath(bx, y0 - Math.max(1.5, h), bw, Math.max(1.5, h), 4) : `M${bx},${y0}V${y0 - h}H${bx + bw}V${y0}Z`;
+        const d = last ? barPath(bx, y0 - Math.max(1.5, h), bw, Math.max(1.5, h), barR()) : `M${bx},${y0}V${y0 - h}H${bx + bw}V${y0}Z`;
         const seg = svgEl('path', { class: 'seg', d, 'data-i': i });
         seg.style.fill = `var(--s${pt.slot || '-other'})`;
         svg.append(seg);
@@ -2399,6 +2583,19 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   dRange = recall('cad.range', '48');
   showAll = recall('cad.all', '') === '1';
   $('scope').addEventListener('click', () => { showAll = !showAll; keep('cad.all', showAll ? '1' : ''); render(); });
+  /* ---- Skin ----
+     Classic is the default and original look. Swiss is the other choice. The early script applies the saved choice
+     before the first paint. The choice stays in this browser only; the data and the logic are the same in both. */
+  function applySkin(v) {
+    const skin = v === 'swiss' ? 'swiss' : 'classic';
+    document.documentElement.dataset.skin = skin;
+    for (const b of document.querySelectorAll('#skin button')) b.setAttribute('aria-pressed', String(b.dataset.v === skin));
+    return skin;
+  }
+  applySkin(document.documentElement.dataset.skin);
+  for (const b of document.querySelectorAll('#skin button')) {
+    b.addEventListener('click', () => { keep('cad.skin', applySkin(b.dataset.v)); dsig = ''; render(); });
+  }
   render();
   /* Hold the once-a-second rebuild while a pointer is down, so a tap lands on the button it started on. */
   let holding = false;

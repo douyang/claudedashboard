@@ -122,15 +122,21 @@ The board runs on the hourly syncs, states how old they are, and reads the runni
 ## Publish
 
 1. Run `python3 scripts/embed_assets.py`.
-2. Run the checks:
+2. Run the checks. The syntax check covers every inline script: the early skin script and the board script.
 
    ```sh
    python3 scripts/embed_assets.py --check
-   python3 -c "s=open('dashboard/index.html').read(); i=s.index('<script>\n(() => {'); open('/tmp/c.js','w').write(s[i+8:s.index('</script>', i)])" && node --check /tmp/c.js
+   python3 - <<'PY'
+   import re, subprocess
+   s = open('dashboard/index.html').read()
+   for i, js in enumerate(re.findall(r'<script>(.*?)</script>', s, re.S)):
+       open(f'/tmp/c{i}.js', 'w').write(js)
+       subprocess.run(['node', '--check', f'/tmp/c{i}.js'], check=True)
+   PY
    NODE_PATH=$(npm root -g) node tests/check.mjs
    ```
 
-3. Publish `dashboard/index.html` to the artifact URL with the Artifact tool and these capabilities:
+3. Publish `dashboard/index.html` to the artifact URL with the Artifact tool. On an update, leave out `capabilities`: the stored declaration stays. A first publish, or a change to the access rules, declares these:
 
    ```json
    {
@@ -150,6 +156,17 @@ The board runs on the hourly syncs, states how old they are, and reads the runni
 4. Read the collections with `ArtifactData` and `as_level: "interact"`. The top-level collections must read as empty.
 
 If another session published a newer version, merge its changes into this file before you publish.
+
+## Skins
+
+The board has two skins. The data, the markup and the logic are the same in both.
+
+- **Classic** is the default: the original paper-and-graphite look.
+- **Swiss** is a white field, black type, one red accent and a visible 24px grid, from the Swiss Modern preset of [frontend-slides](https://github.com/zarazhangrui/frontend-slides). Archivo carries headings and figures. Nunito carries text.
+
+The viewer picks a skin under Skin in the filter panel. The choice stays in that browser (`localStorage` key `cad.skin`). An early script applies it before the first paint. A browser with no saved choice, or with blocked storage, gets Classic. Classic loads no Archivo or Nunito font file.
+
+The Swiss rules sit in their own style block, scoped to `:root[data-skin="swiss"]`. Classic rules do not change. In Swiss, red marks live work only, black marks a calm state, amber marks a person's turn, and crimson marks a failure. Project colours keep the same 16 slots in both skins.
 
 ## Install the skills
 
