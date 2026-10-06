@@ -322,6 +322,51 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
     JSON.stringify(planG.sessions) === '["session_A"]' && g1.more === false && g1.partial === true && !!tg && tg.partial === true && !!t4 && tg.tok === t4.tok + 917
       && !t4.partial && !t3a.partial && !t2.partial && !turn.partial,
     JSON.stringify([planG, g1, tg && tg.tok, t4 && t4.tok, [t4 && t4.partial, t3a.partial, t2.partial, turn.partial]]));
+  /* Claude Code can add an earlier turn first: the total grows, but by less than the counted tokens. The rest stays in
+     the count, and the growth takes the oldest counted calls first */
+  const epoch = (s) => Date.parse(s) / 1000;
+  fs.writeFileSync(path.join(dir, 'absorb.json'), JSON.stringify({ ...sync, at: '2026-10-04T10:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400 }] }));
+  const planA = py('turns-plan', path.join(dir, 'absorb.json'), '--prev', path.join(dir, 'fourth.json'));
+  if (planA.sessions.length) {
+    page('h1.txt', [ev('2026-10-04T10:30:00Z', 'h2', 1000), { created_at: '2026-10-04T09:00:00Z', result: {} }, ev('2026-10-04T08:40:00Z', 'h1', 600), ev('2026-10-04T07:50:00Z', 'm8', 800)], true, 'ch1');
+    py('turns-add', 'session_A', path.join(dir, 'h1.txt'));
+  }
+  py('turns-merge', path.join(dir, 'absorb.json'));
+  const ta = JSON.parse(fs.readFileSync(path.join(dir, 'absorb.json'), 'utf8')).sessions[0].turn;
+  check('events: a total that grew by less than the counted tokens keeps the rest, and the growth takes the oldest calls first',
+    JSON.stringify(planA.sessions) === '["session_A"]' && !!ta && ta.tok === t4.tok - 400 + 617 + 1017 && ta.lastMsg === 'h2' && ta.since === '2026-10-04T05:20:00Z'
+      && ta.pts.every((p) => p[1] > 0) && ta.pts[ta.pts.length - 1][1] === ta.tok,
+    JSON.stringify([planA, ta]));
+  fs.writeFileSync(path.join(dir, 'full.json'), JSON.stringify({ ...sync, at: '2026-10-04T10:35:00Z', sessions: [{ ...sync.sessions[0], status: 'idle', tok: 1000 + t4.tok }] }));
+  const planF = py('turns-plan', path.join(dir, 'full.json'), '--prev', path.join(dir, 'fourth.json'));
+  check('events: a total that grew by the counted tokens or more holds them, so an idle session is not read again', JSON.stringify(planF.sessions) === '[]', JSON.stringify(planF));
+  /* an older script dropped such a count, and the next reading started a new one: the oldest reading that still has
+     tokens outside the total repairs it, and the read counts each call once */
+  fs.writeFileSync(path.join(dir, 'mid.json'), JSON.stringify({ ...sync, at: '2026-10-04T09:35:00Z', sessions: [{ ...sync.sessions[0], status: 'idle', tok: 1400 }] }));
+  fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify({ ...sync, at: '2026-10-04T10:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400,
+    turn: { since: '2026-10-04T10:21:00Z', tok: 47, out: 5, calls: 1, lastAt: '2026-10-04T10:25:00Z', lastMsg: 'n1', pts: [[epoch('2026-10-04T10:25:00Z'), 47]] } }] }));
+  fs.writeFileSync(path.join(dir, 'cur.json'), JSON.stringify({ ...sync, at: '2026-10-04T11:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400 }] }));
+  py('turns-plan', path.join(dir, 'cur.json'), '--prev', path.join(dir, 'new.json'), '--prev', path.join(dir, 'mid.json'), '--prev', path.join(dir, 'fourth.json'));
+  page('k1.txt', [ev('2026-10-04T11:30:00Z', 'n2', 100), ev('2026-10-04T10:25:00Z', 'n1', 30), { created_at: '2026-10-04T10:21:00Z', result: {} },
+    { created_at: '2026-10-04T09:00:00Z', result: {} }, ev('2026-10-04T08:40:00Z', 'h1', 600), ev('2026-10-04T07:50:00Z', 'm8', 800)], true, 'ck1');
+  const k1 = py('turns-add', 'session_A', path.join(dir, 'k1.txt'));
+  py('turns-merge', path.join(dir, 'cur.json'));
+  const tk = JSON.parse(fs.readFileSync(path.join(dir, 'cur.json'), 'utf8')).sessions[0].turn;
+  check('events: a dropped count that the total does not hold yet comes back from an older reading, each call once',
+    k1.more === false && !!tk && tk.tok === t4.tok - 400 + 617 + 47 + 117 && tk.calls === t4.calls + 3 && tk.lastMsg === 'n2', JSON.stringify([k1, tk]));
+  /* when the newest reading carried the count, the next reading continues from it and reads no further back */
+  fs.writeFileSync(path.join(dir, 'cur2.json'), JSON.stringify({ ...sync, at: '2026-10-04T12:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400 }] }));
+  py('turns-plan', path.join(dir, 'cur2.json'), '--prev', path.join(dir, 'cur.json'), '--prev', path.join(dir, 'new.json'), '--prev', path.join(dir, 'fourth.json'));
+  page('l1.txt', [ev('2026-10-04T12:30:00Z', 'p1', 1100), ev('2026-10-04T11:30:00Z', 'n2', 100)], false, 'cl1');
+  const l1 = py('turns-add', 'session_A', path.join(dir, 'l1.txt'));
+  py('turns-merge', path.join(dir, 'cur2.json'));
+  const tl = JSON.parse(fs.readFileSync(path.join(dir, 'cur2.json'), 'utf8')).sessions[0].turn;
+  check('events: the next reading continues the newest count that carried the rest', l1.partial === false && !!tl && !!tk && tl.tok === tk.tok + 1117 && tl.since === tk.since,
+    JSON.stringify([l1, tl]));
+  /* a count whose oldest calls are more than a day old is dropped: by then the total holds them, or it never will */
+  fs.writeFileSync(path.join(dir, 'late.json'), JSON.stringify({ ...sync, at: '2026-10-05T08:00:00Z', sessions: [{ ...sync.sessions[0], status: 'idle', tok: 1400 }] }));
+  const planL = py('turns-plan', path.join(dir, 'late.json'), '--prev', path.join(dir, 'absorb.json'));
+  check('events: a count whose oldest calls are more than a day old is dropped', JSON.stringify(planL.sessions) === '[]', JSON.stringify(planL));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

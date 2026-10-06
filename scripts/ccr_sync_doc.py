@@ -37,7 +37,7 @@ subcommands add the tokens of the turn that runs now, from the session's events
 (list_events, kinds assistant and result). An event page holds message text;
 turns-add reads only ids, times and token counts from it, then deletes it. The
 board stores no text.
-  turns-plan SYNC.json [--prev PREV.json]   list the running sessions to read
+  turns-plan SYNC.json [--prev PREV.json ...]  list the sessions to read
   turns-add SESSION_ID PAGE_FILE            add one page, newest first; print more and before_id
   turns-merge SYNC.json                     write `turn` into each running session of SYNC.json
 Cowork sessions do not appear in list_sessions, but get_session answers for them by
@@ -53,10 +53,12 @@ a turn ends), and [epoch seconds, tokens so far] points, one per 10 minutes.
 partial marks a floor: the read stopped before it reached the end of the
 previous turn or the last call that the previous reading counted, at the page
 cap, at a page that holds no event list, or where the log ended first.
-PREV.json, the newest sync document already on the board, lets the count
-continue from where the last reading stopped. Claude Code adds an ended turn
-to the reported total late, sometimes hours late, so while that total stays
-the same the count runs on through the ends of turns. The collection decides whose sync it is: the
+PREV.json, a recent sync document already on the board (give the last
+three), lets the count continue from where a reading stopped. Claude Code adds
+an ended turn to the reported total late, sometimes hours late, and it can add
+an earlier turn first, so the count runs on through the ends of turns. When the
+total grows, the growth takes the oldest counted calls first and the rest stays
+in the count. A count whose oldest calls are more than a day old is dropped. The collection decides whose sync it is: the
 board owner writes `syncs`; every other person writes
 `data/users/me/profile/syncs`, which only that person and the owner can read.
 """
@@ -90,6 +92,7 @@ def self_id():
 
 TURN_CAP = 30       # event pages per session per sync; a longer turn is a floor until the next sync
 BUCKET = 600        # seconds; turn points keep the last total in each 10-minute bucket
+DAY = 24 * 3600     # seconds; a carried count whose oldest calls are older than this is dropped
 STATE = '/tmp/turns.json'
 
 
@@ -109,22 +112,64 @@ def load_page(path):
     return c['data'], bool(c.get('has_more')), c.get('first_id')
 
 
-def turns_plan(sync_path, prev_path):
+def seconds(s):
+    return dt.datetime.fromisoformat(s.replace('Z', '+00:00')).timestamp()
+
+
+def after(a, b):
+    """True when the ISO time a is after b."""
+    try:
+        return seconds(a) > seconds(b)
+    except ValueError:
+        return a > b
+
+
+def unreported(turn, grew, at):
+    """What the total does not hold yet of a reading's count, after the total grew by `grew`; None if nothing. The
+    growth takes the oldest counted calls first. A count whose oldest calls are older than a day is dropped."""
+    tok = int(turn.get('tok') or 0)
+    if grew < 0 or grew >= tok:
+        return None
+    pts = [[p[0], p[1] - grew] for p in turn.get('pts') or [] if isinstance(p, list) and len(p) >= 2 and p[1] - grew > 0]
+    left = dict(turn, tok=tok - grew, pts=pts)
+    if grew:
+        left['out'] = int(round(int(turn.get('out') or 0) * (tok - grew) / tok))
+        if pts:
+            left['since'] = iso(int(pts[0][0]) // BUCKET * BUCKET)
+    try:
+        old = bool(left.get('since') and at) and seconds(at) - seconds(left['since']) > DAY
+    except ValueError:
+        old = False
+    return None if old else left
+
+
+def turns_plan(sync_path, prev_paths):
     sync = json.load(open(sync_path))
-    prev = {}
-    if prev_path and os.path.exists(prev_path):
-        p = json.load(open(prev_path))
-        p = p.get('data', p) if isinstance(p.get('data'), dict) else p
-        prev = {r['id']: r for r in p.get('sessions', []) if isinstance(r, dict) and r.get('id')}
+    readings = []                                   # the previous readings, newest first: {session id: row}
+    for path in prev_paths:
+        if path and os.path.exists(path):
+            p = json.load(open(path))
+            p = p.get('data', p) if isinstance(p.get('data'), dict) else p
+            readings.append((p.get('at') or '', {r['id']: r for r in p.get('sessions', []) if isinstance(r, dict) and r.get('id')}))
+    readings.sort(key=lambda x: x[0], reverse=True)
     state = {}
     for r in sync['sessions']:
         if r['id'] == sync.get('by') or r.get('via') == 'get':     # no events from a Cowork session: they refuse a cloud caller
             continue
-        o = prev.get(r['id']) or {}
-        # Claude Code adds the tokens of ended turns to the session total late, sometimes hours late. While the
-        # reported total stays the same, the turn counts of the last reading are still outside it: carry them,
-        # also for a session that no longer runs.
-        keep = o.get('turn') if isinstance(o.get('turn'), dict) and o.get('tok') == r['tok'] else None
+        # Claude Code adds ended turns to the total late, and an earlier turn can come first. Carry what the total does
+        # not hold yet of the newest count, also for an idle session. An older count with tokens outside the total
+        # wins when the newer count started after its last call: an older script dropped it, or a read failed.
+        keep, since = None, None
+        for _, rows in readings:
+            o = rows.get(r['id']) or {}
+            t = o.get('turn') if isinstance(o.get('turn'), dict) else None
+            if not t:
+                continue
+            left = unreported(t, int(r['tok']) - int(o.get('tok') or 0), sync.get('at'))
+            if since is None:
+                keep, since = left, t.get('since') or ''
+            elif left and after(since, t.get('lastAt') or ''):
+                keep, since = left, t.get('since') or ''
         if r['status'] != 'running' and not keep:
             continue
         state[r['id']] = {'prev': keep, 'calls': {}, 'pages': 0, 'partial': False}
@@ -183,7 +228,7 @@ def turns_merge(sync_path):
         for mid, (at, t, o) in calls:
             tok += t
             out += o
-            sec = int(dt.datetime.fromisoformat(at.replace('Z', '+00:00')).timestamp())
+            sec = int(seconds(at))
             if pts and pts[-1][0] // BUCKET == sec // BUCKET:
                 pts[-1] = [sec, tok]
             else:
@@ -278,8 +323,7 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ''
     if cmd == 'turns-plan':
         args = sys.argv[2:]
-        prev = args[args.index('--prev') + 1] if '--prev' in args else None
-        return turns_plan(args[0], prev)
+        return turns_plan(args[0], [args[i + 1] for i, a in enumerate(args[:-1]) if a == '--prev'])
     if cmd == 'turns-add':
         return turns_add(sys.argv[2], sys.argv[3])
     if cmd == 'turns-merge':
