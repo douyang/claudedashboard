@@ -54,10 +54,10 @@ If another session published a newer version, merge its changes into this file b
 
 The board has two skins. The data, the markup and the logic are the same in both.
 
-- **Swiss** is the default: a white field, black type, one red accent and a visible 24px grid, from the Swiss Modern preset of [frontend-slides](https://github.com/zarazhangrui/frontend-slides). Archivo carries headings and figures. Nunito carries text.
-- **Classic** is the original paper-and-graphite look.
+- **Classic** is the default: the original paper-and-graphite look.
+- **Swiss** is a white field, black type, one red accent and a visible 24px grid, from the Swiss Modern preset of [frontend-slides](https://github.com/zarazhangrui/frontend-slides). Archivo carries headings and figures. Nunito carries text.
 
-The viewer picks a skin under Skin in the filter panel. The choice stays in that browser (`localStorage` key `cad.skin`). An early script applies it before the first paint.
+The viewer picks a skin under Skin in the filter panel. The choice stays in that browser (`localStorage` key `cad.skin`). An early script applies it before the first paint. A browser with no saved choice, or with blocked storage, gets Classic. Classic loads no Archivo or Nunito font file.
 
 The Swiss rules sit in their own style block, scoped to `:root[data-skin="swiss"]`. Classic rules do not change. In Swiss, red marks live work only, black marks a calm state, amber marks a person's turn, and crimson marks a failure. Project colours keep the same 16 slots in both skins.
 
