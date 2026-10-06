@@ -394,6 +394,45 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/* ---- open jobs: the figure is what they still need, not the total plus it; a job with no time estimate says so ---- */
+for (const allUnknown of [false, true]) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-open-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const at = (min) => new Date(Date.parse(NOW) - min * 60000).toISOString().replace('.000Z', 'Z');
+  const put = (col, id, doc) => fs.writeFileSync(path.join(dir, col, `${id}.json`), JSON.stringify(doc));
+  /* a render job that reports a token estimate and no time estimate, before its first video: no end time can follow */
+  put('jobs', 'long-render', { project: 'Long name', label: 'Render 19 videos', status: 'running', surface: 'Claude Code · cloud', total: 19, done: 0, unit: 'videos',
+    tokEst: 60_000_000, startedAt: at(25), updatedAt: at(25) });
+  if (allUnknown) {
+    const f = path.join(dir, 'jobs', 'atlas-import.json'), j = JSON.parse(fs.readFileSync(f, 'utf8'));
+    fs.writeFileSync(f, JSON.stringify({ ...j, status: 'done', done: 10, finishedAt: at(10), updatedAt: at(10) }));
+  } else {
+    /* the same kind of job after its first videos: the done count gives the end time */
+    put('jobs', 'studio-cut', { project: 'Studio work', label: 'Cut 19 clips', status: 'running', surface: 'Cowork', total: 19, done: 3, unit: 'videos', startedAt: at(30), updatedAt: at(5) });
+  }
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const cards = await s.page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.innerText])));
+  const tile = await s.page.evaluate(() => { const d = [...document.querySelectorAll('#kpis .kpi')].find((x) => /^open jobs/i.test(x.querySelector('.k').textContent)); return d ? d.innerText : ''; });
+  const long = cards['owner/an-unusually-long-repository-name-that-must-wrap-on-a-phone'] || '';
+  if (!allUnknown) {
+    check('open jobs: the page loads without errors', s.problems.length === 0, s.problems.join(' | '));
+    check('open jobs: the tile shows what the open jobs still need, not the total plus it', /^OPEN JOBS\d*\n\+660 M\n\$\d[\d,]* more · 4 open, 2 unestimated$/.test(tile), JSON.stringify(tile));
+    check('open jobs: the card line shows what its open job still needs', /Open jobs \+600 M · \$600 more · 1 job/.test(cards['owner/atlas-port'] || '') && !/Projected/.test(cards['owner/atlas-port'] || ''), (cards['owner/atlas-port'] || '').slice(0, 400));
+    const heads = await headsOf(s.page);
+    const r = (await rows(s.page))['owner/atlas-port'];
+    check('open jobs: the table column shows what the open jobs still need', heads.includes('OPEN JOBS') && !!r && r[heads.indexOf('OPEN JOBS')] === '+600 M · $600', JSON.stringify([heads, r]));
+    check('open jobs: a running job with a token estimate and no time estimate or progress says so', /1 open · no time estimate/.test(long) && /Open jobs \+60 M/.test(long) && !/\bends\b/.test(long.split('\n').slice(0, 6).join(' ')), long.slice(0, 400));
+    check('open jobs: a running job with a done count gets an end time', /\bends \d{1,2}:\d{2}/.test(cards.Studio || ''), (cards.Studio || '').slice(0, 300));
+    const nt = await notesText(s.page);
+    check('open jobs: a note says where an end time comes from', /End time: the done count at its rate so far/.test(nt) && /Open jobs: each adds its tokEst/.test(nt), nt.slice(0, 300));
+  } else {
+    const top = await s.page.evaluate(() => (document.getElementById('outlook') || {}).innerText || '');
+    check('open jobs: with no time estimate at all, the top line says so and names the open projects', /Last to finish\s+No time estimate/i.test(top) && /2 open: .*harbor-docs/i.test(top), JSON.stringify(top));
+  }
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- local and cloud: the hourly listing decides the place; a local session that stops reporting reads No report ---- */
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-local-'));

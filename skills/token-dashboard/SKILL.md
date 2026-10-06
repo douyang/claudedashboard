@@ -101,10 +101,10 @@ Write `jobs/<short-id>` for each task that takes more than a few minutes. Reuse 
 | `note` | The latest detail. Rewrite it as the job moves. |
 | `surface` | As in the registry. |
 | `status` | `queued`, `running`, `waiting` (needs a person), `done`, `failed` or `stopped`. |
-| `total`, `done`, `unit` | Progress, if the work has a count. |
-| `estSec` | The expected length in seconds. |
+| `total`, `done`, `unit` | Progress, if the work has a count. Update `done` at each milestone: the board takes the rate and the end time from it. |
+| `estSec` | The expected length in seconds. Write it on every `queued` or `running` row, and change it when the plan changes. A running row with no `estSec` and no `done` above 0 has no end time on the board. |
 | `tok`, `tokOut` | Tokens the job used so far, if you can measure them. |
-| `tokEst` | The expected total tokens at the end of the job. The board uses it for the projected tokens and cost of the project. |
+| `tokEst` | The expected total tokens at the end of the job. The board shows what the open jobs still need, and its cost. |
 | `startedAt`, `updatedAt`, `finishedAt` | Timestamps. Refresh `updatedAt` on every report. |
 | `askedAt`, `answeredAt`, `answer` | For a question to a person. |
 | `link` | An https link to the PR, session or output. |
