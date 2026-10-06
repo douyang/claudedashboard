@@ -34,15 +34,32 @@ A Claude Code session named "Claude dashboard usage sync" (`session_01DUrUFjVcU4
 ## Publish
 
 1. Edit `dashboard/index.html`.
-2. Run a syntax check on the inline script:
+2. Run a syntax check on every inline script. The page has two: the early skin script and the board script.
 
    ```sh
-   python3 -c "s=open('dashboard/index.html').read(); open('/tmp/c.js','w').write(s.split('<script>')[1].split('</script>')[0])" && node --check /tmp/c.js
+   python3 - <<'PY'
+   import re, subprocess
+   s = open('dashboard/index.html').read()
+   for i, js in enumerate(re.findall(r'<script>(.*?)</script>', s, re.S)):
+       open(f'/tmp/c{i}.js', 'w').write(js)
+       subprocess.run(['node', '--check', f'/tmp/c{i}.js'], check=True)
+   PY
    ```
 
-3. Publish the file to the artifact URL with the Artifact tool. Declare the capabilities `db` and `mcp` (`Claude Code Remote`, tool `list_sessions`).
+3. Publish the file to the artifact URL with the Artifact tool. Leave out `capabilities`, so that the stored declaration stays: `db` with its access rules, `downloads`, `mcp` (`Claude Code Remote`, tool `list_sessions`) and `user`.
 
 If another session published a newer version, merge its changes into this file before you publish.
+
+## Skins
+
+The board has two skins. The data, the markup and the logic are the same in both.
+
+- **Swiss** is the default: a white field, black type, one red accent and a visible 24px grid, from the Swiss Modern preset of [frontend-slides](https://github.com/zarazhangrui/frontend-slides). Archivo carries headings and figures. Nunito carries text.
+- **Classic** is the original paper-and-graphite look.
+
+The viewer picks a skin under Skin in the filter panel. The choice stays in that browser (`localStorage` key `cad.skin`). An early script applies it before the first paint.
+
+The Swiss rules sit in their own style block, scoped to `:root[data-skin="swiss"]`. Classic rules do not change. In Swiss, red marks live work only, black marks a calm state, amber marks a person's turn, and crimson marks a failure. Project colours keep the same 16 slots in both skins.
 
 ## Install the skills
 
