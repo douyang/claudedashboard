@@ -540,11 +540,11 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
 </style>
 
 <script>
-/* Apply the saved skin before the first paint: Swiss by default, Classic on request.
-   The choice stays in this browser; a blocked store falls back to Swiss. */
+/* Apply the saved skin before the first paint: Classic by default, Swiss on request.
+   The choice stays in this browser; a blocked store falls back to Classic. */
 (() => {
-  let skin = 'swiss';
-  try { if (localStorage.getItem('cad.skin') === 'classic') skin = 'classic'; } catch (e) { /* storage blocked: keep the default */ }
+  let skin = 'classic';
+  try { if (localStorage.getItem('cad.skin') === 'swiss') skin = 'swiss'; } catch (e) { /* storage blocked: keep the default */ }
   document.documentElement.dataset.skin = skin;
 })();
 </script>
@@ -600,7 +600,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     <div class="set" id="f-where" role="group" aria-label="Where it runs"><span class="lab">Runs</span></div>
     <div class="set" id="f-status" role="group" aria-label="Status"><span class="lab">Show</span></div>
     <div class="set" id="f-project" role="group" aria-label="Project"><span class="lab">Project</span></div>
-    <div class="set" id="skin" role="group" aria-label="Skin"><span class="lab">Skin</span><button type="button" class="f" data-v="swiss" data-key="skin:swiss" aria-pressed="false">Swiss</button><button type="button" class="f" data-v="classic" data-key="skin:classic" aria-pressed="false">Classic</button></div>
+    <div class="set" id="skin" role="group" aria-label="Skin"><span class="lab">Skin</span><button type="button" class="f" data-v="classic" data-key="skin:classic" aria-pressed="false">Classic</button><button type="button" class="f" data-v="swiss" data-key="skin:swiss" aria-pressed="false">Swiss</button></div>
   </nav>
 
   <section class="invite" id="invite" aria-label="Add a person's Claude" hidden>
@@ -1947,9 +1947,9 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     for (const k in attrs) el.setAttribute(k, attrs[k]);
     return el;
   };
+  /** The corner radius of a bar end: 0 in Swiss, whose shapes are square, else 4. */
+  const barR = () => (document.documentElement.dataset.skin === 'swiss' ? 0 : 4);
   /** A bar anchored to the baseline with only its top corners rounded. */
-  /** The corner radius of a bar end: 4 in Classic, 0 in Swiss, whose shapes are square. */
-  const barR = () => (document.documentElement.dataset.skin === 'classic' ? 4 : 0);
   function barPath(x, y, w, h, r) {
     const rr = Math.max(0, Math.min(r, w / 2, h));
     return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
@@ -2580,10 +2580,10 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   showAll = recall('cad.all', '') === '1';
   $('scope').addEventListener('click', () => { showAll = !showAll; keep('cad.all', showAll ? '1' : ''); render(); });
   /* ---- Skin ----
-     Swiss is the default look and Classic is the original one. The early script applies the saved choice before
-     the first paint. The choice stays in this browser only; the data and the logic are the same in both. */
+     Classic is the default and original look. Swiss is the other choice. The early script applies the saved choice
+     before the first paint. The choice stays in this browser only; the data and the logic are the same in both. */
   function applySkin(v) {
-    const skin = v === 'classic' ? 'classic' : 'swiss';
+    const skin = v === 'swiss' ? 'swiss' : 'classic';
     document.documentElement.dataset.skin = skin;
     for (const b of document.querySelectorAll('#skin button')) b.setAttribute('aria-pressed', String(b.dataset.v === skin));
     return skin;
