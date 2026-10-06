@@ -1,0 +1,10 @@
+{
+ "name": "Studio work",
+ "where": "local",
+ "surface": "Cowork",
+ "sessions": [
+  "cowork-studio"
+ ],
+ "folder": "Studio",
+ "color": 5
+}

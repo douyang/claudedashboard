@@ -1,0 +1,13 @@
+{
+ "name": "Harbor docs",
+ "where": "cloud",
+ "surface": "Claude Code · cloud",
+ "sessions": [
+  "session_01HARBOR1",
+  "session_01HARBOR2"
+ ],
+ "repos": [
+  "owner/harbor-docs"
+ ],
+ "color": 2
+}

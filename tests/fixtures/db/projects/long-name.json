@@ -1,0 +1,10 @@
+{
+ "name": "Long name",
+ "where": "cloud",
+ "surface": "Claude Code · cloud",
+ "sessions": [],
+ "pinned": true,
+ "repos": [
+  "owner/an-unusually-long-repository-name-that-must-wrap-on-a-phone"
+ ]
+}

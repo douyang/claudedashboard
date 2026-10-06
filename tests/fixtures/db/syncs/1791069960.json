@@ -1,0 +1,103 @@
+{
+ "at": "2026-10-03T23:26:00Z",
+ "src": "routine",
+ "sessions": [
+  {
+   "id": "session_01ATLAS01",
+   "title": "Atlas port: build the importer",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T09:00:00Z",
+   "updatedAt": "2026-10-03T23:26:00Z",
+   "tok": 340000000,
+   "out": 3777777,
+   "usd": 340.0,
+   "repos": [
+    "owner/atlas-port"
+   ]
+  },
+  {
+   "id": "session_01HARBOR1",
+   "title": "Harbor docs: resume the crawl",
+   "status": "idle",
+   "bucket": "blocked",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-09-12T14:00:00Z",
+   "updatedAt": "2026-10-03T23:05:00Z",
+   "tok": 9000000000,
+   "out": 100000000,
+   "usd": 8700.0,
+   "repos": [
+    "owner/harbor-docs"
+   ]
+  },
+  {
+   "id": "session_01HARBOR2",
+   "title": "Harbor docs: first pass",
+   "status": "archived",
+   "bucket": "completed",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-09-12T01:00:00Z",
+   "updatedAt": "2026-09-13T05:00:00Z",
+   "tok": 1300000000,
+   "out": 14444444,
+   "usd": 960.0,
+   "repos": [
+    "owner/harbor-docs"
+   ]
+  },
+  {
+   "id": "session_01MODEL01",
+   "title": "Quarterly model: dashboards",
+   "status": "idle",
+   "bucket": "completed",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-09-07T01:00:00Z",
+   "updatedAt": "2026-10-01T21:30:00Z",
+   "tok": 1200000000,
+   "out": 13333333,
+   "usd": 1130.0,
+   "repos": [
+    "owner/quarterly-model"
+   ]
+  },
+  {
+   "id": "session_01TURN001",
+   "title": "Long turn: rebuild the index",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T01:00:00Z",
+   "updatedAt": "2026-10-03T23:26:00Z",
+   "tok": 500000000,
+   "out": 5555555,
+   "usd": 500.0,
+   "repos": [
+    "owner/long-turn"
+   ]
+  },
+  {
+   "id": "session_01PEND001",
+   "title": "Pending turn: migrate the archive",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T01:00:00Z",
+   "updatedAt": "2026-10-03T23:26:00Z",
+   "tok": 80000000,
+   "out": 888888,
+   "usd": 80.0,
+   "repos": [
+    "owner/pending-turn"
+   ]
+  }
+ ],
+ "quota": {
+  "status": "allowed",
+  "type": "five_hour",
+  "resetsAt": "2026-10-04T03:00:00Z",
+  "overage": false,
+  "asOf": "2026-10-03T23:26:00Z"
+ }
+}
