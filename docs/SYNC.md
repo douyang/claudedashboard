@@ -11,7 +11,9 @@ Sync the Claude sessions of this account to the board {{BOARD}}. Do only these s
 7. Cowork sessions do not appear in list_sessions, but get_session answers for them by id.
    a. Call ArtifactData with action "list", url "{{BOARD}}", collection "{{SESSIONS}}", query {"limit": 1000}, out_dir "/tmp/ses".
    b. Run: python3 /tmp/ccr_sync_doc.py local-ids /tmp/sync.json /tmp/ses. It prints "ids": the sessions that report to the board and that the listing lacks.
-   c. For each id, call get_session with {"session_id": "<id>"}, and write the answer unchanged to /tmp/gs<N>.txt (N = 1, 2, ...). Give these calls to a sub-agent when you can start one: each answer holds a task summary. Never read, quote or store it.
+   c. For each id, call get_session with {"session_id": "<id>"}. The answer holds a task summary: do not copy it whole. Write to /tmp/gs<N>.txt (N = 1, 2, ...) only these fields, in this form:
+      {"id": "<id>", "title": "<title>", "session_status": "<session_status>", "status_bucket": "<status_bucket>", "created_at": "<created_at>", "updated_at": "<updated_at>", "external_metadata": {"last_served_model": "<last_served_model>", "usage": {"input_tokens": <n>, "cache_read_tokens": <n>, "cache_write_tokens": <n>, "output_tokens": <n>, "cost_usd": <n>} } }
+      Copy no other field and no text. Give these calls to a sub-agent when you can start one.
    d. Run: python3 /tmp/ccr_sync_doc.py add-local /tmp/sync.json --daily /tmp/daily.json /tmp/gs*.txt. The script keeps only the counts, marks the rows `via: get`, and deletes the files.
    If this step fails, go on with step 8 and name the failed step in the reply.
 8. Claude Code adds a turn's tokens to the session total only some time after the turn ends, sometimes hours later. Steps 9 to 12 add the tokens that the total does not hold yet, from the sessions' events. Take only token counts and times from the events. Never read, quote or store their text. If one of these steps fails, go to step 13 and name the failed step in the reply.

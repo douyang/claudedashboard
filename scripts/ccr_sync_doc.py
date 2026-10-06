@@ -10,27 +10,20 @@ of the listing. The last path is the output file.
 
 The output is one document for the board's `syncs` collection:
 {at, src, by, sessions: [{id, title, status, bucket, model, createdAt, updatedAt, tok, out, usd, repos}], quota}
-`by` is the id of the session that ran this script, read from the cloud environment (CLAUDE_CODE_REMOTE_SESSION_ID,
-or --by). A session that reads the board is running because it reads, so the board does not count its running state
-or its updates as work. The script leaves `by` out when it cannot tell which session it runs in.
+`by` is the id of the session that ran this script (CLAUDE_CODE_REMOTE_SESSION_ID or --by), left out when unknown.
+It runs because it reads, so the board does not count its running state as work.
 `tok` counts input, cache reads, cache writes and output. `quota` is the limit
-state of the most recently updated session. The script does not read the
-task summaries, and from session events it keeps only token counts and times:
-the board stores no message text.
+state of the most recently updated session.
 
 With --daily the script also writes the day's ledger entry for the board's
 `daily` collection: {day, at, cols, rows}, one row per session with the totals
 at this reading. The board keeps the first reading of each UTC day, so a
-second write to the same day is refused and the first one stays. The ledger
-keeps usage after a session leaves the listing and after the hourly syncs
-move out of the page's 8-day window. --from-sync makes the same entry from a
-sync document that already exists, to fill a gap.
+second write to the same day is refused and the first one stays. --from-sync
+makes the same entry from a sync document that already exists, to fill a gap.
 
 The script prints one JSON line: doc_id (the read time in epoch seconds),
 day (the UTC day of the read), sessions, tok, and `more`. When `more` is true, the last page was full: call list_sessions
 again with `after_id` set to `after_id` and add that answer to the list.
-A new document per sync needs no if_version, so a scheduled run writes it
-with one ArtifactData `set`.
 
 Claude Code reports a running session's tokens only when a turn ends. Three
 subcommands add the tokens of the turn that runs now, from the session's events

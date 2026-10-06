@@ -486,6 +486,17 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   check('get: no summary text reaches the reading, and the answer file is deleted', !/PRIVATE/.test(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')) && !fs.existsSync(ans));
   const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
   check('get: the ledger entry carries the Cowork session and marks it', daily.cols.includes('via') && daily.rows.some((r) => r[0] === 'session_01COWORK' && r[daily.cols.indexOf('via')] === 'get'), JSON.stringify(daily.cols));
+  /* the sync writes only the count fields of each answer, in the form that docs/SYNC.md gives: the row is the same */
+  const form = fs.readFileSync(new URL('../docs/SYNC.md', import.meta.url), 'utf8').split('\n').map((l) => l.trim()).find((l) => l.startsWith('{"id": "<id>"')) || '';
+  const nums = [10, 900, 80, 10, 1.5];
+  const vals = { id: 'session_01COWORK2', title: 'T', session_status: 'SESSION_STATUS_IDLE', status_bucket: '', created_at: '2026-10-04T01:00:00Z', updated_at: '2026-10-04T05:29:00Z', last_served_model: 'm' };
+  const filled = form.replace(/<n>/g, () => String(nums.shift())).replace(/"<([a-z_]+)>"/g, (_, k) => JSON.stringify(vals[k] ?? ''));
+  fs.writeFileSync(path.join(dir, 'sync2.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [] }));
+  fs.writeFileSync(path.join(dir, 'gs2.txt'), filled);
+  const add2 = py('add-local', path.join(dir, 'sync2.json'), path.join(dir, 'gs2.txt'));
+  const row2 = JSON.parse(fs.readFileSync(path.join(dir, 'sync2.json'), 'utf8')).sessions[0];
+  check('get: the count fields that the sync writes give the same row as the whole answer', !!form && add2.added === 1 && !!row2 && row2.via === 'get' && row2.tok === 1000 && row2.usd === 1.5 && row2.status === 'idle' && !fs.existsSync(path.join(dir, 'gs2.txt')),
+    JSON.stringify([form.slice(0, 40), add2, row2]));
   const plan = py('turns-plan', path.join(dir, 'sync.json'));
   check('get: the event step skips Cowork sessions, which refuse a cloud caller', JSON.stringify(plan.sessions) === '["session_A"]', JSON.stringify(plan));
   fs.rmSync('/tmp/turns.json', { force: true });

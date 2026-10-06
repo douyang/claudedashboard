@@ -15,7 +15,7 @@ A routine sends the message `sync` to the usage-sync session every hour (UTC min
    - script: `scripts/ccr_sync_doc.py` in this checkout (skip the step that saves it to `/tmp`)
 3. Reply with one line.
 
-Do not edit code, open pull requests, publish the artifact, or write other documents during a sync. Do not read task summaries: a sub-agent saves each `get_session` answer to a file for the script, which keeps the counts and deletes the file. Read session events only as `docs/SYNC.md` says: the script takes token counts and times from them and deletes the pages, and no text leaves them. The board stores counts, titles and links only.
+Do not edit code, open pull requests, publish the artifact, or write other documents during a sync. Do not read task summaries: a sub-agent writes only the count fields of each `get_session` answer to a file for the script, which deletes the file. Read session events only as `docs/SYNC.md` says: the script takes token counts and times from them and deletes the pages, and no text leaves them. The board stores counts, titles and links only.
 
 ## Missed syncs
 
