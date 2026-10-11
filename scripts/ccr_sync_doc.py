@@ -40,6 +40,14 @@ id. Two subcommands add them to the reading, each row marked via: get:
   add-local SYNC.json [--daily DAILY.json] ANSWER_FILE ...
                                             add each get_session answer as a row; delete the files
 A get_session answer holds a task summary; add-local keeps only the row fields.
+The share of each limit window used comes from the rate-limit events of the session that runs the sync. The
+limits are per account, so that session's own events give the account's share:
+  self-id                                   print the id of this session (session_...), or nothing
+  limits SYNC.json PAGE_FILE                take the newest rate_limit_event on one list_events page (kinds
+                                            rate_limit_event), add {windows, windowsAt} to the quota of
+                                            SYNC.json, delete the page; print the shares, more and before_id
+`windows` holds five_hour and seven_day, each {pct, resetsAt}: the share used, 0 to 100, and the reset. A
+rate-limit event holds only the limit state, no text.
 `turn` is {since, tok, out, calls, lastAt, lastMsg, pts, partial}: the tokens
 of the turns that the reported total does not hold yet (output is a floor until
 a turn ends), and [epoch seconds, tokens so far] points, one per 10 minutes.
@@ -282,6 +290,43 @@ def add_local(sync_path, answers, daily_path=None):
     print(json.dumps({'added': added, 'tok': sum(r['tok'] for r in sync['sessions'] if r.get('via') == 'get')}))
 
 
+def limits(sync_path, page_path):
+    """Add the share of each limit window used to the reading, from the newest rate_limit_event on one
+    list_events page of this session. Delete the page. Print the shares; when the page holds no rate-limit event
+    and the log goes on, print more and before_id for the next page."""
+    events, more, first = load_page(page_path)
+    os.remove(page_path)
+    best, best_at = None, ''
+    for e in events or []:
+        ev = e.get('rate_limit_event')
+        if not isinstance(ev, dict):
+            continue
+        info = (ev.get('internal_anthropic_catchall') or {}).get('rate_limit_info') or ev.get('rate_limit_info') or {}
+        at = e.get('created_at') or ''
+        if isinstance(info.get('unifiedWindows'), dict) and at > best_at:
+            best, best_at = info, at
+    windows = {}
+    for k, w in ((best or {}).get('unifiedWindows') or {}).items():
+        u = w.get('utilization') if isinstance(w, dict) else None
+        if isinstance(u, (int, float)) and not isinstance(u, bool):
+            windows[str(k)] = {'pct': round(100 * float(u), 1), 'resetsAt': iso(int(w['resetsAt'])) if w.get('resetsAt') else None}
+    at = best_at[:19] + 'Z' if best_at else None
+    if windows:
+        doc = json.load(open(sync_path))
+        q = doc.get('quota') or {}
+        q['windows'], q['windowsAt'] = windows, at
+        if best.get('status') and at > (q.get('asOf') or ''):      # the event's own state, when it is newer than the listing's
+            q.update({'status': best.get('status'), 'type': best.get('rateLimitType'),
+                      'resetsAt': iso(int(best['resetsAt'])) if best.get('resetsAt') else None,
+                      'overage': bool(best.get('isUsingOverage')), 'asOf': at})
+        doc['quota'] = q
+        json.dump(doc, open(sync_path, 'w'), ensure_ascii=False)
+    go = not windows and events is not None and more and bool(first)
+    out = dict((k, v['pct']) for k, v in windows.items())
+    out.update({'at': at, 'more': go, 'before_id': first if go else None})
+    print(json.dumps(out))
+
+
 def iso(epoch):
     return dt.datetime.fromtimestamp(epoch, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -321,6 +366,10 @@ def main():
         return turns_add(sys.argv[2], sys.argv[3])
     if cmd == 'turns-merge':
         return turns_merge(sys.argv[2])
+    if cmd == 'self-id':
+        return print(self_id())
+    if cmd == 'limits':
+        return limits(sys.argv[2], sys.argv[3])
     if cmd == 'local-ids':
         return local_ids(sys.argv[2], sys.argv[3])
     if cmd == 'add-local':

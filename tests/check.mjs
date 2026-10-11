@@ -131,6 +131,9 @@ const notesText = (page) => page.evaluate(() => (document.getElementById('notes-
   check('invite: no placeholder is left in the text', !/\{\{|\}\}/.test(text), text.match(/\{\{[A-Z_]+\}\}/)?.[0]);
   check('invite: the text names the person and the private path', /Sam/.test(text) && text.includes('data/users/me/profile/syncs'));
   check('invite: the text carries the sync script and the hourly routine', text.includes('def main') && text.includes('cron_expression: "0 * * * *"'));
+  const scriptSrc = fs.readFileSync(new URL('../scripts/ccr_sync_doc.py', import.meta.url), 'utf8');
+  const code = scriptSrc.slice(scriptSrc.indexOf('"""', scriptSrc.indexOf('"""') + 3) + 4).replace(/\s+$/, '');
+  check('invite: the script code in the text is byte-identical to scripts/ccr_sync_doc.py, with a one-line docstring', code.length > 10000 && text.includes(code) && text.includes('"""Make the hourly sync documents for the board.'), String(code.length));
   check('invite: the text is a size a person can paste', text.length > 3000 && text.length < 30000, String(text.length));   // about 6,000 tokens at most
   await p.click('#inv-copy');
   await p.waitForTimeout(200);
@@ -637,6 +640,71 @@ for (const allUnknown of [false, true]) {
   await s.close();
 }
 
+/* ---- limit shares: the sync reads them from its own rate-limit events; both skins show them; a window that reset is over ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-limits-'));
+  const S = new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname;
+  const py = (args, env = {}) => JSON.parse(execFileSync('python3', [S, ...args], { env: { PATH: process.env.PATH, ...env } }).toString().trim().split('\n').pop() || 'null');
+  const raw = (args, env = {}) => execFileSync('python3', [S, ...args], { env: { PATH: process.env.PATH, ...env } }).toString().trim();
+  check('limits: self-id names the session from the environment, and nothing outside it', raw(['self-id'], { CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01TESTSYNC' }) === 'session_01TESTSYNC' && raw(['self-id']) === '');
+  const sync = path.join(dir, 'sync.json');
+  fs.writeFileSync(sync, JSON.stringify({ at: '2026-10-04T00:23:00Z', src: 'routine', sessions: [], quota: { status: 'allowed', type: 'five_hour', resetsAt: '2026-10-04T03:00:00Z', overage: false, asOf: '2026-10-04T00:20:00Z' } }));
+  const ev = (at, five, week) => ({ created_at: at, rate_limit_event: { internal_anthropic_catchall: { rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour', resetsAt: 1791082800, isUsingOverage: false,
+    unifiedWindows: { five_hour: { resetsAt: 1791082800, utilization: five }, seven_day: { resetsAt: 1791435600, utilization: week } } } } } });
+  const page = path.join(dir, 'rl.txt');
+  fs.writeFileSync(page, JSON.stringify({ ccr: { data: [ev('2026-10-04T00:10:00.5Z', 0.02, 0.25), ev('2026-10-04T00:21:40.1Z', 0.03, 0.29), { created_at: '2026-10-04T00:22:00Z', assistant: { internal_anthropic_catchall: { message: { id: 'm', content: 'PRIVATE TEXT' } } } }], has_more: true, first_id: 'e1' } }));
+  const out = py(['limits', sync, page]);
+  const doc = JSON.parse(fs.readFileSync(sync, 'utf8'));
+  check('limits: the newest rate-limit event gives the share and the reset of each window', out.five_hour === 3 && out.seven_day === 29 && out.more === false
+    && doc.quota.windows.five_hour.pct === 3 && doc.quota.windows.seven_day.pct === 29 && doc.quota.windows.seven_day.resetsAt === '2026-10-08T05:00:00Z' && doc.quota.windowsAt === '2026-10-04T00:21:40Z', JSON.stringify([out, doc.quota]));
+  check('limits: the page is deleted and no text reaches the reading', !fs.existsSync(page) && !/PRIVATE/.test(JSON.stringify(doc)), JSON.stringify(doc).slice(0, 200));
+  fs.writeFileSync(page, JSON.stringify({ ccr: { data: [], has_more: true, first_id: 'e9' } }));
+  const none = py(['limits', sync, page]);
+  check('limits: a page with no rate-limit event asks for the next page and changes nothing', none.more === true && none.before_id === 'e9' && JSON.parse(fs.readFileSync(sync, 'utf8')).quota.windows.five_hour.pct === 3, JSON.stringify(none));
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  /* the page: the owner's newest reading carries the shares, and so does Drew's */
+  const ldir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-limits-db-'));
+  fs.cpSync(DB, ldir, { recursive: true });
+  const put = (f, fn) => { const d = JSON.parse(fs.readFileSync(f, 'utf8')); fn(d); fs.writeFileSync(f, JSON.stringify(d)); };
+  put(path.join(ldir, 'syncs', '1791073380.json'), (d) => { d.quota.windows = { five_hour: { pct: 41, resetsAt: '2026-10-04T03:00:00Z' }, seven_day: { pct: 62, resetsAt: '2026-10-08T05:00:00Z' } }; d.quota.windowsAt = '2026-10-04T00:22:00Z'; });
+  put(path.join(ldir, 'data__users__u_drew__profile__syncs', '1791073380.json'), (d) => { d.quota.windows = { five_hour: { pct: 12, resetsAt: '2026-10-04T03:00:00Z' }, seven_day: { pct: 33, resetsAt: '2026-10-09T05:00:00Z' } }; d.quota.windowsAt = '2026-10-04T00:22:00Z'; });
+  const s = await open({ db: ldir, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const f = await s.page.evaluate(() => {
+    const cells = Object.fromEntries([...document.querySelectorAll('.w-kpi')].map((d) => [d.querySelector('.w-k').textContent.trim().toLowerCase(),
+      { v: d.querySelector('.w-v').textContent.trim(), s: d.querySelector('.w-s').textContent.trim(), m: (d.querySelector('.w-meter i') || {}).style ? d.querySelector('.w-meter i').style.width : '' }]));
+    const lim = document.querySelector('.w-blk.b-lim');
+    return { cells, first: [...document.querySelectorAll('.w-kpi .w-k')].slice(0, 2).map((x) => x.textContent.trim()), lim: lim ? lim.innerText : '' };
+  });
+  check('limits, wall: the share of the 5-hour and 7-day limits leads the figures, with a meter and the reset',
+    JSON.stringify(f.first) === '["5-hour limit","7-day limit"]' && f.cells['5-hour limit'].v === '41%' && /^41(\.0)?%$/.test(f.cells['5-hour limit'].m) && /^resets /.test(f.cells['5-hour limit'].s)
+    && f.cells['7-day limit'].v === '62%' && /^62(\.0)?%$/.test(f.cells['7-day limit'].m) && /^resets /.test(f.cells['7-day limit'].s), JSON.stringify(f));
+  check('limits, wall: the queue names the other people with their shares, not the viewer again', /Drew/.test(f.lim) && /5 h 12% · 7 d 33%/.test(f.lim) && !/David/.test(f.lim), f.lim);
+  await s.close();
+  const c = await open({ db: ldir, now: NOW, viewer: 'owner', width: 1100 });
+  await c.page.click('button[data-key="f-person:david"]');
+  await c.page.waitForTimeout(300);
+  const wins = await c.page.evaluate(() => [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText));
+  const c5 = wins.find((x) => /^5-h limit/i.test(x)) || '', c7 = wins.find((x) => /^7-day/i.test(x)) || '';
+  check('limits, Classic: the window tiles show the same shares', /41% of the limit used, as reported/.test(c5) && /62% of the limit used, as reported/.test(c7) && /resets Oct 8/.test(c7), JSON.stringify([c5, c7]));
+  await c.close();
+
+  /* a 7-day report near the cap whose reset passed, and a 7-day share whose reset passed: both are over */
+  put(path.join(ldir, 'syncs', '1791066360.json'), (d) => { d.quota = { status: 'allowed_warning', type: 'seven_day', resetsAt: '2026-10-03T05:00:00Z', overage: false, asOf: '2026-10-03T22:26:00Z' }; });
+  put(path.join(ldir, 'syncs', '1791073380.json'), (d) => { d.quota.windows.seven_day.resetsAt = '2026-10-03T05:00:00Z'; });
+  const e = await open({ db: ldir, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const g = await e.page.evaluate(() => { const d = [...document.querySelectorAll('.w-kpi')].find((x) => /7-day limit/i.test(x.querySelector('.w-k').textContent)); return { v: d.querySelector('.w-v').textContent.trim(), cls: d.className, text: document.getElementById('wall').innerText }; });
+  check('limits, wall: a window whose reset passed shows no share and no near-limit state', g.v === '—' && !/warn|bad/.test(g.cls) && !/Near limit/i.test(g.text), JSON.stringify(g).slice(0, 200));
+  await e.close();
+  const h = await open({ db: ldir, now: NOW, viewer: 'owner', width: 1100 });
+  await h.page.click('button[data-key="f-person:david"]');
+  await h.page.waitForTimeout(300);
+  const hb = await h.page.evaluate(() => ({ body: document.body.innerText, wins: [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText) }));
+  check('limits, Classic: a 7-day report whose reset passed leaves no 7-day tile and no near-limit line', !hb.wins.some((x) => /^7-day/i.test(x)) && !/Near the 7-day limit|Near the limit/.test(hb.body), JSON.stringify(hb.wins));
+  await h.close();
+  fs.rmSync(ldir, { recursive: true, force: true });
+}
+
 /* ---- the Swiss wall: one fixed screen for a tablet or a photo frame, no controls, no notes ---- */
 for (const [w, h] of [[1280, 800], [1024, 600], [800, 1280], [390, 844]]) {
   const s = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: w, height: h });
@@ -662,7 +730,7 @@ for (const [w, h] of [[1280, 800], [1024, 600], [800, 1280], [390, 844]]) {
   check(`wall ${w}x${h}: page loads without errors`, s.problems.length === 0, s.problems.join(' | '));
   check(`wall ${w}x${h}: one screen, no scroll either way, no row cut at the bottom`, g.skin === 'swiss' && g.shown && g.overX <= 1 && g.overY <= 1 && g.inside && g.rowsInside, JSON.stringify(g));
   check(`wall ${w}x${h}: no controls, links, tooltips or note marks`, g.controls === 0 && g.notes === 0, JSON.stringify(g));
-  check(`wall ${w}x${h}: seven figures, none clipped`, g.kpis === 7 && g.clipped === 0, JSON.stringify(g));
+  check(`wall ${w}x${h}: nine figures, none clipped`, g.kpis === 9 && g.clipped === 0, JSON.stringify(g));
   check(`wall ${w}x${h}: every project shows, or the rest fold into a count`, g.shown2 === 13 || (g.shown2 > 0 && new RegExp(`^\\+${13 - g.shown2} projects? · `).test(g.more)), JSON.stringify(g));
   if (w === 1280) {
     const f = await p.evaluate(() => {
