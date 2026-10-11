@@ -175,7 +175,7 @@ The Swiss screen shows these parts, from the top:
 | Projects | One line for each project, working projects first: state, open jobs and progress, end time, 1 h, 24 h, total, cost, last token use |
 | Queue | The questions that wait on you, the limits of the other people, the running and queued jobs with the time the last open project ends, the running sessions, and the people with the age of their sync |
 
-Rows that do not fit fold into a count, for example `+4 projects · 1.70 B`. The queue gives up rows in this order: people, running sessions, jobs. The type scales with the screen. In portrait, the queue moves between the charts and the table.
+Rows that do not fit fold into a count, for example `+4 projects · 1.70 B`. The queue gives up rows in this order: people, running sessions, jobs. The type scales with the screen. In portrait, the queue moves between the charts and the table. With nothing in the queue, the charts and the table take the full width.
 
 The Swiss screen shows the whole board. The filters that a browser saved in Classic stay in storage and do not apply to it.
 

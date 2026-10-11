@@ -786,6 +786,29 @@ for (const [w, h] of [[1280, 800], [1024, 600], [800, 1280], [390, 844]]) {
   await d.close();
 }
 
+/* ---- the wall with an empty queue: no question, no open job, no running session, one account ---- */
+{
+  const qdir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-quiet-'));
+  fs.cpSync(DB, qdir, { recursive: true });
+  const put = (f, fn) => { const d = JSON.parse(fs.readFileSync(f, 'utf8')); fn(d); fs.writeFileSync(f, JSON.stringify(d)); };
+  for (const f of fs.readdirSync(qdir)) if (f.startsWith('data__users__') || f === 'join') fs.rmSync(path.join(qdir, f), { recursive: true, force: true });
+  for (const f of fs.readdirSync(path.join(qdir, 'jobs'))) put(path.join(qdir, 'jobs', f), (d) => { if (['running', 'queued', 'waiting'].includes(d.status)) { d.status = 'done'; d.finishedAt = '2026-10-04T00:00:00Z'; } });
+  for (const f of fs.readdirSync(path.join(qdir, 'syncs'))) put(path.join(qdir, 'syncs', f), (d) => { for (const x of d.sessions || []) if (x.status === 'running') x.status = 'idle'; });
+  for (const f of fs.readdirSync(path.join(qdir, 'sessions'))) put(path.join(qdir, 'sessions', f), (d) => { if (d.status === 'running') d.status = 'idle'; });
+  for (const [w, h] of [[1280, 800], [800, 1280]]) {
+    const s = await open({ db: qdir, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: w, height: h });
+    const g = await s.page.evaluate(() => {
+      const wall = document.getElementById('wall'), right = wall.querySelector('.w-right');
+      return { solo: wall.querySelector('.w-main').classList.contains('solo'), queue: getComputedStyle(right).display, blocks: right.children.length,
+        table: Math.round(wall.querySelector('.w-table').getBoundingClientRect().right), kpis: Math.round(wall.querySelector('.w-kpis').getBoundingClientRect().right),
+        overY: document.documentElement.scrollHeight - innerHeight };
+    });
+    check(`wall ${w}x${h}, empty queue: the charts and the table take the full width`, g.solo && g.queue === 'none' && g.blocks === 0 && Math.abs(g.table - g.kpis) <= 2 && g.overY <= 1, JSON.stringify(g));
+    await s.close();
+  }
+  fs.rmSync(qdir, { recursive: true, force: true });
+}
+
 /* ---- phone width ---- */
 for (const viewer of ['owner', 'person']) {
   const s = await open({ db: DB, now: NOW, viewer, uid: 'u_drew', name: 'Drew', width: 390 });

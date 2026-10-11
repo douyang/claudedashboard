@@ -599,6 +599,9 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
 /* main: charts and the project table on the left, the queue on the right */
 .w-main { display: grid; min-height: 0; padding-top: 0.75em; gap: 0.85em 1.6em;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: minmax(10em, 1fr) minmax(0, max-content); grid-template-areas: "charts right" "table right"; }
+/* nothing in the queue: the charts and the table take the full width */
+.w-main.solo { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(10em, 1fr) minmax(0, max-content); grid-template-areas: "charts" "table"; }
+.w-main.solo .w-right { display: none; }
 .w-charts { grid-area: charts; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.4em; min-width: 0; min-height: 0; }
 .w-chart { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0.3em; min-width: 0; min-height: 0; }
 .w-h { display: flex; justify-content: space-between; gap: 1em; font: 700 0.7em/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
@@ -2793,6 +2796,25 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     for (const v of k.querySelectorAll('.w-v')) wallShrink(v);
     for (const v of k.querySelectorAll('.w-s')) wallShrink(v, 0.78);
 
+    /* what the queue holds. With nothing in it, the charts and the table take the full width */
+    const asks = all.filter(unanswered).sort((a, b) => b.s.waitSec - a.s.waitSec);
+    const lim = [];
+    if (!soloQuota) {
+      /* several accounts: the viewer's own limits lead the figures; each other person gets one line */
+      for (const o of ids) {
+        if (o === homeOwner()) continue;
+        const ow = windowsFor(o, now), q = quotaFor(o);
+        const figs = wJoin(ow.five_hour ? `5 h ${Math.round(ow.five_hour.pct)}%` : '', ow.seven_day ? `7 d ${Math.round(ow.seven_day.pct)}%` : '');
+        const st = q && q.status && t(q.resetsAt) > now ? q.status : '';
+        if (figs || st) lim.push({ k: ownerName(o), figs, st });
+      }
+    }
+    const jobsL = all.filter((x) => x.s.status === 'running' || x.s.status === 'queued')
+      .sort((a, b) => ((a.s.status === 'running' ? 0 : 1) - (b.s.status === 'running' ? 0 : 1)) || ((a.s.known ? a.s.left : 1e12) - (b.s.known ? b.s.left : 1e12)));
+    const runS = sess.filter(working).sort((a, b) => b.tok - a.tok);
+    const ppl = D.people && D.people.length > 1 ? D.people : [];
+    host.querySelector('.w-main').classList.toggle('solo', !(asks.length || lim.length || jobsL.length || runS.length || ppl.length));
+
     /* the project table */
     const tb = $('w-table');
     tb.textContent = '';
@@ -2860,7 +2882,6 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     };
     const swatch = (p) => { const sw = wEl('span', 'w-sw'); sw.style.background = p ? p.color : 'var(--s-other)'; return sw; };
 
-    const asks = all.filter(unanswered).sort((a, b) => b.s.waitSec - a.s.waitSec);
     if (asks.length) {
       const b = blk('b-ask', 'Waiting on you', asks.length);
       for (const { j, s } of asks) {
@@ -2870,32 +2891,19 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       }
     }
 
-    if (!soloQuota) {
-      /* several accounts: the viewer's own limits lead the figures; each other person gets one line */
-      const lim = [];
-      for (const o of ids) {
-        if (o === homeOwner()) continue;
-        const ow = windowsFor(o, now), q = quotaFor(o);
-        const figs = wJoin(ow.five_hour ? `5 h ${Math.round(ow.five_hour.pct)}%` : '', ow.seven_day ? `7 d ${Math.round(ow.seven_day.pct)}%` : '');
-        const st = q && q.status && t(q.resetsAt) > now ? q.status : '';
-        if (figs || st) lim.push({ k: ownerName(o), figs, st });
-      }
-      if (lim.length) {
-        const b = blk('b-lim', 'Limits', null);
-        for (const x of lim) {
-          const r = wEl('div', 'w-row two');
-          const v = wEl('span', 'val');
-          const [word, cls] = LIMIT_WALL[x.st] || ['', 'off'];
-          if (cls !== 'off') v.append(wEl('span', `w-st ${cls}`, word), ' ');
-          v.append(x.figs || word || '—');
-          r.append(wEl('span', 'lab', x.k), v);
-          b.append(r);
-        }
+    if (lim.length) {
+      const b = blk('b-lim', 'Limits', null);
+      for (const x of lim) {
+        const r = wEl('div', 'w-row two');
+        const v = wEl('span', 'val');
+        const [word, cls] = LIMIT_WALL[x.st] || ['', 'off'];
+        if (cls !== 'off') v.append(wEl('span', `w-st ${cls}`, word), ' ');
+        v.append(x.figs || word || '—');
+        r.append(wEl('span', 'lab', x.k), v);
+        b.append(r);
       }
     }
 
-    const jobsL = all.filter((x) => x.s.status === 'running' || x.s.status === 'queued')
-      .sort((a, b) => ((a.s.status === 'running' ? 0 : 1) - (b.s.status === 'running' ? 0 : 1)) || ((a.s.known ? a.s.left : 1e12) - (b.s.known ? b.s.left : 1e12)));
     if (jobsL.length) {
       /* the heading carries the count and the time the last open project ends */
       const b = blk('b-jobs', 'Jobs', ends ? `${jobsL.length} · ends ${when(ends)}` : jobsL.length);
@@ -2912,7 +2920,6 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       }
     }
 
-    const runS = sess.filter(working).sort((a, b) => b.tok - a.tok);
     if (runS.length) {
       const b = blk('b-sess', 'Running', runS.length);
       for (const x of runS) {
@@ -2924,9 +2931,9 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       }
     }
 
-    if (D.people && D.people.length > 1) {
+    if (ppl.length) {
       const b = blk('b-ppl', 'People', null);
-      for (const x of D.people) {
+      for (const x of ppl) {
         const r = wEl('div', 'w-row');
         r.append(wEl('span', 'lab', x.name), wEl('span', 'val', wJoin(x.v24 ? `24 h ${tk(x.v24)}` : '', x.tok ? tk(x.tok) : '')),
           wEl('span', `val${x.late ? ' late' : ''}`, x.syncAt ? agoShort(x.syncAt) : '—'));
