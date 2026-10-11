@@ -10,6 +10,10 @@
  *   --out DIR       screenshot directory (default /tmp/preview)
  *   --now ISO       fake clock, UTC (default: the newest timestamp in the fixtures)
  *   --widths A,B    viewport widths in px (default 390,1100)
+ *   --sizes WxH,... viewport sizes, for example 1280x800,1024x600. Replaces --widths.
+ *   --skin NAME     classic (default) or swiss, as a saved choice in the browser
+ *   --doctype 1     wrap the page in a doctype skeleton, as the artifact page does when it publishes the file
+ *   --dark 1        render with the dark colour scheme
  *   --viewer ROLE   owner (default) or person. A person reads only data/users/<uid>/ and join/<uid>.
  *   --uid ID        the person's id for --viewer person (default u_drew)
  *   --name NAME     the person's display name for --viewer person (default Drew)
@@ -21,6 +25,7 @@
  */
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -120,8 +125,9 @@ export async function open(opts = {}) {
   const docs = readDb(opts.db);
   const nowMs = opts.now ? Date.parse(opts.now) : (newest(docs) ? newest(docs) + 7 * 60000 : Date.now());
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
-  const ctx = await browser.newContext({ viewport: { width: opts.width || 1100, height: opts.height || 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const ctx = await browser.newContext({ viewport: { width: opts.width || 1100, height: opts.height || 900 }, colorScheme: opts.dark ? 'dark' : 'light', permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await ctx.newPage();
+  if (opts.skin) await page.addInitScript((v) => { try { localStorage.setItem('cad.skin', v); } catch (e) { /* storage blocked */ } }, opts.skin);
   const problems = [];
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.g|ERR_|Failed to load resource/.test(m.text())) problems.push(`console: ${m.text()}`); });
@@ -129,7 +135,14 @@ export async function open(opts = {}) {
   await page.clock.install({ time: new Date(nowMs) });
   const liveData = opts.liveData || null;
   await page.addInitScript(stub, { docs, viewer: opts.viewer || 'owner', uid: opts.uid || 'u_drew', name: opts.name || 'Drew', live: opts.live || 'blocked_by_policy', liveData });
-  await page.goto(pathToFileURL(path.resolve(opts.page || 'dashboard/index.html')).href);
+  let file = path.resolve(opts.page || 'dashboard/index.html');
+  if (opts.doctype) {
+    /* the published page runs in standards mode; the bare file runs in quirks mode */
+    const wrapped = path.join(os.tmpdir(), `board-std-${process.pid}.html`);
+    fs.writeFileSync(wrapped, `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></head><body>${fs.readFileSync(file, 'utf8')}</body></html>`);
+    file = wrapped;
+  }
+  await page.goto(pathToFileURL(file).href);
   /* the reset that the artifact page adds around the file when it is published. It sits in the head, before the
      page's own styles, so the page's rules win as they do on the published page */
   await page.evaluate((css) => { const st = document.createElement('style'); st.textContent = css; document.head.prepend(st); },
@@ -148,15 +161,19 @@ async function main() {
   const out = a.out || '/tmp/preview';
   fs.mkdirSync(out, { recursive: true });
   let bad = 0;
-  for (const w of String(a.widths || '390,1100').split(',').map(Number)) {
-    const s = await open({ page: a.page, db: a.db, now: a.now, viewer: a.viewer, uid: a.uid, name: a.name, live: a.live, width: w });
+  const sizes = a.sizes ? String(a.sizes).split(',').map((x) => x.split('x').map(Number)) : String(a.widths || '390,1100').split(',').map((x) => [Number(x), 0]);
+  for (const [w, h] of sizes) {
+    const s = await open({ page: a.page, db: a.db, now: a.now, viewer: a.viewer, uid: a.uid, name: a.name, live: a.live, skin: a.skin, doctype: a.doctype, dark: a.dark, width: w, height: h || undefined });
     for (const sel of a.click) await s.page.click(sel);
     if (a.click.length) await s.page.waitForTimeout(300);
-    const file = path.join(out, `board-${w}.png`);
+    const file = path.join(out, `board-${a.skin ? `${a.skin}-` : ''}${a.dark ? 'dark-' : ''}${w}${h ? `x${h}` : ''}.png`);
     await s.page.screenshot({ path: file, fullPage: true });
-    const overflow = await s.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    console.log(`${file}${overflow > 1 ? `  HORIZONTAL OVERFLOW ${overflow}px` : ''}`);
-    if (overflow > 1) bad = 1;
+    /* innerHeight, not clientHeight: the file has no doctype, and in quirks mode clientHeight is the page height */
+    const [overflow, overY] = await s.page.evaluate(() => [document.documentElement.scrollWidth - document.documentElement.clientWidth, document.documentElement.scrollHeight - innerHeight]);
+    /* the Swiss skin is one fixed screen: it must not scroll either way */
+    const fixed = a.skin === 'swiss';
+    console.log(`${file}${overflow > 1 ? `  HORIZONTAL OVERFLOW ${overflow}px` : ''}${fixed && overY > 1 ? `  VERTICAL OVERFLOW ${overY}px` : ''}`);
+    if (overflow > 1 || (fixed && overY > 1)) bad = 1;
     for (const p of s.problems) { console.log(`  ${p}`); bad = 1; }
     await s.close();
   }

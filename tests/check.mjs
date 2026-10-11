@@ -637,6 +637,87 @@ for (const allUnknown of [false, true]) {
   await s.close();
 }
 
+/* ---- the Swiss wall: one fixed screen for a tablet or a photo frame, no controls, no notes ---- */
+for (const [w, h] of [[1280, 800], [1024, 600], [800, 1280], [390, 844]]) {
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: w, height: h });
+  const p = s.page;
+  const g = await p.evaluate(() => {
+    const wall = document.getElementById('wall'), r = wall.getBoundingClientRect(), tb = wall.querySelector('.w-table');
+    const rows = [...wall.querySelectorAll('.w-table tr')];
+    const bottom = rows.length ? Math.max(...rows.map((x) => x.getBoundingClientRect().bottom)) : 0;
+    return {
+      skin: document.documentElement.dataset.skin,
+      shown: getComputedStyle(wall).display !== 'none' && getComputedStyle(document.querySelector('main.wrap')).display === 'none',
+      overX: document.documentElement.scrollWidth - innerWidth, overY: document.documentElement.scrollHeight - innerHeight,
+      inside: r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1,
+      rowsInside: !tb || bottom <= tb.getBoundingClientRect().bottom + 1,
+      controls: wall.querySelectorAll('button, a, input, select, textarea, details, summary, [title]').length,
+      notes: wall.querySelectorAll('sup').length,
+      kpis: wall.querySelectorAll('.w-kpi').length,
+      clipped: [...wall.querySelectorAll('.w-v')].filter((e) => e.scrollWidth > e.clientWidth + 1).length,
+      shown2: wall.querySelectorAll('.w-table tbody tr:not(.more)').length,
+      more: (wall.querySelector('.w-table tr.more') || {}).innerText || '',
+    };
+  });
+  check(`wall ${w}x${h}: page loads without errors`, s.problems.length === 0, s.problems.join(' | '));
+  check(`wall ${w}x${h}: one screen, no scroll either way, no row cut at the bottom`, g.skin === 'swiss' && g.shown && g.overX <= 1 && g.overY <= 1 && g.inside && g.rowsInside, JSON.stringify(g));
+  check(`wall ${w}x${h}: no controls, links, tooltips or note marks`, g.controls === 0 && g.notes === 0, JSON.stringify(g));
+  check(`wall ${w}x${h}: seven figures, none clipped`, g.kpis === 7 && g.clipped === 0, JSON.stringify(g));
+  check(`wall ${w}x${h}: every project shows, or the rest fold into a count`, g.shown2 === 13 || (g.shown2 > 0 && new RegExp(`^\\+${13 - g.shown2} projects? · `).test(g.more)), JSON.stringify(g));
+  if (w === 1280) {
+    const f = await p.evaluate(() => {
+      /* the first text node: a Classic label carries its note number in a superscript */
+      const kv = (sel) => Object.fromEntries([...document.querySelectorAll(sel)].map((d) => [d.querySelector('.w-k, .k').firstChild.textContent.trim().toLowerCase(), d.querySelector('.w-v, .v').textContent.trim()]));
+      const tr = [...document.querySelectorAll('.w-table tbody tr')].map((r) => [...r.children].map((c) => c.innerText.trim()));
+      return { wall: kv('.w-kpi'), classic: kv('#kpis .kpi'), tr, head: document.querySelector('.w-stat').innerText, text: document.getElementById('wall').innerText };
+    });
+    check('wall: the figures are the ones Classic computes', f.wall['1 h'] === f.classic['last hour'] && f.wall['24 h'] === f.classic['last 24 h'] && f.wall['7 d'] === f.classic['last 7 d'] && f.wall.all === f.classic['all tokens'], JSON.stringify([f.wall, f.classic]));
+    const byName = Object.fromEntries(f.tr.map((r) => [r[0], r]));
+    check('wall: working projects come first and say so', /^working$/i.test((f.tr[0] || [])[1] || '') && /^working$/i.test(byName['owner/atlas-port'][1]), JSON.stringify(f.tr.slice(0, 3)));
+    check('wall: the idle project with 9 B lifetime tokens shows no use in the last hour', byName['owner/harbor-docs'] && byName['owner/harbor-docs'][4] === '—' && byName['owner/harbor-docs'][6] === '10.30 B', JSON.stringify(byName['owner/harbor-docs']));
+    check('wall: the header names the working projects and the newest reading', /3 working/.test(f.head) && /read \d/.test(f.head), f.head);
+    check('wall: no sentences that explain the board', !/measured|untimed|not counted|Notes|Fields for|Times are|Pick a|Show all|Copy/.test(f.text), (f.text.match(/measured|untimed|not counted|Notes|Fields for|Times are|Pick a|Show all|Copy/) || [''])[0]);
+    check('wall: the same people as Classic, each with a sync age', /People/i.test(f.text) && /Drew/.test(f.text) && /Priya/.test(f.text), f.text.slice(-200));
+  }
+  await s.close();
+}
+
+/* ---- the wall ignores the filters that this browser saved for Classic, and a long press returns to Classic ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const p = s.page;
+  const stored = await p.evaluate(() => { try { localStorage.setItem('cad.person', 'u_drew'); return true; } catch (e) { return false; } });
+  if (stored) {
+    await p.reload();
+    await p.waitForTimeout(900);
+    const names = await p.evaluate(() => [...document.querySelectorAll('.w-table tbody tr')].map((r) => r.children[0].innerText.trim()));
+    check('wall: a saved Classic filter does not hide projects on the wall', names.includes('owner/atlas-port') && names.includes('drew/clinic-scheduler'), names.join(','));
+    const box = await (await p.$('.w-head')).boundingBox();
+    await p.mouse.move(box.x + 40, box.y + box.height / 2);
+    await p.mouse.down();
+    await p.clock.runFor(1700);
+    await p.mouse.up();
+    await p.waitForTimeout(200);
+    const back = await p.evaluate(() => ({ skin: document.documentElement.dataset.skin, saved: localStorage.getItem('cad.skin'), wrap: getComputedStyle(document.querySelector('main.wrap')).display,
+      cards: [...document.querySelectorAll('.proj-card h2')].map((x) => x.innerText.trim()) }));
+    check('wall: a long press on the header returns this browser to Classic', back.skin === 'classic' && back.saved === 'classic' && back.wrap !== 'none', JSON.stringify(back).slice(0, 200));
+    check('wall: Classic gets its saved filters back', back.cards.length > 0 && back.cards.every((n) => /clinic.scheduler|faq.site/i.test(n)), back.cards.join(','));
+  } else console.log('SKIP  wall: this browser blocks localStorage for file pages');
+  await s.close();
+}
+
+/* ---- the wall for a person, and in the dark scheme ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'person', uid: 'u_drew', name: 'Drew', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const t0 = await s.page.evaluate(() => document.getElementById('wall').innerText);
+  check('wall, person: only their own projects, no people list', /clinic.scheduler/.test(t0) && !/atlas|harbor|Priya|People/i.test(t0), t0.slice(0, 300));
+  await s.close();
+  const d = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, dark: true, width: 1280, height: 800 });
+  const c = await d.page.evaluate(() => [getComputedStyle(document.getElementById('wall')).backgroundColor, getComputedStyle(document.querySelector('.w-v')).color]);
+  check('wall, dark: a dark field with light figures', c[0] === 'rgb(10, 10, 10)' && c[1] === 'rgb(245, 245, 245)', c.join(' / '));
+  await d.close();
+}
+
 /* ---- phone width ---- */
 for (const viewer of ['owner', 'person']) {
   const s = await open({ db: DB, now: NOW, viewer, uid: 'u_drew', name: 'Drew', width: 390 });

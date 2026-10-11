@@ -14,7 +14,7 @@ The dashboard shows every Claude project, cloud and local. For each project it s
 | `scripts/ccr_sync_doc.py` | Turns `list_sessions` answers into one `syncs` document. |
 | `scripts/ccr_to_docs.py` | Turns a `list_sessions` answer into `sessions` and `ticks` documents. A manual importer. |
 | `scripts/embed_assets.py` | Copies the invite text, the sync procedure, the sync script and the skill into the page. |
-| `scripts/preview.mjs` | Loads the page in Chromium with a stub of `window.claude`, and saves screenshots. |
+| `scripts/preview.mjs` | Loads the page in Chromium with a stub of `window.claude`, and saves screenshots. Options set the skin, the viewport sizes, the colour scheme and a doctype skeleton. |
 | `tests/check.mjs` | End-to-end checks of the page against synthetic fixtures. |
 | `tests/make_fixtures.py` | Writes the synthetic fixtures. The names and numbers are invented. |
 | `skills/token-dashboard/` | The skill that makes every Cowork and Claude Code session report to the board. `scripts/local_usage.py` measures a local session from its own transcript. |
@@ -159,14 +159,34 @@ If another session published a newer version, merge its changes into this file b
 
 ## Skins
 
-The board has two skins. The data, the markup and the logic are the same in both.
+The board has two skins. Both read the same data and show the same figures.
 
-- **Classic** is the default: the original paper-and-graphite look.
-- **Swiss** is a white field, black type, one red accent and a visible 24px grid, from the Swiss Modern preset of [frontend-slides](https://github.com/zarazhangrui/frontend-slides). Archivo carries headings and figures. Nunito carries text.
+- **Classic** is the default: the original paper-and-graphite board, with the filters, the invite panel, the exports and the numbered notes.
+- **Swiss** is a wall display for a small tablet or a photo frame. It fills one screen and does not scroll. It has no controls, links, tooltips or notes. It uses a white field, black type and one red accent, from the Swiss Modern preset of [frontend-slides](https://github.com/zarazhangrui/frontend-slides). Archivo carries the figures and labels. Archivo Narrow carries the names.
 
-The viewer picks a skin under Skin in the filter panel. The choice stays in that browser (`localStorage` key `cad.skin`). An early script applies it before the first paint. A browser with no saved choice, or with blocked storage, gets Classic. Classic loads no Archivo or Nunito font file.
+The Swiss screen shows these parts, from the top:
 
-The Swiss rules sit in their own style block, scoped to `:root[data-skin="swiss"]`. Classic rules do not change. In Swiss, red marks live work only, black marks a calm state, amber marks a person's turn, and crimson marks a failure. Project colours keep the same 16 slots in both skins.
+| Part | Contents |
+|---|---|
+| Header | The number of working projects, the time of the newest reading (crimson when it is late), the date and the clock |
+| Figures | Tokens in the last 1 h, 5 h, 24 h, 7 d and 30 d, with cost and rate; all tokens and cost; the open jobs and the tokens they still need |
+| Charts | Tokens per hour over 48 h and per day over 30 d, stacked by project colour. A grey band marks the current 5-hour window. Hatching marks a running turn that Claude Code has not reported yet. |
+| Projects | One line for each project, working projects first: state, open jobs and progress, end time, 1 h, 24 h, total, cost, last token use |
+| Queue | The questions that wait on you, the limits, the running and queued jobs with the time the last open project ends, the running sessions, and the people with the age of their sync |
+
+Rows that do not fit fold into a count, for example `+4 projects · 1.70 B`. The queue gives up rows in this order: people, running sessions, jobs. The type scales with the screen. In portrait, the queue moves between the charts and the table.
+
+The Swiss screen shows the whole board. The filters that a browser saved in Classic stay in storage and do not apply to it.
+
+To set up a frame, open the board on it once and press **Swiss** under Skin. The choice stays in that browser (`localStorage` key `cad.skin`). A browser with no saved choice, or with blocked storage, gets Classic. To return to Classic, press and hold the Swiss header for 1.5 seconds. Classic loads no Archivo, Archivo Narrow or Nunito font file.
+
+The wall has its own style block and its own builder, `wall()` in the page script. It takes its figures from the same calculations as Classic. The earlier Swiss rules for the Classic markup stay in the page, but they do not apply while the wall shows. In Swiss, red marks live work only, black marks a calm state, amber marks a person's turn, and crimson marks a failure. Project colours keep the same 16 slots in both skins.
+
+To see the wall at frame sizes, run this command. `--doctype 1` loads the page in standards mode, as the published page runs.
+
+```sh
+NODE_PATH=$(npm root -g) node scripts/preview.mjs --db tests/fixtures/db --now 2026-10-04T00:25:00Z --skin swiss --doctype 1 --sizes 1280x800,1024x600,800x1280 --out /tmp/wall
+```
 
 ## Install the skills
 

@@ -1,7 +1,7 @@
 <title>Claude Activity Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Archivo:wght@400;500;600;700;800&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <style>
 /* Projects, each holding its own job rows, in the paper-and-graphite palette the
    board started with. One column; filters above; every colour a token. */
@@ -373,8 +373,9 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
    SWISS SKIN
    The Swiss Modern preset of frontend-slides: a white field, black type,
    one red accent and a visible grid. Archivo 800 carries display text and
-   figures; Nunito carries running text. The skin restyles the board only.
-   The data logic and the markup are the same in both skins.
+   figures; Nunito carries running text. The rules in this block restyle the
+   Classic markup. The wall (next block) hides that markup in Swiss; these
+   rules stay for a return to a scrolling Swiss board.
    Layout: one column of 2px-ruled panels on a 24px grid. Square corners.
    Color jobs: red = live work (running, working now, the live dot).
    Black = calm state (done, allowed). Amber = waits on a person or needs
@@ -538,6 +539,136 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
 :root[data-skin="swiss"] .lgk.band { background: var(--ink); opacity: 0.14; }
 :root[data-skin="swiss"] .dtip { border: var(--frame) solid var(--ink); border-radius: 0; box-shadow: none; background: var(--paper-2); }
 </style>
+<style>
+/* =======================================================================
+   SWISS WALL
+   In Swiss the board is one fixed screen for a small tablet or a photo
+   frame: no scroll, no controls, no notes. It reads the same figures as
+   Classic.
+   Layout: a header line, a ruled strip of seven figures, then two charts
+   and the project table on the left two thirds and the queue on the right.
+   Type: one unit, --wu, from the screen size; every size is an em of it.
+   Archivo carries figures and labels; Archivo Narrow carries names.
+   ======================================================================= */
+#wall { display: none; }
+:root[data-skin="swiss"] { height: 100%; overflow: hidden; }
+:root[data-skin="swiss"] body { height: 100%; overflow: hidden; background-image: none; }
+:root[data-skin="swiss"] main.wrap { display: none; }
+:root[data-skin="swiss"] #wall { display: grid; }
+.wall {
+  --wu: clamp(9px, min(1.05vw, 1.75vh), 22px);
+  --narrow: "Archivo Narrow", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  box-sizing: border-box; height: 100%; overflow: hidden;
+  padding: 0.9em max(16px, 1.4em) 0.8em;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  font: 500 var(--wu)/1.25 var(--display); color: var(--ink); background: var(--paper);
+}
+.wall .num, .w-table, .w-row .val { font-variant-numeric: tabular-nums; }
+
+/* header: the board's name, then what works now, the newest reading, the date and the clock */
+.w-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4em 1.4em; padding-bottom: 0.6em;
+  border-bottom: var(--frame) solid var(--ink); min-width: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.w-brand { display: flex; align-items: center; gap: 0.55em; min-width: 0; }
+.w-mark { flex: none; width: 1.05em; height: 1.05em; background: var(--accent); }
+#wall .w-head h1 { margin: 0; font: 800 1.5em/1 var(--display); letter-spacing: -0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-stat { display: flex; align-items: baseline; gap: 0 1.1em; white-space: nowrap; min-width: 0; }
+.w-work { font-weight: 800; color: var(--accent); }
+.w-idle { color: var(--ink-3); }
+.w-live { display: inline-block; width: 0.62em; height: 0.62em; margin-right: 0.45em; background: var(--ink-3); }
+.w-live.on { background: var(--accent); animation: breathe 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .w-live.on { animation: none; } }
+.w-read, .w-date { font-size: 0.9em; color: var(--ink-3); }
+.w-read.late { color: var(--flag); font-weight: 800; }
+.w-clock { font: 800 1.5em/1 var(--display); letter-spacing: -0.02em; }
+
+/* figures: one ruled strip, the value large, its cost and rate under it */
+.w-kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: var(--frame) solid var(--ink); }
+.w-kpi { display: grid; gap: 0.2em; align-content: start; min-width: 0; padding: 0.6em 0.8em 0.65em; border-left: 1px solid var(--rule-2); }
+.w-kpi:first-child { border-left: 0; padding-left: 0; }
+.w-k { font: 700 0.7em/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+.w-v { font: 800 2.25em/1 var(--display); letter-spacing: -0.035em; white-space: nowrap; overflow: hidden; }
+.w-kpi.live .w-v { color: var(--accent); }
+.w-s { font-size: 0.82em; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* main: charts and the project table on the left, the queue on the right */
+.w-main { display: grid; min-height: 0; padding-top: 0.75em; gap: 0.85em 1.6em;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: minmax(10em, 1fr) minmax(0, max-content); grid-template-areas: "charts right" "table right"; }
+.w-charts { grid-area: charts; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.4em; min-width: 0; min-height: 0; }
+.w-chart { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0.3em; min-width: 0; min-height: 0; }
+.w-h { display: flex; justify-content: space-between; gap: 1em; font: 700 0.7em/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+.w-h b { font-weight: 800; color: var(--ink); }
+.w-plot { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.w-plot svg { position: absolute; inset: 0 auto auto 0; display: block; }   /* out of the flow: the svg never sizes its own box */
+.w-plot .grid { stroke: var(--rule-2); stroke-width: 1; }
+.w-plot .axis { stroke: var(--ink); stroke-width: 1.5; }
+.w-plot .ylab, .w-plot .xlab { fill: var(--ink-3); font-family: var(--display); font-weight: 600; }
+.w-plot .band { fill: var(--ink); opacity: 0.07; }
+.w-plot .hatch { stroke: var(--ink-3); stroke-width: 1.5; opacity: 0.45; }
+.w-plot .seg { stroke: var(--paper); stroke-width: 1; }
+
+/* the project table: one line a project, active first; rows that do not fit fold into the last line */
+.w-table { grid-area: table; min-height: 0; min-width: 0; overflow: hidden; }
+.w-table table { width: 100%; border-collapse: collapse; table-layout: fixed; font: inherit; }   /* a table in quirks mode does not inherit the font */
+.w-table th { padding: 0 0 0.45em 0.6em; border-bottom: var(--frame) solid var(--ink); font: 700 0.68em/1 var(--display); letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-3); text-align: right; white-space: nowrap; overflow: hidden; }
+.w-table td { padding: 0.34em 0 0.34em 0.6em; border-bottom: 1px solid var(--rule-2); font-size: 0.95em; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-table th.l, .w-table td.l { text-align: left; }
+.w-table th:first-child, .w-table td:first-child { padding-left: 0; text-align: left; }
+.w-table td.pn { font: 600 1em/1.25 var(--narrow); }
+.w-table .tt .own { color: var(--ink-3); font-weight: 500; }
+.w-table tr.dim td { color: var(--ink-3); }
+.w-table tr.more td { border-bottom: 0; color: var(--ink-3); font-size: 0.85em; }
+.w-sw { display: inline-block; flex: none; width: 0.68em; height: 0.68em; margin-right: 0.5em; vertical-align: 0.02em; }
+.w-st { display: inline-block; padding: 0.28em 0.45em; border: 1.5px solid currentColor; font: 800 0.64em/1 var(--display); letter-spacing: 0.07em; text-transform: uppercase; }
+.w-st.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.w-st.warn { background: var(--wait-fill); border-color: var(--wait-fill); color: var(--on-wait); }
+.w-st.bad { background: var(--flag); border-color: var(--flag); color: var(--paper); }
+.w-st.off { border-color: transparent; padding-inline: 0; color: var(--ink-3); }
+.w-empty { margin: 0; padding-top: 0.6em; color: var(--ink-3); }
+
+/* the queue: what waits on you, the limits, the jobs, the running sessions, the people */
+.w-right { grid-area: right; display: flex; flex-direction: column; gap: 0.95em; min-height: 0; min-width: 0; overflow: hidden; }
+.w-blk { flex: none; display: grid; min-width: 0; }
+.w-blk > .w-h { padding-bottom: 0.45em; border-bottom: var(--frame) solid var(--ink); }
+.w-blk.b-ask > .w-h { padding: 0.42em 0.5em; border-bottom: 0; background: var(--wait-fill); color: var(--on-wait); }
+.w-blk.b-ask > .w-h b { color: inherit; }
+.w-row { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: 0.15em 0.6em; min-width: 0;
+  padding: 0.36em 0; border-bottom: 1px solid var(--rule-2); }
+.w-row .lab { min-width: 0; font: 600 0.98em/1.25 var(--narrow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-row .val { font-size: 0.88em; color: var(--ink-2); white-space: nowrap; text-align: right; }
+.w-row .val.late { color: var(--flag); font-weight: 800; }
+.w-row .sub { grid-column: 1 / -1; margin: 0; font-size: 0.82em; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-row .prog { position: absolute; left: 0; bottom: -1px; height: 2px; }
+.w-row.two { grid-template-columns: minmax(0, 1fr) auto; }
+.w-ask .lab { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.w-mk { align-self: center; min-width: 3.7em; padding: 0.3em 0.35em; border: 1.5px solid currentColor; font: 800 0.6em/1 var(--display);
+  letter-spacing: 0.07em; text-transform: uppercase; text-align: center; color: var(--ink-3); }
+.w-mk.m-run { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.w-mk.m-stale { color: var(--wait); }
+.w-lim { grid-template-columns: 4.8em auto minmax(0, 1fr); }
+.w-lim .k { font: 700 0.7em/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+.w-lim .meter2 { grid-column: 1 / -1; position: relative; height: 0.32em; margin-top: 0.25em; background: var(--track); }
+.w-lim .meter2 i { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+.w-lim .meter2.warn i { background: var(--wait-fill); }
+.w-lim .meter2.bad i { background: var(--flag); }
+.w-more { padding-top: 0.3em; font-size: 0.82em; color: var(--ink-3); }
+
+/* portrait: the queue moves between the charts and the table */
+@media (orientation: portrait) {
+  .wall { --wu: clamp(9px, min(1.75vw, 1.05vh), 22px); }
+  .w-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .w-kpi:nth-child(5) { border-left: 0; padding-left: 0; }
+  .w-kpi:nth-child(n+5) { border-top: 1px solid var(--rule-2); }
+  .w-kpi:last-child { grid-column: span 2; }
+  .w-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(10em, 1fr) auto minmax(0, max-content); grid-template-areas: "charts" "right" "table"; }
+  .w-right { max-height: 34vh; }
+}
+@media (max-width: 560px) {
+  .w-charts { grid-template-columns: minmax(0, 1fr); }
+  .w-charts .w-chart + .w-chart { display: none; }
+  .w-v { font-size: 1.8em; }
+}
+</style>
 
 <script>
 /* Apply the saved skin before the first paint: Classic by default, Swiss on request.
@@ -659,6 +790,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   </section>
 </main>
 
+<section class="wall" id="wall" aria-label="Claude activity"></section>
+
 <!-- assets:start -->
 <script type="application/json" id="assets">{
 "invite": "# Report {{NAME}}'s Claude usage to the {{BOARD_OWNER}} activity board\n\n{{NAME}} asks you to run this setup once. After it, an hourly update runs by itself, with no further action.\n\n- Board: {{BOARD}}\n- Reporter: {{NAME}}\n\n## Who can read what you write\n\n- You write only to the private path `data/users/me/profile/...`. The board resolves `me` to {{NAME}}'s own id.\n- Only {{NAME}} and {{BOARD_OWNER}} can read that path. Other people on the board cannot.\n- You cannot write anywhere else on the board. If a write to another path works, stop and report it.\n\n## What the setup sends\n\n- For each Claude Code cloud session of this account: id, title, status, model, start and update times, repositories, token counts, and the cost at API list prices.\n- The usage-limit state of the account: status, window and reset time.\n- The same totals once a day, as a ledger entry. The ledger keeps usage after a session leaves the listing.\n- For each Cowork session that reports to the board: the same fields, read with get_session by id. The answer holds a task summary; only its count fields are written down.\n- For each session that runs a turn: the token counts and times of that turn so far. Claude Code reports a turn's tokens only when it ends, so the sync reads them from the session's events. A script takes the counts from each event page and deletes the page.\n- Nothing else. No message text, no task summaries, no file contents.\n\n## Before you start\n\n- You need the tools ArtifactData, list_sessions and list_events (server claude-code-remote). If they are deferred, load them: ToolSearch \"select:ArtifactData,mcp__claude-code-remote__list_sessions,mcp__claude-code-remote__list_events\".\n- {{BOARD_OWNER}} must share the board with {{NAME}} with edit access (Contributor). If a write fails with \"not found\" or \"not allowed\", stop and tell {{NAME}} to ask {{BOARD_OWNER}} for edit access.\n- If ArtifactData says that resolving \"me\" needs the db and user capabilities, stop. Tell {{NAME}} to ask {{BOARD_OWNER}} to republish the board.\n- If a tool is missing, name the tool and the step that needs it. Then stop.\n\n## Step 1. Run the sync once now\n\nFollow \"THE SYNC\" at the end of this text. It writes the first document to the board.\n\n## Step 2. Check the first document\n\n- Call ArtifactData with action \"get\", url \"{{BOARD}}\", collection \"data/users/me/profile/syncs\", and the doc_id that the script printed.\n- Call it again for collection \"data/users/me/profile/daily\" and the day that the script printed. A day that already has an entry is fine.\n- If the sync document is missing or holds no sessions, stop and report the problem.\n\n## Step 3. Make the update hourly\n\n1. Call list_triggers. Look for a routine named \"Claude board hourly sync\".\n2. If the routine exists, call update_trigger on it with the cron and prompt below. Do not create a second routine.\n3. If it does not exist, call create_trigger (server claude-code-remote) with these settings:\n   - name: \"Claude board hourly sync\"\n   - cron_expression: \"0 * * * *\"\n   - initiation: \"human_request\"\n   - prompt: the full text of \"THE SYNC\", unchanged.\n4. Do not set create_new_session_on_fire or notifications. The routine then wakes this session every hour. A routine that starts a fresh session gets no list_sessions tool, so the sync would fail there.\n5. If you have set_session_title, rename this session to \"Claude board usage sync\". Tell {{NAME}}: \"Keep this session. Do not archive or delete it. The hourly update runs in it.\"\n6. If you have no create_trigger tool, tell {{NAME}} to create a scheduled task in the Claude app. The task runs every hour and its prompt is the text of \"THE SYNC\". Do not skip this silently.\n7. Call list_triggers again. Confirm that the routine is enabled. Note its next_run_at.\n\n## Step 4. Show {{NAME}} on the board\n\nTell {{NAME}}: \"Open {{BOARD}} once in your browser.\" The board then lists {{NAME}} for {{BOARD_OWNER}} and shows {{NAME}} their own usage.\n\n## Step 5. Sessions that list_sessions does not show\n\n- Cowork sessions and local CLI sessions do not appear in list_sessions. They report their own jobs and usage through the token-dashboard skill. Once a Cowork session reports, the hourly update also reads its totals with get_session.\n- Tell {{NAME}}: \"Open the board, press Save skill file, and upload the zip in claude.ai under Settings, Capabilities, Skills.\" The board page builds the file for {{NAME}}.\n\n## Step 6. Report\n\nReply in max 4 lines:\n- The number of sessions and tokens that the first sync wrote.\n- The routine id and its next run time.\n- Whether {{NAME}} still has to open the board and upload the skill.\n\n## THE SYNC\n\n{{SYNC}}\n",
@@ -672,6 +805,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  /** Swiss shows the wall: one fixed screen with no controls and no notes. */
+  const isWall = () => document.documentElement.dataset.skin === 'swiss';
   const STATUS = { queued: 'Queued', running: 'Running', waiting: 'Waiting', done: 'Done', failed: 'Failed', stopped: 'Stopped' };
   const STALE_SEC = 1800;
   const REPORT_STALE_SEC = 45 * 60;    // a local session reports at least every 30 min while it works
@@ -1321,6 +1456,8 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
 
   function render() {
     const now = Date.now();
+    /* the wall has no controls, so it shows the whole board; the saved Classic filters stay in storage */
+    if (isWall()) { fStatus = 'all'; fProject = 'all'; fWhere = 'all'; fPerson = 'all'; showAll = false; }
     noteDyn.clear();
     if (armed && now - armedAt >= ARM_MS) armed = null;
     /* the board rebuilds every second: keep keyboard focus on the same control */
@@ -1501,6 +1638,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       : 'No project matches these filters.';
 
     numberNotes();
+    if (isWall()) wall(now, projects, all, sess, ids);
     if (focusKey) {
       const el = [...document.querySelectorAll('[data-key]')].find((n) => n.dataset.key === focusKey);
       if (el && el !== document.activeElement && !el.disabled) el.focus({ preventScroll: true });
@@ -1689,6 +1827,9 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     srcJobs = false;
     if (!sp.length && !spL.length) { sp = spans(all); spL = sp; srcJobs = sp.length > 0; }
     density(sp, spL, now, pend.map((s) => [pendingBy.get(s.id), T]));
+    WD = { T, tot, usd, nSess: sess.length, w1, w5, w24, w7, w30, c1, c5, c24, c7, c30,
+      u1: winUsd(T - H, T), u5: winUsd(T - 5 * H, T), u24: winUsd(T - 24 * H, T), u7: winUsd(T - 168 * H, T), u30: winUsd(T - 720 * H, T, DAILY_GAP_SEC),
+      moreAll, moreUsd, sp, spL, pend: pend.map((s) => [pendingBy.get(s.id), T]), people: [] };
 
     /* table by project: every project, inactive ones dimmed, whatever the filters below say */
     const tbl = $('ptable');
@@ -1833,6 +1974,7 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
       else sync2 = mine.length ? 'session reports only' : 'no report yet';
       td(sync2, cls);
       tbl.append(tr);
+      WD.people.push({ name: ownerName(o), tok, v24, run, syncAt: ls ? t(ls.at) : 0, late: cls === 'late' });
     }
   }
   /** Rename a person. Only an editor can. */
@@ -2535,6 +2677,349 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
   }
 
   /* ---------------------------------------------------------------- *
+   * The wall: Swiss as one fixed screen                               *
+   * ---------------------------------------------------------------- */
+  /* In Swiss the board is one screen for a small tablet or a photo frame: no scroll, no controls, no notes. It reads
+     the figures that render() and usagePanel() computed, so both skins show the same numbers. Rows that do not fit
+     fold into a count. A long press (1.5 s) on the header is the one way back to Classic in this browser. */
+  let WD = { people: [] };             // the figures of this render that the wall reads
+  const wallSig = {};                  // each chart redraws only when its bars, its size or its bands change
+  const wEl = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const wJoin = (...xs) => xs.filter(Boolean).join(' · ');
+  /** A project title on one line: the owner of a repository lighter than its name. */
+  function wTitle(title) {
+    const el = wEl('span', 'tt'), m = /^([\w.-]+\/)([\w.-]+)$/.exec(title);
+    if (m) el.append(wEl('span', 'own', m[1]), m[2]); else el.textContent = title;
+    return el;
+  }
+  const LIMIT_WALL = { allowed: ['Allowed', 'off'], allowed_warning: ['Near limit', 'warn'], rejected: ['Limit reached', 'bad'] };
+
+  function wallFrame(host) {
+    host.innerHTML = '<header class="w-head"><div class="w-brand"><span class="w-mark" aria-hidden="true"></span><h1>Claude activity</h1></div>'
+      + '<div class="w-stat" id="w-stat"></div></header><div class="w-kpis" id="w-kpis"></div>'
+      + '<div class="w-main"><div class="w-charts"><div class="w-chart"><div class="w-h" id="w-h1"></div><div class="w-plot" id="w-plot1"></div></div>'
+      + '<div class="w-chart"><div class="w-h" id="w-h2"></div><div class="w-plot" id="w-plot2"></div></div></div>'
+      + '<div class="w-table" id="w-table"></div><div class="w-right" id="w-right"></div></div>';
+    let press = 0;
+    host.addEventListener('pointerdown', (ev) => {
+      if (!ev.target.closest('.w-head')) return;
+      clearTimeout(press);
+      press = setTimeout(() => { keep('cad.skin', applySkin('classic')); loadFilters(); dsig = ''; render(); }, 1500);
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) host.addEventListener(ev, () => clearTimeout(press));
+  }
+
+  function wall(now, projects, all, sess, ids) {
+    const host = $('wall');
+    if (!host.firstChild) wallFrame(host);
+    const D = WD, H = HOUR;
+    const byName = new Map(projects.map((p) => [p.name, p]));
+
+    /* header: what works now, the newest reading, the date, the clock */
+    const st = $('w-stat');
+    st.textContent = '';
+    const nWork = projects.filter((p) => p.working).length;
+    const wk = wEl('span', nWork ? 'w-work' : 'w-idle');
+    wk.append(wEl('span', `w-live${nWork ? ' on' : ''}`), nWork ? `${nWork} working` : 'Idle');
+    const mine = latestSyncs().find((d) => ownerOf(d) === homeOwner());
+    const rd = wEl('span', 'w-read');
+    if (mine) {
+      const at = t(mine.at), late = (now - at) / 1000 > SYNC_MISSED_SEC;
+      rd.textContent = `read ${when(at)}${late ? ' · late' : ''}`;
+      if (late) rd.classList.add('late');
+    } else rd.textContent = 'no reading';
+    st.append(wk, rd, wEl('span', 'w-date', new Date(now).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })), wEl('b', 'w-clock', clock(now)));
+
+    /* figures: each window ends at the newest reading, as in Classic */
+    const k = $('w-kpis');
+    k.textContent = '';
+    const cell = (label, value, sub, cls) => {
+      const c = wEl('div', `w-kpi${cls ? ` ${cls}` : ''}`);
+      c.append(wEl('span', 'w-k', label), wEl('span', 'w-v', value), wEl('span', 'w-s', sub || ' '));
+      k.append(c);
+    };
+    const usdS = (v) => (v >= 0.5 ? `≈${money(v)}` : '');
+    const rate = (w, c) => (c > 0 ? `${tk(w / (c / H))}/h` : '');
+    const win = (label, w, c, u, withRate) => cell(label, c > 0 ? tk(w || 0) : '—', c > 0 ? wJoin(usdS(u || 0), withRate ? rate(w || 0, c) : '') : '');
+    win('1 h', D.w1, D.c1, D.u1, false);
+    win('5 h', D.w5, D.c5, D.u5, true);
+    win('24 h', D.w24, D.c24, D.u24, true);
+    win('7 d', D.w7, D.c7, D.u7, true);
+    win('30 d', D.w30, D.c30, D.u30, false);
+    cell('All', D.nSess ? tk(D.tot || 0) : '—', D.nSess ? wJoin(money(D.usd || 0), `${D.nSess} sessions`) : '');
+    const open = all.filter(isLive);
+    const ends = Math.max(0, ...projects.filter((p) => p.r.active > 0 && p.r.known && p.r.left > 0).map((p) => now + p.r.left * 1000));
+    cell('Open jobs', String(open.length), D.moreAll > 0 ? `+${tk(D.moreAll)} · ${money(D.moreUsd)}` : '',
+      open.some((x) => x.s.status === 'running' && !x.s.stale) ? 'live' : '');
+    for (const v of k.querySelectorAll('.w-v')) wallShrink(v);
+
+    /* the project table */
+    const tb = $('w-table');
+    tb.textContent = '';
+    if (!projects.length) tb.append(wEl('p', 'w-empty', db ? 'No projects' : 'No data'));
+    else {
+      /* a narrow screen drops the jobs, the end time and the last hour, so that every figure keeps its digits */
+      const narrow = tb.clientWidth < 560;
+      const ALL_COLS = [['Project', 'l', 31, 1], ['State', 'l', 12, 1], ['Jobs', '', 9, 0], ['Ends', '', 9, 0], ['1 h', '', 7, 0], ['24 h', '', 8, 1], ['Total', '', 8, 1], ['Cost', '', 8, 1], ['Used', '', 8, 1]];
+      const keepCol = ALL_COLS.map((c) => !narrow || c[3] === 1);
+      const cols = ALL_COLS.filter((c, i) => keepCol[i]);
+      const table = wEl('table'), cg = wEl('colgroup'), hr = wEl('tr'), thead = wEl('thead'), body = wEl('tbody');
+      const sumW = cols.reduce((a, c) => a + c[2], 0);
+      for (const [txt, al, wd] of cols) { const c = wEl('col'); c.style.width = `${((100 * wd) / sumW).toFixed(1)}%`; cg.append(c); hr.append(wEl('th', al, txt)); }
+      thead.append(hr);
+      table.append(cg, thead, body);
+      tb.append(table);
+      const list = [...projects].sort((a, b) => (b.active - a.active) || (b.working - a.working) || ((b.v24 || 0) - (a.v24 || 0)) || (b.lastAct - a.lastAct));
+      const rows = [];
+      for (const p of list) {
+        const tr = wEl('tr', p.active ? '' : 'dim');
+        const nm = wEl('td', 'pn');
+        const sw = wEl('span', 'w-sw'); sw.style.background = p.color;
+        nm.append(sw, wTitle(p.title));
+        const quiet = p.active && p.silent;
+        const word = p.active ? (p.working ? 'Working' : quiet ? 'No report' : 'Idle') : (p.doc && p.doc.status === 'done' ? 'Done' : p.doc && p.doc.status === 'paused' ? 'Paused' : 'Inactive');
+        const sc = wEl('td', 'l');
+        sc.append(wEl('span', `w-st ${p.working ? 'on' : quiet ? 'warn' : 'off'}`, word));
+        const r = p.r;
+        const cells = [nm, sc,
+          wEl('td', '', r.active ? `${r.active} · ${Math.floor(r.pfrac * 100)}%` : '—'),
+          wEl('td', '', r.active && r.known && r.left > 0 ? when(now + r.left * 1000) : '—'),
+          wEl('td', '', p.v1 ? tk(p.v1) : '—'),
+          wEl('td', '', p.v24 ? tk(p.v24) : '—'),
+          wEl('td', '', p.sess.length ? `${tk(p.tok)}${p.partial ? '+' : ''}` : '—'),
+          wEl('td', '', p.cost ? `${p.costEst ? '≈' : ''}${money(p.cost)}` : '—'),
+          wEl('td', '', p.lastMoved ? agoShort(p.lastMoved) : '—')];
+        tr.append(...cells.filter((c, i) => keepCol[i]));
+        body.append(tr);
+        rows.push([tr, p]);
+      }
+      const cut = [];
+      let more = null;
+      while (tb.scrollHeight > tb.clientHeight + 1 && rows.length > 1) {
+        const [tr, p] = rows.pop();
+        tr.remove(); cut.push(p);
+        if (more) more.remove();
+        more = wEl('tr', 'more');
+        const td = wEl('td', '', `+${cut.length} ${cut.length === 1 ? 'project' : 'projects'} · ${tk(cut.reduce((a, x) => a + x.tok, 0))}`);
+        td.colSpan = cols.length;
+        more.append(td);
+        body.append(more);
+      }
+    }
+
+    /* the queue */
+    const right = $('w-right');
+    right.textContent = '';
+    const blk = (key, title, count) => {
+      const b = wEl('section', `w-blk ${key}`), h = wEl('div', 'w-h');
+      h.append(wEl('span', '', title));
+      if (count != null) h.append(wEl('b', '', String(count)));
+      b.append(h);
+      right.append(b);
+      return b;
+    };
+    const swatch = (p) => { const sw = wEl('span', 'w-sw'); sw.style.background = p ? p.color : 'var(--s-other)'; return sw; };
+
+    const asks = all.filter(unanswered).sort((a, b) => b.s.waitSec - a.s.waitSec);
+    if (asks.length) {
+      const b = blk('b-ask', 'Waiting on you', asks.length);
+      for (const { j, s } of asks) {
+        const r = wEl('div', 'w-row two w-ask');
+        r.append(wEl('span', 'lab', j.label || j.id || 'Question'), wEl('span', 'val', dur(s.waitSec)), wEl('span', 'sub', projectOf(j)));
+        b.append(r);
+      }
+    }
+
+    const lim = [];
+    if (soloQuota) {
+      const q5s = limitTypes.five_hour, r5s = q5s ? t(q5s.resetsAt) : 0;
+      if (q5s) lim.push({ k: '5-hour', st: q5s.status, pct: +q5s.pct > 0 ? +q5s.pct : 0, reset: r5s,
+        used: r5s > now ? inRange(D.sp || [], r5s - 5 * H, Math.min(readEnd || now, r5s)) : 0 });
+      const wkType = Object.keys(limitTypes).filter((x) => x.indexOf('seven_day') === 0).sort((a, b) => limitTypes[b].at - limitTypes[a].at)[0];
+      const q7 = wkType ? limitTypes[wkType] : null;
+      const reset7 = q7 ? t(q7.resetsAt) : quota ? t(quota.weekResetsAt) : 0;
+      const wp = quota && +quota.weekPct > 0 ? +quota.weekPct : 0;
+      if (q7 || wp || reset7 > now) lim.push({ k: (q7 && WINDOW[q7.type]) || '7-day', st: q7 ? q7.status : '', pct: wp, used: 0, reset: reset7 });
+    } else {
+      for (const o of ids) {
+        const q = quotaFor(o);
+        if (q && q.status) lim.push({ k: ownerName(o), st: q.status, win: WINDOW[q.type] || '', pct: 0, used: 0, reset: t(q.resetsAt) });
+      }
+    }
+    if (lim.length) {
+      const b = blk('b-lim', 'Limits', null);
+      for (const x of lim) {
+        const r = wEl('div', 'w-row w-lim');
+        const [word, cls] = LIMIT_WALL[x.st] || [x.st ? String(x.st) : '—', 'off'];
+        const mid = wEl('span', 'val');
+        mid.style.textAlign = 'left';
+        if (x.st) mid.append(wEl('span', `w-st ${cls}`, word));
+        const fig = wJoin(x.win, x.used > 0 ? tk(x.used) : '', x.pct ? `${x.pct.toFixed(0)}%` : '');
+        if (fig) mid.append(` ${fig}`);
+        /* a window whose reset has passed: the next reading reports the new one */
+        r.append(wEl('span', 'k', x.k), mid, wEl('span', 'val', x.reset > now ? `${when(x.reset)} · ${dur((x.reset - now) / 1000)}` : x.reset ? `ended ${when(x.reset)}` : ''));
+        if (x.pct) { const m = wEl('span', `meter2 ${cls}`), i = wEl('i'); i.style.width = `${Math.min(100, x.pct)}%`; m.append(i); r.append(m); }
+        b.append(r);
+      }
+    }
+
+    const jobsL = all.filter((x) => x.s.status === 'running' || x.s.status === 'queued')
+      .sort((a, b) => ((a.s.status === 'running' ? 0 : 1) - (b.s.status === 'running' ? 0 : 1)) || ((a.s.known ? a.s.left : 1e12) - (b.s.known ? b.s.left : 1e12)));
+    if (jobsL.length) {
+      /* the heading carries the count and the time the last open project ends */
+      const b = blk('b-jobs', 'Jobs', ends ? `${jobsL.length} · ends ${when(ends)}` : jobsL.length);
+      for (const { j, s } of jobsL) {
+        const p = byName.get(projectOf(j));
+        const r = wEl('div', 'w-row w-job');
+        const run = s.status === 'running';
+        const lab = wEl('span', 'lab');
+        lab.append(swatch(p), j.label || j.id || 'Job');
+        const v = wJoin(s.total ? `${Math.floor(s.pfrac * 100)}%` : '', run && s.known && s.left > 0 ? when(now + s.left * 1000) : !run && s.est ? dur(s.est) : '');
+        r.append(wEl('span', `w-mk ${run ? (s.stale ? 'm-stale' : 'm-run') : 'm-queue'}`, run ? 'Run' : 'Queue'), lab, wEl('span', 'val', v || '—'));
+        if (s.total) { const pr = wEl('i', 'prog'); pr.style.width = `${(s.pfrac * 100).toFixed(1)}%`; pr.style.background = p ? p.color : 'var(--ink-3)'; r.append(pr); }
+        b.append(r);
+      }
+    }
+
+    const runS = sess.filter(working).sort((a, b) => b.tok - a.tok);
+    if (runS.length) {
+      const b = blk('b-sess', 'Running', runS.length);
+      for (const x of runS) {
+        const r = wEl('div', 'w-row two');
+        const lab = wEl('span', 'lab');
+        lab.append(swatch(byName.get(sessionProject(x))), x.title);
+        r.append(lab, wEl('span', 'val', x.tok ? tk(x.tok) : '—'));
+        b.append(r);
+      }
+    }
+
+    if (D.people && D.people.length > 1) {
+      const b = blk('b-ppl', 'People', null);
+      for (const x of D.people) {
+        const r = wEl('div', 'w-row');
+        r.append(wEl('span', 'lab', x.name), wEl('span', 'val', wJoin(x.v24 ? `24 h ${tk(x.v24)}` : '', x.tok ? tk(x.tok) : '')),
+          wEl('span', `val${x.late ? ' late' : ''}`, x.syncAt ? agoShort(x.syncAt) : '—'));
+        b.append(r);
+      }
+    }
+    wallFit(right);
+
+    /* charts last: they take the height that the table and the queue leave. Tokens per hour over 48 h, per day over 30 d */
+    const q5 = (soloQuota ? limitTypes : limitsFor(homeOwner())).five_hour, r5 = q5 ? t(q5.resetsAt) : 0;
+    wallPlot('1', D.sp || [], 48, 1, now, r5, D.pend || []);
+    wallPlot('2', D.spL || [], 720, 24, now, 0, []);
+  }
+
+  /** Fold the queue's last rows into a count until it fits: people first, then running sessions, then jobs. */
+  function wallFit(right) {
+    const over = () => right.scrollHeight > right.clientHeight + 1;
+    for (const key of ['b-ppl', 'b-sess', 'b-jobs', 'b-lim', 'b-ask']) {
+      if (!over()) return;
+      const b = right.querySelector(`.w-blk.${key}`);
+      if (!b) continue;
+      const rows = [...b.querySelectorAll(':scope > .w-row')];
+      let n = 0, more = null;
+      while (over() && n < rows.length - 1) {
+        rows[rows.length - 1 - n].remove(); n += 1;
+        if (!more) { more = wEl('div', 'w-more'); b.append(more); }
+        more.textContent = `+${n} more`;
+      }
+      if (over()) b.remove();
+    }
+  }
+
+  /** A figure that is wider than its cell gets smaller, never clipped. */
+  function wallShrink(el) {
+    el.style.fontSize = '';
+    const base = parseFloat(getComputedStyle(el).fontSize);
+    for (let f = 0.94; el.scrollWidth > el.clientWidth + 1 && f > 0.5; f -= 0.06) el.style.fontSize = `${(base * f).toFixed(1)}px`;
+  }
+
+  /** Stacked bars by project: one series a project, coloured by its slot. No labels on the bars, one value axis. */
+  function wallPlot(id, sp, hours, minStep, now, reset5, pend) {
+    const host = $(`w-plot${id}`), head = $(`w-h${id}`);
+    const perDayW = minStep >= 24;
+    let to = now;
+    for (const x of sp) if (x.b > to) to = x.b;
+    const from = to - hours * HOUR;
+    const b = bins(sp.filter((x) => x.b > from), from, to, Math.round(hours / minStep), minStep);
+    const peak = b.bars.reduce((a, x) => Math.max(a, x.rate), 0);
+    const unit = perDayW ? '/d' : '/h';
+    head.textContent = '';
+    head.append(wEl('span', '', perDayW ? `Per day · ${Math.round(hours / 24)} d` : `Per hour · ${hours} h`));
+    if (peak > 0) { const pk = wEl('span', '', 'peak '); pk.append(wEl('b', '', `${tk(peak)}${unit}`)); head.append(pk); }
+    const w = Math.round(host.clientWidth), h = Math.round(host.clientHeight);
+    const fs = Math.max(8, parseFloat(getComputedStyle(host).fontSize) * 0.7);
+    const sig = JSON.stringify([w, h, fs, b.step, b.bars.map((x) => [x.t0, x.parts.map((q) => [q.slot, Math.round(q.tok)])]), reset5, pend]);
+    if (wallSig[id] === sig && host.firstChild) return;
+    wallSig[id] = sig;
+    host.textContent = '';
+    if (w < 40 || h < 30 || !b.bars.length) return;
+    const svg = svgEl('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'img',
+      'aria-label': `Tokens ${perDayW ? 'per day, 30 days' : 'per hour, 48 hours'}, peak ${tk(peak)}${unit}` });
+    const L = Math.round(fs * 3.4), R = 2, T = Math.round(fs * 0.6), AX = Math.round(fs * 1.7);
+    const pw = Math.max(10, w - L - R), ph = Math.max(10, h - T - AX);
+    const top = nice(peak);
+    const t0 = b.bars[0].t0, t1 = b.bars[b.bars.length - 1].t1;
+    const X = (tt) => L + (pw * (tt - t0)) / (t1 - t0);
+    svg.append(svgEl('line', { class: 'grid', x1: L, y1: T, x2: L + pw, y2: T }));
+    const yl = svgEl('text', { class: 'ylab', x: L - fs * 0.45, y: T + fs * 0.35, 'text-anchor': 'end', 'font-size': fs });
+    yl.textContent = peak > 0 ? tk(top) : '0';
+    svg.append(yl);
+    /* the current 5-hour window, as a receding band */
+    if (reset5) {
+      const a = Math.max(t0, reset5 - 5 * HOUR), z = Math.min(t1, reset5);
+      if (z > a) svg.append(svgEl('rect', { class: 'band', x: X(a), y: T, width: Math.max(2, X(z) - X(a)), height: ph }));
+    }
+    /* a running turn that Claude Code has not reported yet: hatched, so it does not read as zero */
+    if (pend.length) {
+      const defs = svgEl('defs', {}), pat = svgEl('pattern', { id: `w-hatch${id}`, width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' });
+      pat.append(svgEl('line', { class: 'hatch', x1: 0, y1: 0, x2: 0, y2: 6 }));
+      defs.append(pat);
+      svg.append(defs);
+      for (const [a0, z0] of pend) {
+        const a = Math.max(t0, a0), z = Math.min(t1, z0);
+        if (z > a) { const r = svgEl('rect', { x: X(a), y: T, width: Math.max(2, X(z) - X(a)), height: ph }); r.style.fill = `url(#w-hatch${id})`; svg.append(r); }
+      }
+    }
+    const slot = pw / b.bars.length, gap = slot >= 6 ? 2 : 1, bw = Math.max(1, slot - gap);
+    const per = perDayW ? b.step / 24 : b.step;
+    b.bars.forEach((bar, i) => {
+      if (bar.rate <= 0) return;
+      let y0 = T + ph;
+      bar.parts.forEach((q, n) => {
+        let hh = (ph * (q.tok / per)) / top;
+        if (n === bar.parts.length - 1 && T + ph - (y0 - hh) < 1.5) hh = y0 - (T + ph - 1.5);   // a measured bar stays visible
+        if (hh <= 0) return;
+        const seg = svgEl('rect', { class: 'seg', x: L + slot * i + gap / 2, y: y0 - hh, width: bw, height: hh });
+        seg.style.fill = `var(--s${q.slot || '-other'})`;
+        svg.append(seg);
+        y0 -= hh;
+      });
+    });
+    svg.append(svgEl('line', { class: 'axis', x1: L, y1: T + ph, x2: L + pw, y2: T + ph }));
+    /* time labels: midnight (the weekday) and noon over 48 h; four dates over 30 d */
+    const ticks = [];
+    if (!perDayW) {
+      const d = new Date(t0);
+      d.setMinutes(0, 0, 0);
+      d.setHours(d.getHours() < 12 ? 0 : 12);
+      for (let i = 0; i < 10; i++) {
+        const ms = d.getTime();
+        if (ms >= t0 && ms <= t1) ticks.push([ms, d.getHours() === 0 ? d.toLocaleDateString([], { weekday: 'short' }) : clock(ms)]);
+        d.setHours(d.getHours() + 12);
+      }
+    } else for (const f of [0, 1 / 3, 2 / 3, 1]) { const ms = t0 + f * (t1 - t0); ticks.push([ms, day(ms)]); }
+    for (const [ms, text] of ticks) {
+      const x = X(ms), anchor = x < L + fs * 2.5 ? 'start' : x > L + pw - fs * 2.5 ? 'end' : 'middle';
+      const lab = svgEl('text', { class: 'xlab', x, y: T + ph + fs * 1.35, 'text-anchor': anchor, 'font-size': fs });
+      lab.textContent = text;
+      svg.append(lab);
+    }
+    host.append(svg);
+  }
+
+  /* ---------------------------------------------------------------- *
    * Snapshots the board writes from live reads                       *
    * ---------------------------------------------------------------- */
   const written = new Set();
@@ -2574,18 +3059,22 @@ sup.fn a:hover, sup.fn a:focus-visible { text-decoration: underline; }
     }
   }
 
-  fStatus = recall('cad.status', 'all');
-  if (fStatus === 'running' || fStatus === 'waiting' || fStatus === 'queued') fStatus = 'live';   // the one-state chips before Open took them in
-  if (fStatus !== 'live' && fStatus !== 'done') fStatus = 'all';
-  fProject = recall('cad.project', 'all');
-  fWhere = recall('cad.where', 'all');
-  fPerson = recall('cad.person', 'all');
-  dRange = recall('cad.range', '48');
-  showAll = recall('cad.all', '') === '1';
+  function loadFilters() {
+    fStatus = recall('cad.status', 'all');
+    if (fStatus === 'running' || fStatus === 'waiting' || fStatus === 'queued') fStatus = 'live';   // the one-state chips before Open took them in
+    if (fStatus !== 'live' && fStatus !== 'done') fStatus = 'all';
+    fProject = recall('cad.project', 'all');
+    fWhere = recall('cad.where', 'all');
+    fPerson = recall('cad.person', 'all');
+    dRange = recall('cad.range', '48');
+    showAll = recall('cad.all', '') === '1';
+  }
+  loadFilters();
   $('scope').addEventListener('click', () => { showAll = !showAll; keep('cad.all', showAll ? '1' : ''); render(); });
   /* ---- Skin ----
-     Classic is the default and original look. Swiss is the other choice. The early script applies the saved choice
-     before the first paint. The choice stays in this browser only; the data and the logic are the same in both. */
+     Classic is the default and original look. Swiss is the wall: one fixed screen for a tablet or a photo frame.
+     The early script applies the saved choice before the first paint. The choice stays in this browser only; the
+     data and the figures are the same in both. A long press on the wall's header returns to Classic. */
   function applySkin(v) {
     const skin = v === 'swiss' ? 'swiss' : 'classic';
     document.documentElement.dataset.skin = skin;
