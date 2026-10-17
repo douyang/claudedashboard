@@ -1,0 +1,11 @@
+{
+ "label": "Cowork · studio",
+ "where": "local",
+ "surface": "Cowork",
+ "tok": 12000000,
+ "out": 80000,
+ "partial": true,
+ "note": "a floor",
+ "updatedAt": "2026-10-04T00:10:00Z",
+ "src": "report"
+}

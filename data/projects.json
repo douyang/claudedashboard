@@ -1,7 +1,7 @@
 {
-  "_comment": "Project registry for the dashboard's projects collection. Keys are document ids. Session ids, repos and artifact links come from list_sessions, list_repos and the artifact gallery on 2026-10-03. 'Gmail update' takes its name from the session title. 'color' is a fixed colour slot 1-8 on the board; projects without one draw in the neutral Other colour.",
+  "_comment": "Project registry for the dashboard's projects collection. Keys are document ids. Session ids, repos and artifact links come from list_sessions, list_repos and the artifact gallery on 2026-10-03. A project's name is its first repository, else its folder, else its own name; the name that it had before is an alias. 'color' is a fixed colour slot 1-8 on the board; projects without one draw in the neutral Other colour.",
   "heart-by-ultrasound": {
-    "name": "The Heart by Ultrasound",
+    "name": "douyang/echodemo",
     "where": "cloud",
     "surface": "Claude Code · web",
     "sessions": [
@@ -18,14 +18,17 @@
       "https://claude.ai/artifact/JuLHC45hrSq3jmn8JSxx2t",
       "https://claude.ai/artifact/NAo2uQQ2sU1vsWcUTb9jmx"
     ],
-    "aliases": [],
+    "aliases": [
+      "The Heart by Ultrasound"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z",
     "color": 1
   },
   "amyloid-heart": {
-    "name": "The Amyloid Heart",
+    "name": "douyang/heartmodel",
     "aliases": [
-      "The Amyloid Heart films"
+      "The Amyloid Heart films",
+      "The Amyloid Heart"
     ],
     "where": "cloud",
     "surface": "Claude Code · web",
@@ -77,7 +80,7 @@
     "color": 4
   },
   "gmail-update": {
-    "name": "Gmail update",
+    "name": "douyang/AmyloidEcho",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -87,13 +90,14 @@
       "douyang/AmyloidEcho"
     ],
     "artifacts": [],
-    "note": "Name from the session title.",
-    "aliases": [],
+    "aliases": [
+      "Gmail update"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z",
     "color": 7
   },
   "cardiology-practices": {
-    "name": "Cardiology Practice Tracker",
+    "name": "douyang/Cardiologyprivatepractices",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -108,12 +112,14 @@
     "artifacts": [
       "https://claude.ai/artifact/1TY5qqmsRnhz6aTZRzYz5b"
     ],
-    "aliases": [],
+    "aliases": [
+      "Cardiology Practice Tracker"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z",
     "color": 2
   },
   "business-tracker": {
-    "name": "InVision Business Tracker",
+    "name": "douyang/Businesstrack",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -127,12 +133,14 @@
     "artifacts": [
       "https://claude.ai/artifact/Xg5XXkQRJVQzAdEXvtiDTw"
     ],
-    "aliases": [],
+    "aliases": [
+      "InVision Business Tracker"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z",
     "color": 5
   },
   "ntap-hospitals": {
-    "name": "NTAP hospital data",
+    "name": "douyang/AmyloidEcho",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -144,11 +152,13 @@
     "artifacts": [
       "https://claude.ai/artifact/Bq3xF9F5fbSSGhzcCzCw8e"
     ],
-    "aliases": [],
+    "aliases": [
+      "NTAP hospital data"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "ai-echo-central": {
-    "name": "AI Echo Central",
+    "name": "douyang/ASERegistryExample",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -160,11 +170,13 @@
     "artifacts": [
       "https://claude.ai/artifact/Ha4aqtD5Xnfz8b33ih6ssc"
     ],
-    "aliases": [],
+    "aliases": [
+      "AI Echo Central"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "invision-website": {
-    "name": "InVision website",
+    "name": "invisionmedtech/invisionmedtech.github.io",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -176,11 +188,13 @@
     "artifacts": [
       "https://claude.ai/artifact/8iytAX7CRTeUKxYeSYDrB9"
     ],
-    "aliases": [],
+    "aliases": [
+      "InVision website"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "lab-website": {
-    "name": "Ouyang Lab website",
+    "name": "douyang/douyang.github.io",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -190,12 +204,14 @@
       "douyang/douyang.github.io"
     ],
     "artifacts": [],
-    "aliases": [],
+    "aliases": [
+      "Ouyang Lab website"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z",
     "color": 8
   },
   "cpacs": {
-    "name": "Cardiology PACS",
+    "name": "douyang/CPACS",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -205,11 +221,13 @@
       "douyang/CPACS"
     ],
     "artifacts": [],
-    "aliases": [],
+    "aliases": [
+      "Cardiology PACS"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "geometry-wars": {
-    "name": "Geometry Wars game",
+    "name": "douyang/pewpew",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -221,11 +239,13 @@
       "douyang/Game_test"
     ],
     "artifacts": [],
-    "aliases": [],
+    "aliases": [
+      "Geometry Wars game"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "personal-webpage": {
-    "name": "Personal webpage",
+    "name": "douyang/personal-webpage",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -236,11 +256,13 @@
       "douyang/personal-webpage"
     ],
     "artifacts": [],
-    "aliases": [],
+    "aliases": [
+      "Personal webpage"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "flight-page": {
-    "name": "Flight information page",
+    "name": "douyang/douyang.github.io",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -250,11 +272,13 @@
       "douyang/douyang.github.io"
     ],
     "artifacts": [],
-    "aliases": [],
+    "aliases": [
+      "Flight information page"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z"
   },
   "claude-dashboard": {
-    "name": "Claude dashboard",
+    "name": "douyang/claudedashboard",
     "where": "cloud",
     "surface": "Claude Code · cloud",
     "sessions": [
@@ -266,7 +290,9 @@
     "artifacts": [
       "https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4"
     ],
-    "aliases": [],
+    "aliases": [
+      "Claude dashboard"
+    ],
     "updatedAt": "2026-10-03T23:30:00Z",
     "color": 6
   }

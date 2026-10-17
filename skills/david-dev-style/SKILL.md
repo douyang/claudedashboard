@@ -1,6 +1,6 @@
 ---
 name: "david-dev-style"
-description: "David's house style for building and changing software: any web app, tool, dashboard, or repo, not one project. Use it WHENEVER you develop or change an application or repository for David, even a small edit that he does not name: UI or product copy, a feature, data or a schema, code cleanup, a deploy, or a PR. It sets product framing (the user's real job, mobile and desktop), copy rules (no AI slop, no reflexive hedges), data integrity (never fabricate data, record provenance and verification), the build, validate, and ship discipline (deploy model, non-destructive production edits, validation before push, current docs and screenshots, branch, PR, merge), reporting every project and its token usage to the Claude dashboard, and the 80% ASD-STE100 writing profile for all dev prose: replies, PRs, commits, code comments, docs, and UI sentences. Use it on \"clean up this copy\", \"remove the AI slop\", \"make it work on mobile\", \"add this feature\", \"update the schema\", \"ship it\", or any edit to one of his apps or repos."
+description: "David's style for building software: any web app, tool, dashboard, or repo. Use it WHENEVER you develop or change an application or repository for David, even a small edit that he does not name: UI, a feature, data, schema, code cleanup, a deploy, or a PR. It sets product framing (the user's real job, mobile and desktop), copy rules (no AI slop, no reflexive hedges), data integrity (never fabricate data, record provenance and verification), the build, validate, and ship discipline (deploy model, non-destructive production edits, validation before push, current docs and screenshots, branch, PR, merge), reporting every project and its token usage to the Claude dashboard, a keep-going working style with no \"go\" prompts, and the 80% ASD-STE100 writing profile for all dev prose: replies, PRs, commits, code comments, docs, and UI sentences. Use it on \"clean up this copy\", \"remove the AI slop\", \"make it work on mobile\", \"add this feature\", \"update the schema\", \"ship it\", or any edit to one of his apps or repos."
 ---
 
 # Building software the way David likes it
@@ -88,6 +88,13 @@ UI labels can be fragments. UI sentences, such as errors and empty states, follo
 - Short, concrete labels that the user already uses.
 - Real numbers and provenance, not adjectives.
 
+**Make each view readable at a glance:**
+- **Show a state with a color and a label, not a sentence.** A green `Allowed` pill, a `local` tag, or a coverage meter reads faster than a sentence. Pair each color with a label, so that color is never the only signal.
+- **State each fact once.** If a chip, a tile, or a table shows a number, do not repeat the number in a sentence.
+- **Give figures short labels.** Let the units carry the meaning: `3.97 B · $1,185 · 24 h 445 M`, not `Tokens 3.97 B, Cost $1,185, Last 24 hours 445 M`.
+- **Put caveats and methods in numbered notes at the bottom.** Mark each place that a note applies to with a superscript number that links to the note. Number the notes in the order of their first appearance. Keep a caveat inline only if the user must act on it now.
+- **Fold repeated rows.** A queued or finished item takes one line. Show a progress bar only for an item that has a count.
+
 **Example: a summary subtitle**
 Slop: `A comprehensive overview of your entire pipeline at a glance`
 Craft: `12 systems · 4 active`
@@ -95,6 +102,10 @@ Craft: `12 systems · 4 active`
 **Example: an empty state**
 Slop: `No items right now! You're all caught up. Great job! 🎉`
 Craft: `No open items.`
+
+**Example: a usage tile**
+Slop: `867 M · $709 · 140 M/h · measured 6 h 10 min of 24 h`, then a paragraph on how the board measures tokens.
+Craft: `867 M`, then `≈$304 · 140 M/h`, then `26% measured¹`, with a thin meter. Note 1 at the bottom of the page explains the method.
 
 When David says "remove AI slop", "deveneer", or "craft pass", apply this standard. Read every string as a skeptical domain expert. Delete each part that the expert would reject. Apply the same standard to chat replies, PR bodies, and docs.
 
@@ -181,7 +192,7 @@ Required rules:
 
 ## 9. Report every project to the Claude dashboard
 
-David tracks all his Claude work on one board: https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4. Every repo, app, and dev task reports there. Follow the `claude-dashboard` skill for the fields and the procedure.
+David tracks all his Claude work on one board: https://claude.ai/artifact/DLbfexxF2FECgcQ7Xy2jA4. Every repo, app, and dev task reports there. Follow the `token-dashboard` skill for the fields and the procedure.
 
 - **At the start**, register the project in the `projects` collection, with `where`, `repos`, `artifacts`, and your session id. Open a `jobs` row for each task that takes more than a few minutes.
 - **While you work**, update the job rows at each milestone, and at least every 30 minutes. Give each job a `tokEst`, so that the board can project the tokens and cost of the project.
@@ -196,5 +207,14 @@ Never invent a token figure. A missing figure is better than a wrong one.
 ## Working style
 
 David works fast. He dislikes delays from unnecessary questions and option lists. If the request and the code make the correct decision clear, make that decision. Do not give him a list of options. Recommend one option.
+
+**Keep going. Never ask David to say "go".** If a finding calls for a fix, a check, or the next step of a plan, do it in the same turn. Then report what you did and why. Do not end a reply with "Reply go to …" or "Should I …?". He approves these proposals each time, and each one costs him an extra message.
+
+- Ask first only in these cases:
+  - The step deletes or overwrites data or history that you cannot restore.
+  - The step shares, sends, or posts something to other people.
+  - Two options give different results, and the request and the code do not settle the choice.
+- Some side steps cost much more than the task, for example an hour of agent time on a side question. Do not stop for such a step. Do the main work. In the reply, name the side step and its cost.
+- Before a large step, state the plan in one line in the reply. Then do the step. David can stop you.
 
 Apply the no-slop standard to replies too. In each reply, state what you did, what you validated, and each step that David must run himself. Ask a question only when his answer changes the outcome.

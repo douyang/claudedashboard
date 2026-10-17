@@ -1,0 +1,12 @@
+{
+ "name": "Quarterly model",
+ "where": "cloud",
+ "surface": "Claude Code · cloud",
+ "sessions": [
+  "session_01MODEL01"
+ ],
+ "repos": [
+  "owner/quarterly-model"
+ ],
+ "color": 3
+}
