@@ -105,14 +105,15 @@ A person who opens the board sees their own usage, and a **Set up my Claude** bu
 
 ## The hourly sync
 
-A routine sends `sync` to the usage-sync session at minute 26 of every hour. The session follows `docs/SYNC.md` and writes `syncs/<epoch>`. `CLAUDE.md` holds the values, so the procedure survives a context reset.
+A routine sends `sync` to the usage-sync session at minute 26 of every hour. The session starts one Haiku sub-agent with the brief `docs/SYNC_AGENT.md` and relays its one-line reply. The sub-agent writes `syncs/<epoch>`. The brief is `docs/SYNC.md` in a short form, with the values of this board. `CLAUDE.md` holds the dispatch steps, so the procedure survives a context reset.
 
-After the listing, the sync reads each Cowork session that reports to the board with `get_session`, the share of each limit window from its own rate-limit events, and the turn that runs now in each running session from its events. Sub-agents do both, which keeps the cost low and keeps the task summaries and messages out of the sync session. The sub-agent that calls `get_session` writes only the count fields of each answer, never the summary. A script keeps only the counts. `scripts/ccr_sync_doc.py turns-add` takes only token counts and times from each event page and deletes the page.
+After the listing, the sub-agent reads each Cowork session that reports to the board with `get_session`, and the share of each limit window from the session's own rate-limit events. It writes only the count fields of each `get_session` answer, never the summary. `scripts/sync_agent.py rows` drops a Cowork row that disagrees with the last reading: a Claude Code total never falls, and it changes only together with `updated_at`. In 2,556 row pairs of 72 readings, no total broke either rule. The usage-sync session never sees a task summary or an event. The sync skips the turn reads of `docs/SYNC.md` steps 12 and 13, because the permission check of the usage-sync session refuses `turns-add`.
+
+Each call of the usage-sync session reads its whole conversation again, so the session makes only two calls per sync: it starts the sub-agent, then relays the line. In the old procedure, the session did the sync itself. The 17:26 UTC sync on 17 Oct took 11 calls of the session at a context of about 756k tokens, plus 4 calls of a sub-agent on the session's model: 8.69 M tokens and about $2.67 at API list prices. The Haiku trial at 17:46 UTC took 9 calls, 0.88 M tokens and about $0.07, and wrote the same 36 rows. The two calls of the session add about $0.06 each at a context of 230k tokens.
 
 - The routine wakes one session that stays alive. A routine that starts a fresh session each hour does not work: fresh routine sessions do not get the Claude Code Remote tools, so they cannot call `list_sessions`.
-- A routine message that arrives while the session works on another turn waits until that turn ends. If the newest reading is then more than 70 minutes old, the session runs the sync at the end of the turn, and it skips a late `sync` that arrives less than 30 minutes after a reading. `CLAUDE.md` holds both rules. The page marks a reading older than 80 minutes as late.
+- A routine message that arrives while the session works on another turn waits until that turn ends. If the newest reading is then more than 70 minutes old, the session starts the sync at the end of the turn. The sub-agent skips a late `sync` that arrives less than 30 minutes after a reading. `CLAUDE.md` holds both rules. The page marks a reading older than 80 minutes as late.
 - To stop the sync, disable the routine in claude.ai Routines.
-- One test run cost about $0.11 at API list prices.
 
 ## If the live read is blocked
 

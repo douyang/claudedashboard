@@ -545,6 +545,48 @@ for (const allUnknown of [false, true]) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/* ---- the sync sub-agent: its brief asks for the same count fields, and its helper drops rows with copy errors ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-agent-'));
+  const H = new URL('../scripts/sync_agent.py', import.meta.url).pathname;
+  const run = (...a) => JSON.parse(execFileSync('python3', [H, ...a, '--dir', dir], { env: { PATH: process.env.PATH, CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01SELF' } }).toString().trim().split('\n').pop());
+  const formOf = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8').split('\n').map((l) => l.trim()).find((l) => l.startsWith('{"id": "<id>"')) || '';
+  check('agent: the brief asks for the same count fields as docs/SYNC.md', !!formOf('../docs/SYNC_AGENT.md') && formOf('../docs/SYNC_AGENT.md') === formOf('../docs/SYNC.md'));
+  const ses = (id, st, upd, input) => ({ id, title: id, session_status: `SESSION_STATUS_${st}`, created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { usage: { input_tokens: input, output_tokens: 0 } } });
+  const ls = path.join(dir, 'ls1.txt');
+  fs.writeFileSync(ls, JSON.stringify({ ccr: { data: [ses('session_01SELF', 'RUNNING', '2026-10-04T06:00:00Z', 1234), ses('session_01IDLE', 'IDLE', '2026-10-04T01:00:00Z', 1000000), ses('session_01RUN', 'RUNNING', '2026-10-04T06:20:00Z', 5000)] } }));
+  const cow = (id, tok, upd) => ({ id, title: id, status: 'idle', tok, out: tok / 100, usd: tok / 1000, createdAt: '2026-10-04T00:00:00Z', updatedAt: upd, repos: [], via: 'get' });
+  fs.mkdirSync(path.join(dir, 'prev', 'syncs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'prev', 'syncs', '1791091800.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [
+    cow('session_01COWA', 1000, '2026-10-04T05:00:00Z'), cow('session_01COWB', 2000, '2026-10-04T05:00:00Z'), cow('session_01COWC', 3000, '2026-10-04T05:00:00Z'), cow('session_01COWE', 5000, '2026-10-04T05:00:00Z')] }));
+  fs.mkdirSync(path.join(dir, 'ses', 'sessions'), { recursive: true });
+  for (const id of ['session_01COWA', 'session_01COWB', 'session_01COWC', 'session_01COWD', 'session_01COWE', 'session_01IDLE', 'cowork-notes']) fs.writeFileSync(path.join(dir, 'ses', 'sessions', `${id}.json`), JSON.stringify({ id }));
+  const early = run('plan', ls, '--at', '2026-10-04T05:50:00Z');
+  check('agent: a sync less than 30 minutes after the newest reading gives the skip line', early.skip === 'Skipped: syncs/1791091800 is 20 minutes old.' && early.age_min === 20, JSON.stringify(early));
+  const p = run('plan', ls, '--at', '2026-10-04T06:30:00Z');
+  check('agent: the plan holds the listing, the Cowork ids and the sessions to read turns from, without this session',
+    !('skip' in p) && p.age_min === 60 && p.sessions === 3 && p.tok === 1006234 && p.doc_id === '1791095400' && p.day === '2026-10-04'
+    && JSON.stringify(p.ids) === '["session_01COWA","session_01COWB","session_01COWC","session_01COWD","session_01COWE"]' && JSON.stringify(p.turns) === '["session_01RUN"]', JSON.stringify(p));
+  const line = (id, upd, tok) => JSON.stringify({ id, title: 'T "q"', session_status: 'SESSION_STATUS_IDLE', status_bucket: '', created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { last_served_model: 'm', usage: { input_tokens: 0, cache_read_tokens: tok - tok / 100, cache_write_tokens: 0, output_tokens: tok / 100, cost_usd: tok / 1000 } } });
+  /* A: unchanged. B: same updated_at, other counts (a copy error). C: grew with a new updated_at. D: new. E: fell (a copy error). */
+  [line('session_01COWA', '2026-10-04T05:00:00Z', 1000), line('session_01COWB', '2026-10-04T05:00:00Z', 2100), line('session_01COWC', '2026-10-04T06:10:00Z', 3500),
+    line('session_01COWD', '2026-10-04T06:00:00Z', 100), line('session_01COWE', '2026-10-04T06:10:00Z', 4000)].forEach((l, i) => fs.writeFileSync(path.join(dir, `gs${i + 1}.txt`), l));
+  fs.writeFileSync(path.join(dir, 'rl.txt'), JSON.stringify({ ccr: { has_more: false, first_id: 'e1', data: [{ created_at: '2026-10-04T06:29:00Z', rate_limit_event: { rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.09, resetsAt: 1791100000 }, seven_day: { utilization: 0.49, resetsAt: 1791500000 } } } } }] } }));
+  const r = run('rows');
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  const got = out.sessions.filter((x) => x.via === 'get').map((x) => x.id).join(',');
+  check('agent: rows drops the Cowork rows that disagree with the last reading, from the reading and the ledger',
+    r.added === 5 && r.checked === 4 && r.dropped === 2 && r.kept === 3 && got === 'session_01COWA,session_01COWC,session_01COWD'
+    && daily.rows.filter((x) => x[daily.cols.indexOf('via')] === 'get').length === 3, JSON.stringify([r, got]));
+  check('agent: rows writes the reply line, with the limit shares and the skipped steps',
+    r.line === 'Synced 3 sessions, 1,006,234 tokens at 2026-10-04T06:30:00Z. Cowork: 3 of 5 sessions. Limits: 5 h 9%, 7 d 49%. Dropped 2 Cowork rows with copy errors. Skipped steps 12 and 13.', r.line);
+  check('agent: the answer files and the rate-limit page are deleted, and the reading keeps the limit state',
+    !fs.readdirSync(dir).some((f) => /^gs\d+\.txt$|^rl\.txt$/.test(f)) && out.quota && out.quota.windows.five_hour.pct === 9 && out.by === 'session_01SELF');
+  fs.rmSync('/tmp/turns.json', { force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- the 5-hour and 7-day tiles: tokens and covered time from the same readings, and no hints for fields that nobody reports ---- */
 {
   const tiles = async (db) => {
