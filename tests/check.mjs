@@ -870,7 +870,11 @@ for (const [w, h] of [[1280, 800], [1024, 600], [800, 1280], [390, 844]]) {
     await p.mouse.down();
     await p.clock.runFor(1700);
     await p.mouse.up();
-    await p.waitForTimeout(200);
+    /* Classic restores the saved filters after it renders: under load that takes longer than one fixed wait */
+    for (let i = 0; i < 15; i++) {
+      await p.waitForTimeout(200);
+      if (await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card h2')]; return c.length > 0 && c.every((x) => /clinic.scheduler|faq.site/i.test(x.innerText)); })) break;
+    }
     const back = await p.evaluate(() => ({ skin: document.documentElement.dataset.skin, saved: localStorage.getItem('cad.skin'), wrap: getComputedStyle(document.querySelector('main.wrap')).display,
       cards: [...document.querySelectorAll('.proj-card h2')].map((x) => x.innerText.trim()) }));
     check('wall: a long press on the header returns this browser to Classic', back.skin === 'classic' && back.saved === 'classic' && back.wrap !== 'none', JSON.stringify(back).slice(0, 200));
