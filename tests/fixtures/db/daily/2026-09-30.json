@@ -1,0 +1,67 @@
+{
+ "day": "2026-09-30",
+ "at": "2026-09-30T00:26:00Z",
+ "src": "routine",
+ "cols": [
+  "id",
+  "title",
+  "status",
+  "tok",
+  "out",
+  "usd",
+  "createdAt",
+  "repo"
+ ],
+ "rows": [
+  [
+   "session_01HARBOR1",
+   "Harbor docs: resume the crawl",
+   "idle",
+   8600000000,
+   95555555,
+   8256.0,
+   "2026-09-12T14:00:00Z",
+   "owner/harbor-docs"
+  ],
+  [
+   "session_01HARBOR2",
+   "Harbor docs: first pass",
+   "archived",
+   1300000000,
+   14000000,
+   960.0,
+   "2026-09-12T01:00:00Z",
+   "owner/harbor-docs"
+  ],
+  [
+   "session_01MODEL01",
+   "Quarterly model: dashboards",
+   "idle",
+   1000000000,
+   11111111,
+   940.0,
+   "2026-09-07T01:00:00Z",
+   "owner/quarterly-model"
+  ],
+  [
+   "session_01RETIRE1",
+   "Weekly \"export\", v2",
+   "idle",
+   400000000,
+   4444444,
+   440.0,
+   "2026-09-20T10:00:00Z",
+   "owner/retired-experiment"
+  ],
+  [
+   "session_01FORMULA",
+   "=SUM(1,1) test",
+   "idle",
+   5000000,
+   50000,
+   6.0,
+   "2026-09-29T10:00:00Z",
+   "owner/retired-experiment"
+  ]
+ ]
+}

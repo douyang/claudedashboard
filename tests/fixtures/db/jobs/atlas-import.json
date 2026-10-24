@@ -1,0 +1,13 @@
+{
+ "project": "Atlas port",
+ "label": "Import the 2024 archive",
+ "status": "running",
+ "surface": "Claude Code · cloud",
+ "total": 10,
+ "done": 4,
+ "unit": "files",
+ "startedAt": "2026-10-03T22:30:00Z",
+ "updatedAt": "2026-10-04T00:20:00Z",
+ "estSec": 14400,
+ "tokEst": 600000000
+}

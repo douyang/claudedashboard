@@ -1,0 +1,43 @@
+{
+ "at": "2026-10-04T00:23:00Z",
+ "src": "routine",
+ "sessions": [
+  {
+   "id": "session_01DREW001",
+   "title": "Clinic scheduler rebuild",
+   "status": "running",
+   "bucket": "working",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-02T15:00:00Z",
+   "updatedAt": "2026-10-04T00:23:00Z",
+   "tok": 265000000,
+   "out": 2944444,
+   "usd": 371.0,
+   "repos": [
+    "drew/clinic-scheduler"
+   ]
+  },
+  {
+   "id": "session_01DREW002",
+   "title": "Patient FAQ site",
+   "status": "idle",
+   "bucket": "review_ready",
+   "model": "claude-sonnet-5-5",
+   "createdAt": "2026-10-01T09:00:00Z",
+   "updatedAt": "2026-10-02T01:00:00Z",
+   "tok": 96000000,
+   "out": 1066666,
+   "usd": 130.0,
+   "repos": [
+    "drew/faq-site"
+   ]
+  }
+ ],
+ "quota": {
+  "status": "allowed",
+  "type": "five_hour",
+  "resetsAt": "2026-10-04T03:00:00Z",
+  "overage": false,
+  "asOf": "2026-10-04T00:23:00Z"
+ }
+}
