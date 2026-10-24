@@ -587,6 +587,69 @@ for (const allUnknown of [false, true]) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/* ---- the sync sub-agent: the runs of scheduled tasks that the listing leaves out, and sessions that are gone ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-tasks-'));
+  const H = new URL('../scripts/sync_agent.py', import.meta.url).pathname;
+  const run = (...a) => JSON.parse(execFileSync('python3', [H, ...a, '--dir', dir], { env: { PATH: process.env.PATH, CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01SELF' } }).toString().trim().split('\n').pop());
+  const ses = (id, upd, input) => ({ id, title: id, session_status: 'SESSION_STATUS_IDLE', created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { usage: { input_tokens: input, output_tokens: 0 } } });
+  const ls = path.join(dir, 'ls1.txt');
+  fs.writeFileSync(ls, JSON.stringify({ ccr: { data: [ses('session_01SELF', '2026-10-04T06:00:00Z', 1234), ses('session_01KEEPS', '2026-10-04T05:00:00Z', 50)] } }));
+  const task = (id, title, tok, usd, runs, lastRun, status, last) => ({ id, title, status, bucket: status === 'running' ? 'working' : 'completed', model: 'm', createdAt: '2026-10-03T12:50:00Z',
+    updatedAt: '2026-10-04T05:20:00Z', tok, out: 10, usd, repos: [], via: 'trigger', runs, lastRun, last });
+  fs.mkdirSync(path.join(dir, 'prev', 'syncs'), { recursive: true });
+  /* the earlier reading counted run A of the hourly task, and run W of the weekly task while it ran */
+  fs.writeFileSync(path.join(dir, 'prev', 'syncs', '1791091800.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [
+    task('trig_01HOURLY', 'Hourly task', 3000, 0.3, 3, 'session_01RUNA', 'idle', { tok: 1000, out: 10, usd: 0.1 }),
+    task('trig_01WEEKLY', 'Weekly task', 500, 0.05, 1, 'session_01RUNW', 'running', { tok: 500, out: 10, usd: 0.05 })] }));
+  fs.mkdirSync(path.join(dir, 'ses', 'sessions'), { recursive: true });
+  for (const [id, doc] of [['session_01COWX', {}], ['session_01GONE', { gone: '2026-10-04T03:30:00Z' }], ['session_01SELFREP', {}]]) fs.writeFileSync(path.join(dir, 'ses', 'sessions', `${id}.json`), JSON.stringify({ title: id, ...doc }));
+  const p = run('plan', ls, '--at', '2026-10-04T06:30:00Z');
+  check('tasks: the plan leaves out a session document marked gone', JSON.stringify(p.ids) === '["session_01COWX","session_01SELFREP"]', JSON.stringify(p.ids));
+  const t = (id, name, persist, cse) => ({ id, name, persist_session: persist, last_run: { session_id: cse } });
+  const list = [t('trig_01HOURLY', 'Hourly task', false, 'cse_01RUNB'), t('trig_01WEEKLY', 'Weekly task', false, 'cse_01RUNW'), t('trig_01PERSIST', 'Persistent', true, 'cse_01KEEPS'),
+    t('trig_01REPORTS', 'Reports itself', false, 'cse_01SELFREP'), t('trig_01NEW', 'New "task"', false, 'cse_01RUNN')];
+  const ids = '["session_01COWX","session_01SELFREP","session_01RUNB","session_01RUNW","session_01RUNN"]';
+  fs.writeFileSync(path.join(dir, 'tr.json'), JSON.stringify({ data: list, has_more: false }));
+  const ra = run('runs', path.join(dir, 'tr.json'));
+  fs.writeFileSync(path.join(dir, 'tr.txt'), list.map((x) => JSON.stringify(x)).join('\n') + '\n');
+  const rb = run('runs', path.join(dir, 'tr.txt'));
+  check('tasks: runs reads the new run of each fresh-session task and a run that was running, from the answer or from lines',
+    JSON.stringify(ra.ids) === ids && ra.runs === 3 && JSON.stringify(rb) === JSON.stringify(ra), JSON.stringify([ra, rb]));
+  const line = (id, tok, usd) => JSON.stringify({ id, title: 'T', session_status: 'SESSION_STATUS_IDLE', status_bucket: 'SESSION_STATUS_BUCKET_REVIEW_READY', created_at: '2026-10-04T05:50:00Z',
+    updated_at: '2026-10-04T05:55:00Z', external_metadata: { last_served_model: 'm', usage: { input_tokens: 0, cache_read_tokens: tok - 10, cache_write_tokens: 0, output_tokens: 10, cost_usd: usd } } });
+  [line('session_01COWX', 700, 0.07), line('session_01SELFREP', 800, 0.08), line('session_01RUNB', 1200, 0.12), line('session_01RUNW', 900, 0.09), line('session_01RUNN', 400, 0.04)]
+    .forEach((l, i) => fs.writeFileSync(path.join(dir, `gs${i + 1}.txt`), l));
+  const r1 = run('rows');
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  const of = (doc, id) => doc.sessions.find((x) => x.id === id) || {};
+  const h = of(out, 'trig_01HOURLY'), w = of(out, 'trig_01WEEKLY'), n = of(out, 'trig_01NEW');
+  check('tasks: a new run adds to its task row, and a run read again replaces its own earlier totals',
+    h.tok === 4200 && h.out === 20 && h.usd === 0.42 && h.runs === 4 && h.lastRun === 'session_01RUNB' && h.createdAt === '2026-10-03T12:50:00Z'
+    && w.tok === 900 && w.usd === 0.09 && w.runs === 1 && w.status === 'idle' && w.bucket === 'completed'
+    && n.tok === 400 && n.runs === 1 && n.title === 'New "task"' && n.createdAt === '2026-10-04T05:50:00Z', JSON.stringify([h, w, n]));
+  check('tasks: runs are not session rows, the Cowork rows stay, and the ledger keeps the task rows',
+    !out.sessions.some((x) => /RUN[BWN]$/.test(x.id)) && out.sessions.filter((x) => x.via === 'get').length === 2
+    && daily.rows.filter((x) => x[daily.cols.indexOf('via')] === 'trigger').length === 3 && !fs.readdirSync(dir).some((f) => /^gs\d+\.txt$/.test(f)), JSON.stringify(out.sessions.map((x) => x.id)));
+  check('tasks: the reply line counts the runs', r1.line === 'Synced 2 sessions, 1,284 tokens at 2026-10-04T06:30:00Z. Cowork: 2 sessions. Scheduled: 3 runs.', r1.line);
+  const r2 = run('rows');
+  check('tasks: a second rows pass in the same sync counts no run twice', r2.line === r1.line && of(JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')), 'trig_01HOURLY').tok === 4200, r2.line);
+  /* the next hour: no new run, so the task rows carry over unchanged */
+  fs.renameSync(path.join(dir, 'sync.json'), path.join(dir, 'prev', 'syncs', '1791095400.json'));
+  const p2 = run('plan', ls, '--at', '2026-10-04T07:30:00Z');
+  fs.writeFileSync(path.join(dir, 'tr.txt'), list.slice(0, 2).map((x) => JSON.stringify(x)).join('\n') + '\n');
+  const r3 = run('runs', path.join(dir, 'tr.txt'));
+  [line('session_01COWX', 700, 0.07), line('session_01SELFREP', 800, 0.08)].forEach((l, i) => fs.writeFileSync(path.join(dir, `gs${i + 1}.txt`), l));
+  const r4 = run('rows');
+  const out3 = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  check('tasks: the next hour carries the task rows, and a counted run is not read again',
+    p2.age_min === 60 && JSON.stringify(r3.ids) === '["session_01COWX","session_01SELFREP"]' && r3.runs === 0 && !/Scheduled/.test(r4.line)
+    && of(out3, 'trig_01HOURLY').tok === 4200 && of(out3, 'trig_01WEEKLY').tok === 900 && of(out3, 'trig_01NEW').tok === 400, JSON.stringify([r3, r4.line]));
+  fs.rmSync('/tmp/turns.json', { force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- the 5-hour and 7-day tiles: tokens and covered time from the same readings, and no hints for fields that nobody reports ---- */
 {
   const tiles = async (db) => {

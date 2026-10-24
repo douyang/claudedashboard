@@ -19,7 +19,7 @@ Make the Agent call alone in its message. If the tool starts the sub-agent in th
 
 If the Agent tool fails, follow `docs/SYNC_AGENT.md` yourself. It is `docs/SYNC.md` in a short form, with the values of this board and with `scripts/sync_agent.py`. A sub-agent keeps the sync cheap: every call of this session reads the whole conversation again.
 
-Do not edit code, open pull requests, publish the artifact, or write other documents during a sync. Do not read task summaries or session events in this session. The sub-agent writes only the count fields of each `get_session` answer to a file for the script, which deletes the file, and its reply holds counts only. The script takes only the limit state from the rate-limit events and deletes the pages. The board stores counts, titles and links only.
+Do not edit code, open pull requests, publish the artifact, or write other documents during a sync. Do not read task summaries or session events in this session. The sub-agent writes only the count fields of each `get_session` answer to a file for the script, which deletes the file, and its reply holds counts only. From `list_triggers` it copies only the id, the name and the newest run of each scheduled task that starts a fresh session. The script takes only the limit state from the rate-limit events and deletes the pages. The board stores counts, titles and links only.
 
 ## Missed syncs
 
