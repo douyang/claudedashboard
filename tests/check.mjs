@@ -1,0 +1,930 @@
+#!/usr/bin/env node
+/* End-to-end checks of dashboard/index.html against the synthetic fixtures, in Chromium with a stub of window.claude.
+ *
+ *   NODE_PATH=$(npm root -g) node tests/check.mjs
+ *
+ * The fixtures' clock is 2026-10-04T00:25:00Z. The stub applies the same access rules as the published board:
+ * the owner reads all; a person reads and writes only data/users/<id>/ and join/<id>.
+ */
+import { open } from '../scripts/preview.mjs';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const DB = new URL('./fixtures/db', import.meta.url).pathname;
+const NOW = '2026-10-04T00:25:00Z';
+let failed = 0;
+const check = (name, ok, detail = '') => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  ${detail}`}`); if (!ok) failed += 1; };
+const rows = (page) => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#ptable tr')].slice(1).filter((r) => !r.classList.contains('sep')).map((r) => {
+  const c = [...r.children].map((x) => x.innerText.trim().replace(/\s+/g, ' '));
+  const tt = r.querySelector('.tt');
+  return [tt ? tt.innerText.trim() : c[0], c];
+})));
+const headsOf = (page) => page.evaluate(() => [...document.querySelectorAll('#ptable tr')][0].querySelectorAll('th').length
+  ? [...[...document.querySelectorAll('#ptable tr')][0].querySelectorAll('th')].map((th) => (th.firstChild ? th.firstChild.textContent : '').trim().toUpperCase()) : []);
+const notesText = (page) => page.evaluate(() => (document.getElementById('notes-list') || {}).innerText || '');
+
+/* ---- owner view ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', width: 1100 });
+  const p = s.page;
+  check('owner: page loads without errors', s.problems.length === 0, s.problems.join(' | '));
+  const heads = await headsOf(p);
+  const col = (n) => heads.indexOf(n);
+  const R = await rows(p);
+  check('density: the table has no Share column, which repeated the Tokens column', heads.length > 5 && !heads.includes('SHARE'), heads.join(','));
+  const atlas = R['owner/atlas-port'], harbor = R['owner/harbor-docs'], model = R['owner/quarterly-model'];
+  check('owner: the running project shows measured use in the last hour', atlas && atlas[col('1 H')] !== '—', JSON.stringify(atlas));
+  check('owner: the idle project with 9 B lifetime tokens shows no use in the last hour', harbor && harbor[col('1 H')] === '—', JSON.stringify(harbor));
+  check('owner: the idle project shows no use in 24 h', harbor && harbor[col('24 H')] === '—', JSON.stringify(harbor));
+  check('owner: the project idle for two days shows no use in 24 h', model && model[col('24 H')] === '—', JSON.stringify(model));
+  check('owner: last token use of the two-day idle project is in hours or days', model && /^\d+ (h|d)$/.test(model[col('LAST USE')]), JSON.stringify(model));
+  const pills = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((c) => [c.querySelector('h2').innerText.trim(), c.querySelector('.pill').innerText.trim()])));
+  check('owner: the running project reads Working now', /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
+  check('owner: the idle project reads Idle', /^idle$/i.test(pills['owner/harbor-docs']), JSON.stringify(pills));
+
+  /* ---- names: a project is named after its repository, else its folder, else its own name ---- */
+  const cards = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((c) => [c.querySelector('h2').innerText.trim(), c.innerText])));
+  check('names: a registry project shows its repository, not its old label', !!atlas && !R['Atlas port'] && !R['Harbor docs'] && !R['Quarterly model'], Object.keys(R).join(' | '));
+  check('names: a job row that uses the old label keeps its project', /Import the 2024 archive/.test(cards['owner/atlas-port'] || ''), Object.keys(cards).join(' | '));
+  check('names: two registry entries with one repository are one project, whatever the case',
+    !!harbor && !R['Harbor notes'] && !R['Owner/Harbor-Docs'] && harbor[col('SESSIONS')].startsWith('2') && /Outline the migration notes/.test(cards['owner/harbor-docs'] || ''), JSON.stringify(harbor));
+  check('names: a Cowork project with a folder and no repository is named after the folder',
+    !!R.Studio && !R['Studio work'] && /\blocal\b/i.test(R.Studio[0]) && R.Studio[col('TOKENS')] === '12 M+', JSON.stringify(R.Studio));
+  check('names: a Cowork session with a folder and no registry entry forms a project named after the folder',
+    !!R['Field notes'] && /\blocal\b/i.test(R['Field notes'][0]) && /^3(\.0)? M\+$/.test(R['Field notes'][col('TOKENS')]), JSON.stringify(R['Field notes']));
+  check('names: repository names that differ in case are one project',
+    !!R['priya/figures'] && !R['Priya/Figures'] && R['priya/figures'][col('SESSIONS')].startsWith('3'), JSON.stringify(R['priya/figures']));
+  check('names: a session with no repository and no folder keeps its own name', !!R['Untracked scratch work'] && /not in registry/i.test(R['Untracked scratch work'][0]), Object.keys(R).join(' | '));
+  /* ---- reader: the session that takes the hourly reading runs because it reads; that is not work ---- */
+  check('reader: the session that took the reading does not make its project work', /^idle$/i.test(pills['priya/figures']) && /^working now$/i.test(pills['owner/atlas-port']), JSON.stringify(pills));
+  const sl = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'priya/figures'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
+  check('reader: its row says that it took the reading, and the count shows no running session', /Took the hourly reading/.test(sl) && !/running/i.test(sl.split('\n')[0]), sl.slice(0, 200));
+  /* ---- turns: Claude Code reports a running session's tokens only when its turn ends ---- */
+  const lt = R['owner/long-turn'];
+  check('turns: the tokens of a finished turn spread over the readings it ran through', !!lt && /^[56]\d M$/.test(lt[col('1 H')]), JSON.stringify(lt));
+  const pn = await p.evaluate(() => (document.getElementById('pending-note') || {}).innerText || '');
+  check('turns: a turn that still runs is named as not counted yet', /Not counted yet/.test(pn) && /owner\/pending-turn/.test(pn) && /unchanged since/.test(pn), pn);
+  const hatch = await p.evaluate(() => document.querySelectorAll('#density-plot rect.pending').length);
+  await (await p.$('#density-plot .seg')).hover();
+  const tipGaps = await p.evaluate(() => [...document.querySelectorAll('.dtip:not([hidden]) .tr')].map((r) => { const k = r.querySelector('.k'), v = r.querySelector('.v'); return k && v ? Math.round(v.getBoundingClientRect().left - k.getBoundingClientRect().right) : -1; }));
+  check('chart: the hover keeps a space between each project name and its rate', tipGaps.length > 0 && tipGaps.every((g) => g >= 6), JSON.stringify(tipGaps));
+  await p.mouse.move(0, 0);
+  check('turns: the chart hatches the running turn instead of showing zero', hatch > 0, String(hatch));
+  const prow = await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const d = c && c.querySelector('details.sessions'); if (!d) return ''; d.open = true; return d.innerText; });
+  check('turns: its session row says that the total has not changed', /total unchanged since/.test(prow), prow.slice(0, 200));
+  const own = await p.evaluate(() => [...document.querySelectorAll('.proj-card h2 .own')].map((e) => e.innerText));
+  check('names: the owner of a repository reads in a lighter tone', own.length > 0 && own.includes('owner/'), own.join(','));
+  const kp = await p.evaluate(() => document.getElementById('kpis').innerText);
+  const k24 = await p.evaluate(() => { const d = [...document.querySelectorAll('#kpis .kpi')].find((x) => /^last 24 h/i.test(x.querySelector('.k').textContent)); return d ? d.innerText : ''; });
+  check('owner: the 24 h figure says how much of the window it measured', /\d+% measured/.test(k24), k24);
+  const nt = await notesText(p);
+  check('owner: tokens used before the first reading are stated, not placed in an hour', /untimed/.test(kp) && /before the first reading/.test(nt), kp);
+  const note = await p.evaluate(() => { const n = document.getElementById('livenote'); return { text: n.innerText, warn: n.classList.contains('warn') }; });
+  check('owner: a blocked live read is explained and does not warn', /live read off/.test(note.text) && !note.warn && /blocks the Claude Code Remote tool/.test(nt), JSON.stringify(note));
+  /* ---- density: each caveat once, in numbered notes; no sentence that repeats a figure ---- */
+  /* textContent: a superscript in a closed session list carries its number too, but innerText reads it as empty */
+  const fns = await p.evaluate(() => [...document.querySelectorAll('sup.fn')].map((x) => [x.dataset.note, x.textContent.trim(), (x.querySelector('a') || {}).getAttribute ? x.querySelector('a').getAttribute('href') : '']));
+  const lis = await p.evaluate(() => [...document.querySelectorAll('#notes-list li')].map((li) => li.id));
+  const firstSeen = []; for (const [k] of fns) if (!firstSeen.includes(k)) firstSeen.push(k);
+  check('notes: each superscript carries the number of its note, in page order, and every note is cited',
+    fns.length > 0 && fns.every(([k, n, href]) => +n === firstSeen.indexOf(k) + 1 && href === `#note-${k}`) && JSON.stringify(lis) === JSON.stringify(firstSeen.map((k) => `note-${k}`)), JSON.stringify({ fns: fns.slice(0, 6), lis }));
+  const bodyText = await p.evaluate(() => document.body.innerText);
+  check('density: no narration and no sentence that repeats the chips', !/Every project, its sessions|projects are working now\.|Measured, last 24 h|Across projects|The hourly sync reads them/.test(bodyText),
+    (bodyText.match(/Every project, its sessions|projects are working now\.|Measured, last 24 h|Across projects|The hourly sync reads them/) || [''])[0]);
+  const words = (bodyText.match(/\S+/g) || []).length;
+  check('density: the owner view of the fixtures stays under 1,400 words (1,690 before the rewrite)', words < 1400, String(words));
+  const qrow = await p.evaluate(() => { const r = document.querySelector('.row.is-queued'); return r ? { one: r.classList.contains('one'), bar: !!r.querySelector('.bar'), tail: (r.querySelector('.tail') || {}).innerText || '' } : null; });
+  check('density: a queued job takes one line, with its figures at the right and no empty bar', !!qrow && qrow.one && !qrow.bar && /queued/.test(qrow.tail), JSON.stringify(qrow));
+  const sel = await p.evaluate(() => { const x = document.querySelector('#f-project select'); return x ? x.options.length : 0; });
+  check('density: the project filter is one dropdown', sel > 3, String(sel));
+  /* ---- status filter: one chip for jobs not finished, one for finished jobs; Done works in Active only ---- */
+  const stChips = await p.evaluate(() => [...document.querySelectorAll('#f-status button')].map((b) => b.innerText.trim()));
+  check('filter: the status chips are All, Open and Done, each with its count, and no one-state chips', stChips.length === 3 && stChips[0] === 'All' && /^Open \d+$/.test(stChips[1]) && /^Done \d+$/.test(stChips[2]), stChips.join(','));
+  const rowStates = () => p.evaluate(() => [...document.querySelectorAll('#projects article.row > .head > .chip')].map((c) => c.textContent.trim()));
+  const chipN = (i) => +String(stChips[i] || '').split(' ')[1];
+  await p.click('button[data-key="f-status:done"]');
+  await p.waitForTimeout(250);
+  const doneStates = await rowStates();
+  const doneNote = await p.evaluate(() => document.getElementById('scope-note').innerText);
+  check('filter: Done lists the finished jobs in Active only, as many as its chip says', doneStates.length > 0 && doneStates.length === chipN(2) && doneStates.every((x) => /^(Done|Failed|Stopped)$/.test(x)) && !/finished jobs hidden/.test(doneNote),
+    JSON.stringify([chipN(2), doneStates, doneNote]));
+  await p.click('button[data-key="f-status:live"]');
+  await p.waitForTimeout(250);
+  const openStates = await rowStates();
+  check('filter: Open lists running, waiting and queued jobs together, as many as its chip says', openStates.length === chipN(1) && openStates.includes('Running') && openStates.includes('Queued') && openStates.every((x) => /^(Running|Waiting|Queued|Answered)$/.test(x)),
+    JSON.stringify([chipN(1), openStates]));
+  await p.click('button[data-key="f-status:all"]');
+  await p.waitForTimeout(250);
+  const people = await p.evaluate(() => [...document.querySelectorAll('#people tr')].slice(1).map((r) => r.children[0].innerText.replace('Rename', '').trim()));
+  check('owner: the people table lists everyone', people.join(',') === 'David C,Drew,Priya', people.join(','));
+  await p.click('button[data-key="f-person:u_drew"]');
+  await p.waitForTimeout(300);
+  const names = await p.evaluate(() => [...document.querySelectorAll('.proj-card h2')].map((h) => h.innerText.trim()));
+  check('owner: the person filter shows only that person', names.length > 0 && names.every((n) => /clinic.scheduler|faq.site/i.test(n)), names.join(','));
+
+  await p.click('button[data-key="f-person:add"]');
+  await p.fill('#inv-name', 'Sam');
+  await p.waitForTimeout(200);
+  const text = await p.inputValue('#inv-text');
+  check('invite: no placeholder is left in the text', !/\{\{|\}\}/.test(text), text.match(/\{\{[A-Z_]+\}\}/)?.[0]);
+  check('invite: the text names the person and the private path', /Sam/.test(text) && text.includes('data/users/me/profile/syncs'));
+  check('invite: the text carries the sync script and the hourly routine', text.includes('def main') && text.includes('cron_expression: "0 * * * *"'));
+  const scriptSrc = fs.readFileSync(new URL('../scripts/ccr_sync_doc.py', import.meta.url), 'utf8');
+  const code = scriptSrc.slice(scriptSrc.indexOf('"""', scriptSrc.indexOf('"""') + 3) + 4).replace(/\s+$/, '');
+  check('invite: the script code in the text is byte-identical to scripts/ccr_sync_doc.py, with a one-line docstring', code.length > 10000 && text.includes(code) && text.includes('"""Make the hourly sync documents for the board.'), String(code.length));
+  check('invite: the text is a size a person can paste', text.length > 3000 && text.length < 30000, String(text.length));   // about 6,000 tokens at most
+  await p.click('#inv-copy');
+  await p.waitForTimeout(200);
+  const clip = await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
+  check('invite: the copy button puts the whole text on the clipboard', clip === text);
+  await p.click('#inv-skill');
+  await p.waitForTimeout(300);
+  const saved = await p.evaluate(() => window.__saved);
+  check('invite: the skill file is saved as one zip', saved.length === 1 && saved[0].filename === 'token-dashboard.zip');
+  if (saved[0]) {
+    const f = path.join(os.tmpdir(), 'check-skill.zip');
+    fs.writeFileSync(f, Buffer.from(saved[0].b64, 'base64'));
+    const lu = new URL('../skills/token-dashboard/scripts/local_usage.py', import.meta.url).pathname;
+    const out = execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile('${f}');assert z.testzip() is None;t=z.read('token-dashboard/SKILL.md').decode();print(z.namelist()[0]);print('Person: Sam' in t);n='token-dashboard/scripts/local_usage.py';print(n in z.namelist() and z.read(n)==open('${lu}','rb').read())`]).toString().trim().split('\n');
+    check('invite: the zip is valid, holds the skill and the local usage script, and names the person', out[0] === 'token-dashboard/SKILL.md' && out[1] === 'True' && out[2] === 'True', out.join(' | '));
+  }
+
+  /* ---- history: the ledger, sessions that left the listing, long ranges, CSV ---- */
+  await p.click('button[data-key="f-person:all"]');
+  await p.waitForTimeout(250);
+  const writes = await p.evaluate(() => window.__writes);
+  const day3 = writes.find((x) => x[1] === 'daily/2026-10-03');
+  check('history: the owner page fills a completed day that has no ledger entry', !!day3 && day3[0] === 'set' && day3[2].at === '2026-10-03T22:26:00Z' && day3[2].rows.length === 6, JSON.stringify(day3 && [day3[1], day3[2].at, day3[2].rows.length]));
+  check('history: it fills the same day in a person\'s subtree, and not the open day', writes.some((x) => x[1] === 'data/users/u_drew/profile/daily/2026-10-03') && !writes.some((x) => /daily\/2026-10-04$/.test(x[1])));
+  if (day3) {
+    const f = path.join(os.tmpdir(), 'check-day3.json');
+    fs.writeFileSync(f, JSON.stringify(day3[2]));
+    const out = execFileSync('python3', [new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname, '--from-sync', path.join(DB, 'syncs', '1791066360.json'), path.join(os.tmpdir(), 'check-day3-py.json')]);
+    const py = JSON.parse(fs.readFileSync(path.join(os.tmpdir(), 'check-day3-py.json'), 'utf8'));
+    check('history: the page and scripts/ccr_sync_doc.py make the same ledger entry', JSON.stringify(py) === JSON.stringify(day3[2]) || (JSON.stringify(Object.entries(py).sort()) === JSON.stringify(Object.entries(day3[2]).sort())), String(out));
+  }
+  const kp2 = await p.evaluate(() => document.getElementById('kpis').innerText);
+  check('history: All tokens counts the session that Claude Code no longer lists', /no longer listed/.test(kp2), kp2.split('\n').slice(0, 3).join(' | '));
+  check('history: Last 30 days comes from the ledger', /LAST 30 D\n[\d.]+ [MB]/.test(kp2), kp2);
+  const rows2 = await rows(p);
+  check('history: the project of the removed session stays in the table with its tokens', rows2['owner/retired-experiment'] && rows2['owner/retired-experiment'][col('TOKENS')] === '405 M', JSON.stringify(rows2['owner/retired-experiment']));
+  for (const range of ['720', 'all']) {
+    await p.click(`button[data-key="density-range:${range}"]`);
+    await p.waitForTimeout(250);
+    const g = await p.evaluate(() => ({ h: document.getElementById('density-h').innerText, cap: document.getElementById('density-cap').innerText, sub: document.getElementById('density-sub').innerText,
+      ledger: !!document.querySelector('#density-sub sup[data-note="ledger"]'), segs: document.querySelectorAll('#density-plot .seg').length }));
+    check(`history: the ${range === 'all' ? 'All' : '30 d'} range shows tokens per day from the ledger`, /^per day$/i.test(g.h) && /day bars/.test(g.cap) && /\/day/.test(g.sub) && g.segs > 0 && g.ledger, JSON.stringify(g).slice(0, 260));
+    const tall = await p.evaluate(() => { const svg = document.querySelector('#density-plot svg'); const h = svg.viewBox.baseVal.height; const st = {}; for (const x of svg.querySelectorAll('.seg')) st[x.dataset.i] = (st[x.dataset.i] || 0) + x.getBBox().height; return Math.max(0, ...Object.values(st)) / h; });
+    check(`history: the tallest ${range === 'all' ? 'All' : '30 d'} bar reaches into the plot, not a sliver at its base`, tall > 0.4, tall.toFixed(2));
+  }
+  await p.click('button[data-key="density-range:48"]');
+  await p.click('#exp-daily');
+  await p.waitForTimeout(400);
+  await p.click('#exp-hourly');
+  await p.waitForTimeout(400);
+  const files = await p.evaluate(() => window.__saved.filter((f) => /^claude-usage-/.test(f.filename)).map((f) => [f.filename, f.b64]));
+  const csv = (name) => { const f = files.find((x) => x[0] === name); return f ? Buffer.from(f[1], 'base64').toString('utf8').replace(/^﻿/, '') : ''; };
+  const daily = csv('claude-usage-daily.csv'), hourly = csv('claude-usage-hourly.csv');
+  const dlines = daily.trim().split('\r\n');
+  check('csv: the daily file has the header and one row per session per ledger day', dlines[0] === 'day,person,session_id,title,repo,status,tokens_total,tokens_since_previous_reading,output_tokens_total,cost_usd_total,reading_utc' && dlines.length === 1 + 5 + 5 + 6 + 6 + 2, `${dlines.length} lines`);
+  check('csv: a title with a comma and a quote is quoted', daily.includes('"Weekly ""export"", v2"'));
+  check('csv: a title that starts with = cannot start a spreadsheet formula', daily.includes('"\'=SUM(1,1) test"') && !/(^|,)=SUM/m.test(daily));
+  check('csv: growth is blank at a first reading and exact after', /2026-09-30,David C,session_01HARBOR1,[^\n]*,8600000000,,/.test(daily) && /2026-10-01,David C,session_01HARBOR1,[^\n]*,8800000000,200000000,/.test(daily));
+  const hlines = hourly.trim().split('\r\n');
+  check('csv: the hourly file has one row per session per reading, for everyone', hlines.length === 1 + 18 + 6 + 4, `${hlines.length} lines`);
+  check('csv: the hourly file names each person', /,Drew,/.test(hourly) && /,Priya,/.test(hourly) && /,David C,/.test(hourly));
+  await s.close();
+}
+
+/* ---- a turn longer than 3 h that every hourly reading saw running ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-turn-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const base = JSON.parse(fs.readFileSync(path.join(DB, 'syncs', '1791066360.json'), 'utf8'));      // the 22:26 reading
+  const lt = base.sessions.find((x) => x.id === 'session_01TURN001');
+  for (const hh of ['19', '20', '21']) {
+    const at = `2026-10-03T${hh}:26:00Z`;
+    fs.writeFileSync(path.join(dir, 'syncs', `${Date.parse(at) / 1000}.json`), JSON.stringify({ at, src: 'routine', sessions: [{ ...lt, updatedAt: at }] }));
+  }
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const heads = await headsOf(s.page);
+  const r = (await rows(s.page))['owner/long-turn'], c = (n) => heads.indexOf(n);
+  check('turns: a turn longer than 3 h that every reading saw running places its tokens over the turn',
+    !!r && r[c('24 H')] === '120 M' && /^2\d M$/.test(r[c('1 H')]), JSON.stringify(r));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync script records which session took the reading ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-by-'));
+  const answer = path.join(dir, 'ls1.txt');
+  fs.writeFileSync(answer, JSON.stringify({ ccr: { data: [{ id: 'session_01TESTABC', title: 'T', session_status: 'SESSION_STATUS_RUNNING', created_at: '2026-10-04T00:00:00Z', updated_at: '2026-10-04T00:10:00Z', external_metadata: { usage: { input_tokens: 1, output_tokens: 1 } } }] } }));
+  const run = (env) => { execFileSync('python3', [new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname, answer, path.join(dir, 'out.json'), '--at', '2026-10-04T00:15:00Z'], { env: { PATH: process.env.PATH, ...env } }); return JSON.parse(fs.readFileSync(path.join(dir, 'out.json'), 'utf8')); };
+  check('script: the reading names the session that took it, from the cloud environment', run({ CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01TESTABC' }).by === 'session_01TESTABC');
+  check('script: without the environment variable the reading names no session', !('by' in run({})));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync script reads running turns from event pages: counts and times only, then deletes the pages ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-ev-'));
+  const S = new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname;
+  const py = (...a) => JSON.parse(execFileSync('python3', [S, ...a]).toString().trim().split('\n').pop());
+  const ev = (at, mid, cr) => ({ created_at: at, assistant: { internal_anthropic_catchall: { message: { id: mid, content: [{ type: 'text', text: 'PRIVATE WORDS' }],
+    usage: { input_tokens: 2, cache_read_input_tokens: cr, cache_creation_input_tokens: 10, output_tokens: 5 } } } } });
+  const page = (f, data, more, first) => fs.writeFileSync(path.join(dir, f), `<other-session nonce="n">\n${JSON.stringify({ ccr: { data, has_more: more, first_id: first, last_id: 'z' } })}\n</other-session>`);
+  const sync = { at: '2026-10-04T05:30:00Z', src: 'routine', by: 'session_R', sessions: [
+    { id: 'session_A', title: 'A', status: 'running', tok: 1000, repos: [] }, { id: 'session_R', title: 'R', status: 'running', tok: 7, repos: [] }] };
+  fs.writeFileSync(path.join(dir, 'sync.json'), JSON.stringify(sync));
+  const plan = py('turns-plan', path.join(dir, 'sync.json'));
+  check('events: the plan reads running sessions and skips the session that reads', JSON.stringify(plan.sessions) === '["session_A"]', JSON.stringify(plan));
+  page('p1.txt', [ev('2026-10-04T05:20:00Z', 'm3', 100), ev('2026-10-04T05:20:01Z', 'm3', 100), ev('2026-10-04T05:28:00Z', 'm4', 200)], true, 'cur1');
+  const a1 = py('turns-add', 'session_A', path.join(dir, 'p1.txt'));
+  page('p2.txt', [ev('2026-10-04T04:50:00Z', 'm1', 999), { created_at: '2026-10-04T04:55:00Z', result: {} }, ev('2026-10-04T05:05:00Z', 'm2', 50)], true, 'cur2');
+  const a2 = py('turns-add', 'session_A', path.join(dir, 'p2.txt'));
+  check('events: paging goes on until the end of the previous turn', a1.more === true && a1.before_id === 'cur1' && a2.more === false, JSON.stringify([a1, a2]));
+  check('events: each page is deleted after the script reads it', !fs.existsSync(path.join(dir, 'p1.txt')) && !fs.existsSync(path.join(dir, 'p2.txt')));
+  const m = py('turns-merge', path.join(dir, 'sync.json'));
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const turn = out.sessions[0].turn;
+  check('events: the turn counts each model call once, and only calls after the previous turn ended', m.turn_tok === 3 * 17 + 50 + 100 + 200 && turn.calls === 3 && turn.since === '2026-10-04T05:05:00Z', JSON.stringify(turn));
+  check('events: no text from the events reaches the sync document', !/PRIVATE/.test(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')) && !('turn' in out.sessions[1]));
+  /* the next reading: the same turn still runs, so it continues from the last counted call */
+  fs.writeFileSync(path.join(dir, 'prev.json'), JSON.stringify(out));
+  fs.writeFileSync(path.join(dir, 'next.json'), JSON.stringify({ ...sync, at: '2026-10-04T06:30:00Z', sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'next.json'), '--prev', path.join(dir, 'prev.json'));
+  page('q1.txt', [ev('2026-10-04T05:28:01Z', 'm4', 200), ev('2026-10-04T06:00:00Z', 'm5', 300)], true, 'c9');
+  const q = py('turns-add', 'session_A', path.join(dir, 'q1.txt'));
+  py('turns-merge', path.join(dir, 'next.json'));
+  const t2 = JSON.parse(fs.readFileSync(path.join(dir, 'next.json'), 'utf8')).sessions[0].turn;
+  check('events: the next reading continues the turn without counting a call twice', q.more === false && t2.tok === turn.tok + 317 && t2.calls === 4 && t2.since === turn.since, JSON.stringify([q, t2.tok, t2.calls]));
+  /* Claude Code adds a turn's tokens to the session total late. A reading after the turn ended and a new one began,
+     with the old total, keeps the ended turn: it counts through the result event back to the last reading */
+  fs.writeFileSync(path.join(dir, 'prev2.json'), fs.readFileSync(path.join(dir, 'next.json')));
+  fs.writeFileSync(path.join(dir, 'third.json'), JSON.stringify({ ...sync, at: '2026-10-04T07:35:00Z', sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'third.json'), '--prev', path.join(dir, 'prev2.json'));
+  page('r1.txt', [ev('2026-10-04T07:30:00Z', 'm7', 700), { created_at: '2026-10-04T07:10:00Z', result: {} }, ev('2026-10-04T06:30:00Z', 'm6', 600), ev('2026-10-04T06:00:00Z', 'm5', 300)], true, 'c10');
+  const rr = py('turns-add', 'session_A', path.join(dir, 'r1.txt'));
+  py('turns-merge', path.join(dir, 'third.json'));
+  const t3a = JSON.parse(fs.readFileSync(path.join(dir, 'third.json'), 'utf8')).sessions[0].turn;
+  check('events: a turn that ended while Claude Code still reports the old total stays in the count',
+    rr.more === false && !!t3a && t3a.tok === t2.tok + 617 + 717 && t3a.calls === 6 && t3a.since === turn.since, JSON.stringify([rr, t3a && t3a.tok, t3a && t3a.calls]));
+  /* the session is idle now and its total has still not changed: the reading still carries its unreported turns */
+  fs.writeFileSync(path.join(dir, 'prev3.json'), fs.readFileSync(path.join(dir, 'third.json')));
+  fs.writeFileSync(path.join(dir, 'fourth.json'), JSON.stringify({ ...sync, at: '2026-10-04T08:35:00Z', sessions: [{ ...sync.sessions[0], status: 'idle' }] }));
+  const plan4 = py('turns-plan', path.join(dir, 'fourth.json'), '--prev', path.join(dir, 'prev3.json'));
+  if (plan4.sessions.length) {
+    page('s1.txt', [{ created_at: '2026-10-04T08:00:00Z', result: {} }, ev('2026-10-04T07:50:00Z', 'm8', 800), ev('2026-10-04T07:30:00Z', 'm7', 700)], false, 'c11');
+    py('turns-add', 'session_A', path.join(dir, 's1.txt'));
+  }
+  py('turns-merge', path.join(dir, 'fourth.json'));
+  const t4 = JSON.parse(fs.readFileSync(path.join(dir, 'fourth.json'), 'utf8')).sessions[0].turn;
+  check('events: an idle session whose total Claude Code has not updated keeps its unreported turns',
+    JSON.stringify(plan4.sessions) === '["session_A"]' && !!t4 && !!t3a && t4.tok === t3a.tok + 817, JSON.stringify([plan4, t4 && t4.tok]));
+  /* a turn longer than the page cap: the read stops after 30 pages and marks the turn partial */
+  fs.writeFileSync(path.join(dir, 'cap.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'cap.json'));
+  let n = 0, last = null;
+  do {
+    n += 1;
+    page(`c${n}.txt`, [ev(new Date(Date.parse('2026-10-04T05:29:00Z') - n * 60000).toISOString().replace('.000Z', 'Z'), `k${n}`, 0)], true, `cc${n}`);
+    last = py('turns-add', 'session_A', path.join(dir, `c${n}.txt`));
+  } while (last.more && n < 40);
+  py('turns-merge', path.join(dir, 'cap.json'));
+  const t3 = JSON.parse(fs.readFileSync(path.join(dir, 'cap.json'), 'utf8')).sessions[0].turn;
+  check('events: a turn longer than 30 pages stops after 30 and reads as a floor', n === 30 && t3.partial === true && t3.calls === 30 && t3.tok === 30 * 17, JSON.stringify([n, t3.calls, t3.tok, t3.partial]));
+  /* a page that holds no event list (a copy that broke off, an error answer) ends the read, keeps the calls before it,
+     marks the count as a floor, and is still deleted */
+  fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'bad.json'));
+  page('b1.txt', [ev('2026-10-04T05:25:00Z', 'b1', 0)], true, 'cb1');
+  const b1 = py('turns-add', 'session_A', path.join(dir, 'b1.txt'));
+  fs.writeFileSync(path.join(dir, 'b2.txt'), '{"ccr": {"data": [{"created_at": "2026-10-04T05:2');
+  const b2 = py('turns-add', 'session_A', path.join(dir, 'b2.txt'));
+  py('turns-merge', path.join(dir, 'bad.json'));
+  const tb = JSON.parse(fs.readFileSync(path.join(dir, 'bad.json'), 'utf8')).sessions[0].turn;
+  fs.writeFileSync(path.join(dir, 'bad2.json'), JSON.stringify({ ...sync, sessions: [sync.sessions[0]] }));
+  py('turns-plan', path.join(dir, 'bad2.json'));
+  fs.writeFileSync(path.join(dir, 'b3.txt'), 'The tool answered: {"error": "upstream timeout"}');
+  const b3 = py('turns-add', 'session_A', path.join(dir, 'b3.txt'));
+  check('events: a page with no event list ends the read, keeps the calls before it, reads as a floor, and is deleted',
+    b1.more === true && b1.partial === false && b2.more === false && b2.partial === true && b3.more === false && b3.partial === true
+      && !fs.existsSync(path.join(dir, 'b2.txt')) && !fs.existsSync(path.join(dir, 'b3.txt')) && !!tb && tb.partial === true && tb.calls === 1 && tb.tok === 17,
+    JSON.stringify([b1, b2, b3, tb]));
+  /* the events end before the read reaches the last call that the previous reading counted: calls are missing */
+  fs.writeFileSync(path.join(dir, 'gap.json'), JSON.stringify({ ...sync, at: '2026-10-04T09:35:00Z', sessions: [sync.sessions[0]] }));
+  const planG = py('turns-plan', path.join(dir, 'gap.json'), '--prev', path.join(dir, 'fourth.json'));
+  page('g1.txt', [ev('2026-10-04T09:30:00Z', 'g9', 900)], false, 'cg1');
+  const g1 = py('turns-add', 'session_A', path.join(dir, 'g1.txt'));
+  py('turns-merge', path.join(dir, 'gap.json'));
+  const tg = JSON.parse(fs.readFileSync(path.join(dir, 'gap.json'), 'utf8')).sessions[0].turn;
+  check('events: events that end before the last counted call read as a floor; a read that reaches it does not',
+    JSON.stringify(planG.sessions) === '["session_A"]' && g1.more === false && g1.partial === true && !!tg && tg.partial === true && !!t4 && tg.tok === t4.tok + 917
+      && !t4.partial && !t3a.partial && !t2.partial && !turn.partial,
+    JSON.stringify([planG, g1, tg && tg.tok, t4 && t4.tok, [t4 && t4.partial, t3a.partial, t2.partial, turn.partial]]));
+  /* Claude Code can add an earlier turn first: the total grows, but by less than the counted tokens. The rest stays in
+     the count, and the growth takes the oldest counted calls first */
+  const epoch = (s) => Date.parse(s) / 1000;
+  fs.writeFileSync(path.join(dir, 'absorb.json'), JSON.stringify({ ...sync, at: '2026-10-04T10:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400 }] }));
+  const planA = py('turns-plan', path.join(dir, 'absorb.json'), '--prev', path.join(dir, 'fourth.json'));
+  if (planA.sessions.length) {
+    page('h1.txt', [ev('2026-10-04T10:30:00Z', 'h2', 1000), { created_at: '2026-10-04T09:00:00Z', result: {} }, ev('2026-10-04T08:40:00Z', 'h1', 600), ev('2026-10-04T07:50:00Z', 'm8', 800)], true, 'ch1');
+    py('turns-add', 'session_A', path.join(dir, 'h1.txt'));
+  }
+  py('turns-merge', path.join(dir, 'absorb.json'));
+  const ta = JSON.parse(fs.readFileSync(path.join(dir, 'absorb.json'), 'utf8')).sessions[0].turn;
+  check('events: a total that grew by less than the counted tokens keeps the rest, and the growth takes the oldest calls first',
+    JSON.stringify(planA.sessions) === '["session_A"]' && !!ta && ta.tok === t4.tok - 400 + 617 + 1017 && ta.lastMsg === 'h2' && ta.since === '2026-10-04T05:20:00Z'
+      && ta.pts.every((p) => p[1] > 0) && ta.pts[ta.pts.length - 1][1] === ta.tok,
+    JSON.stringify([planA, ta]));
+  fs.writeFileSync(path.join(dir, 'full.json'), JSON.stringify({ ...sync, at: '2026-10-04T10:35:00Z', sessions: [{ ...sync.sessions[0], status: 'idle', tok: 1000 + t4.tok }] }));
+  const planF = py('turns-plan', path.join(dir, 'full.json'), '--prev', path.join(dir, 'fourth.json'));
+  check('events: a total that grew by the counted tokens or more holds them, so an idle session is not read again', JSON.stringify(planF.sessions) === '[]', JSON.stringify(planF));
+  /* an older script dropped such a count, and the next reading started a new one: the oldest reading that still has
+     tokens outside the total repairs it, and the read counts each call once */
+  fs.writeFileSync(path.join(dir, 'mid.json'), JSON.stringify({ ...sync, at: '2026-10-04T09:35:00Z', sessions: [{ ...sync.sessions[0], status: 'idle', tok: 1400 }] }));
+  fs.writeFileSync(path.join(dir, 'new.json'), JSON.stringify({ ...sync, at: '2026-10-04T10:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400,
+    turn: { since: '2026-10-04T10:21:00Z', tok: 47, out: 5, calls: 1, lastAt: '2026-10-04T10:25:00Z', lastMsg: 'n1', pts: [[epoch('2026-10-04T10:25:00Z'), 47]] } }] }));
+  fs.writeFileSync(path.join(dir, 'cur.json'), JSON.stringify({ ...sync, at: '2026-10-04T11:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400 }] }));
+  py('turns-plan', path.join(dir, 'cur.json'), '--prev', path.join(dir, 'new.json'), '--prev', path.join(dir, 'mid.json'), '--prev', path.join(dir, 'fourth.json'));
+  page('k1.txt', [ev('2026-10-04T11:30:00Z', 'n2', 100), ev('2026-10-04T10:25:00Z', 'n1', 30), { created_at: '2026-10-04T10:21:00Z', result: {} },
+    { created_at: '2026-10-04T09:00:00Z', result: {} }, ev('2026-10-04T08:40:00Z', 'h1', 600), ev('2026-10-04T07:50:00Z', 'm8', 800)], true, 'ck1');
+  const k1 = py('turns-add', 'session_A', path.join(dir, 'k1.txt'));
+  py('turns-merge', path.join(dir, 'cur.json'));
+  const tk = JSON.parse(fs.readFileSync(path.join(dir, 'cur.json'), 'utf8')).sessions[0].turn;
+  check('events: a dropped count that the total does not hold yet comes back from an older reading, each call once',
+    k1.more === false && !!tk && tk.tok === t4.tok - 400 + 617 + 47 + 117 && tk.calls === t4.calls + 3 && tk.lastMsg === 'n2', JSON.stringify([k1, tk]));
+  /* when the newest reading carried the count, the next reading continues from it and reads no further back */
+  fs.writeFileSync(path.join(dir, 'cur2.json'), JSON.stringify({ ...sync, at: '2026-10-04T12:35:00Z', sessions: [{ ...sync.sessions[0], tok: 1400 }] }));
+  py('turns-plan', path.join(dir, 'cur2.json'), '--prev', path.join(dir, 'cur.json'), '--prev', path.join(dir, 'new.json'), '--prev', path.join(dir, 'fourth.json'));
+  page('l1.txt', [ev('2026-10-04T12:30:00Z', 'p1', 1100), ev('2026-10-04T11:30:00Z', 'n2', 100)], false, 'cl1');
+  const l1 = py('turns-add', 'session_A', path.join(dir, 'l1.txt'));
+  py('turns-merge', path.join(dir, 'cur2.json'));
+  const tl = JSON.parse(fs.readFileSync(path.join(dir, 'cur2.json'), 'utf8')).sessions[0].turn;
+  check('events: the next reading continues the newest count that carried the rest', l1.partial === false && !!tl && !!tk && tl.tok === tk.tok + 1117 && tl.since === tk.since,
+    JSON.stringify([l1, tl]));
+  /* a count whose oldest calls are more than a day old is dropped: by then the total holds them, or it never will */
+  fs.writeFileSync(path.join(dir, 'late.json'), JSON.stringify({ ...sync, at: '2026-10-05T08:00:00Z', sessions: [{ ...sync.sessions[0], status: 'idle', tok: 1400 }] }));
+  const planL = py('turns-plan', path.join(dir, 'late.json'), '--prev', path.join(dir, 'absorb.json'));
+  check('events: a count whose oldest calls are more than a day old is dropped', JSON.stringify(planL.sessions) === '[]', JSON.stringify(planL));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the page draws a running turn from its event counts ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-turnpts-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const f = path.join(dir, 'syncs', '1791073380.json');                       // the 00:23 reading
+  const d = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const sec = (iso) => Date.parse(iso) / 1000;
+  d.sessions.find((x) => x.id === 'session_01PEND001').turn = { since: '2026-10-03T23:30:00Z', tok: 60_000_000, out: 0, calls: 40, lastAt: '2026-10-04T00:20:00Z', lastMsg: 'm',
+    pts: [[sec('2026-10-03T23:30:00Z'), 5_000_000], [sec('2026-10-03T23:50:00Z'), 30_000_000], [sec('2026-10-04T00:20:00Z'), 60_000_000]] };
+  fs.writeFileSync(f, JSON.stringify(d));
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const heads = await headsOf(s.page);
+  const c = (n) => heads.indexOf(n);
+  const r = (await rows(s.page))['owner/pending-turn'];
+  const notes = await s.page.evaluate(() => ({ turns: (document.getElementById('turns-note') || {}).innerText || '', pend: (document.getElementById('pending-note') || {}).innerText || '' }));
+  check('events: the running turn adds its tokens to the session', !!r && r[c('TOKENS')] === '140 M', JSON.stringify(r));
+  check('events: the turn places its tokens in the hours they were used', !!r && /^5\d M$/.test(r[c('1 H')]), JSON.stringify(r));
+  check('events: the figures name the turn read from events, and not as not counted', /Includes 60 M/.test(notes.turns) && /owner\/pending-turn/.test(notes.turns) && !/owner\/pending-turn/.test(notes.pend), JSON.stringify(notes));
+  const row = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'owner/pending-turn'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
+  check('events: its session row says how much the turn used so far', /60 M so far/.test(row), row.slice(0, 200));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- open jobs: the figure is what they still need, not the total plus it; a job with no time estimate says so ---- */
+for (const allUnknown of [false, true]) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-open-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const at = (min) => new Date(Date.parse(NOW) - min * 60000).toISOString().replace('.000Z', 'Z');
+  const put = (col, id, doc) => fs.writeFileSync(path.join(dir, col, `${id}.json`), JSON.stringify(doc));
+  /* a render job that reports a token estimate and no time estimate, before its first video: no end time can follow */
+  put('jobs', 'long-render', { project: 'Long name', label: 'Render 19 videos', status: 'running', surface: 'Claude Code · cloud', total: 19, done: 0, unit: 'videos',
+    tokEst: 60_000_000, startedAt: at(25), updatedAt: at(25) });
+  if (allUnknown) {
+    const f = path.join(dir, 'jobs', 'atlas-import.json'), j = JSON.parse(fs.readFileSync(f, 'utf8'));
+    fs.writeFileSync(f, JSON.stringify({ ...j, status: 'done', done: 10, finishedAt: at(10), updatedAt: at(10) }));
+  } else {
+    /* the same kind of job after its first videos: the done count gives the end time */
+    put('jobs', 'studio-cut', { project: 'Studio work', label: 'Cut 19 clips', status: 'running', surface: 'Cowork', total: 19, done: 3, unit: 'videos', startedAt: at(30), updatedAt: at(5) });
+  }
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const cards = await s.page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.innerText])));
+  const tile = await s.page.evaluate(() => { const d = [...document.querySelectorAll('#kpis .kpi')].find((x) => /^open jobs/i.test(x.querySelector('.k').textContent)); return d ? d.innerText : ''; });
+  const long = cards['owner/an-unusually-long-repository-name-that-must-wrap-on-a-phone'] || '';
+  if (!allUnknown) {
+    check('open jobs: the page loads without errors', s.problems.length === 0, s.problems.join(' | '));
+    check('open jobs: the tile shows what the open jobs still need, not the total plus it', /^OPEN JOBS\d*\n\+660 M\n\$\d[\d,]* more · 4 open, 2 unestimated$/.test(tile), JSON.stringify(tile));
+    check('open jobs: the card line shows what its open job still needs', /Open jobs \+600 M · \$600 more · 1 job/.test(cards['owner/atlas-port'] || '') && !/Projected/.test(cards['owner/atlas-port'] || ''), (cards['owner/atlas-port'] || '').slice(0, 400));
+    const heads = await headsOf(s.page);
+    const r = (await rows(s.page))['owner/atlas-port'];
+    check('open jobs: the table column shows what the open jobs still need', heads.includes('OPEN JOBS') && !!r && r[heads.indexOf('OPEN JOBS')] === '+600 M · $600', JSON.stringify([heads, r]));
+    check('open jobs: a running job with a token estimate and no time estimate or progress says so', /1 open · no time estimate/.test(long) && /Open jobs \+60 M/.test(long) && !/\bends\b/.test(long.split('\n').slice(0, 6).join(' ')), long.slice(0, 400));
+    check('open jobs: a running job with a done count gets an end time', /\bends \d{1,2}:\d{2}/.test(cards.Studio || ''), (cards.Studio || '').slice(0, 300));
+    const nt = await notesText(s.page);
+    check('open jobs: a note says where an end time comes from', /End time: the done count at its rate so far/.test(nt) && /Open jobs: each adds its tokEst/.test(nt), nt.slice(0, 300));
+  } else {
+    const top = await s.page.evaluate(() => (document.getElementById('outlook') || {}).innerText || '');
+    check('open jobs: with no time estimate at all, the top line says so and names the open projects', /Last to finish\s+No time estimate/i.test(top) && /2 open: .*harbor-docs/i.test(top), JSON.stringify(top));
+  }
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- local and cloud: the hourly listing decides the place; a local session that stops reporting reads No report ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-local-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  const at = (min) => new Date(Date.parse(NOW) - min * 60000).toISOString().replace('.000Z', 'Z');
+  const sec = (iso) => Date.parse(iso) / 1000;
+  const put = (col, id, doc) => fs.writeFileSync(path.join(dir, col, `${id}.json`), JSON.stringify(doc));
+  /* a Cowork session that calls itself cloud, appears in no reading, and stopped reporting 2 h ago */
+  put('sessions', 'session_01GRANTA1', { title: 'Grant A drafts', folder: 'Grant A', where: 'cloud', surface: 'Claude Code · cloud', src: 'report', status: 'running', updatedAt: at(120), createdAt: at(600), partial: true });
+  /* a local session that reports now, with counts and points from its transcript */
+  put('sessions', 'cowork-grant-b', { title: 'Grant B drafts', folder: 'Grant B', where: 'local', surface: 'Cowork', src: 'transcript', status: 'running', updatedAt: at(5), createdAt: at(300),
+    tok: 30_000_000, out: 100_000, calls: 300, since: at(300), lastAt: at(6),
+    pts: [[sec(at(300)) - 1, 0], [sec(at(290)), 5_000_000], [sec(at(50)) - 1, 5_000_000], [sec(at(40)), 20_000_000], [sec(at(6)), 30_000_000]] });
+  /* a Cowork session whose own report went stale, read by the sync with get_session: generic title, newer state */
+  put('sessions', 'session_01GRANTC1', { title: 'Grant C drafts', folder: 'Grant C', where: 'local', surface: 'Cowork', src: 'report', status: 'running', updatedAt: at(100), createdAt: at(400), partial: true });
+  {
+    const f = path.join(dir, 'syncs', '1791073380.json'), d = JSON.parse(fs.readFileSync(f, 'utf8'));
+    d.sessions.push({ id: 'session_01GRANTC1', title: 'Claude.ai E1 upgraded conversation', status: 'idle', bucket: '', model: '', createdAt: at(400), updatedAt: at(3), tok: 50_000_000, out: 400_000, usd: 20, repos: [], via: 'get' });
+    fs.writeFileSync(f, JSON.stringify(d));
+  }
+  for (let i = 1; i <= 6; i += 1) put('sessions', `cowork-extra-${i}`, { title: `Extra ${i}`, folder: `Extra ${i}`, where: 'local', surface: 'Cowork', src: 'report', status: 'idle', updatedAt: at(30 + i), tok: 1_000_000 });
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  check('local: the page loads without errors', s.problems.length === 0, s.problems.join(' | '));
+  const heads = await headsOf(s.page); const c = (n) => heads.indexOf(n);
+  const R = await rows(s.page);
+  const pills = await s.page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.querySelector('.pill').innerText.trim()])));
+  check('local: a session that no reading lists is local, whatever it calls itself', !!R['Grant A'] && /\blocal\b/i.test(R['Grant A'][0]), JSON.stringify(R['Grant A']));
+  check('local: a running report with no newer report for 45 min reads No report, not Working now', /^no report$/i.test(pills['Grant A'] || ''), JSON.stringify(pills));
+  const row = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'Grant A'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
+  check('local: its session row says how long it sent no report', /No report for 2 h/.test(row), row.slice(0, 200));
+  check('local: a fresh local report counts as Working now', /^working now$/i.test(pills['Grant B'] || ''), JSON.stringify(pills));
+  check('local: transcript points place the local tokens in the hours they were used', !!R['Grant B'] && /^2\d M$/.test(R['Grant B'][c('1 H')]) && R['Grant B'][c('24 H')] === '30 M', JSON.stringify(R['Grant B']));
+  check('local: a cloud project keeps its place', !!R['owner/atlas-port'] && !/\blocal\b/i.test(R['owner/atlas-port'][0]), JSON.stringify(R['owner/atlas-port']));
+  check('local: a Cowork session that get_session read stays local, with its total and its newer state', !!R['Grant C'] && /\blocal\b/i.test(R['Grant C'][0]) && R['Grant C'][c('TOKENS')] === '50 M' && /^idle$/i.test(pills['Grant C'] || ''), JSON.stringify([R['Grant C'], pills['Grant C']]));
+  const rowC = await s.page.evaluate(() => { const cd = [...document.querySelectorAll('.proj-card')].find((x) => x.querySelector('h2').innerText.trim() === 'Grant C'); const dd = cd && cd.querySelector('details.sessions'); if (!dd) return ''; dd.open = true; return dd.innerText; });
+  check('local: its row keeps the title that the session reported and says the sync read it', /Grant C drafts/.test(rowC) && !/E1 upgraded/.test(rowC) && /read hourly/.test(rowC), rowC.slice(0, 200));
+  /* colours: each project among the 16 with the latest activity has its own colour */
+  const sw = await s.page.evaluate(() => [...document.querySelectorAll('.proj-card')].map((x) => [x.querySelector('h2').innerText.trim(), x.querySelector('h2 .sw').style.background]));
+  const colored = sw.filter(([, b]) => !/other/.test(b)).map(([, b]) => b);
+  const total = Object.keys(R).length;
+  check('colours: more than 8 projects get distinct colours, and grey only past 16', sw.length > 8 && new Set(colored).size === colored.length
+    && sw.length - colored.length <= Math.max(0, total - 16) && colored.some((b) => /--s(9|1[0-6])\)/.test(b)), JSON.stringify(sw));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the local usage script: counts and times from the session's own transcript, never text ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-lu-'));
+  const S = new URL('../skills/token-dashboard/scripts/local_usage.py', import.meta.url).pathname;
+  const proj = path.join(dir, 'projects', '-work-grant');
+  fs.mkdirSync(path.join(proj, 'sid-1', 'subagents'), { recursive: true });
+  const a = (ts, id, cr, o) => JSON.stringify({ type: 'assistant', timestamp: ts, message: { id, content: [{ type: 'text', text: 'PRIVATE WORDS' }], usage: { input_tokens: 10, cache_read_input_tokens: cr, cache_creation_input_tokens: 100, output_tokens: o } } });
+  const main = [JSON.stringify({ type: 'user', timestamp: '2026-10-04T10:00:00Z', message: { content: 'PRIVATE PROMPT' } }),
+    a('2026-10-04T10:00:05Z', 'm1', 1000, 5), a('2026-10-04T10:00:06Z', 'm1', 1000, 50), a('2026-10-04T10:04:00Z', 'm2', 2000, 40),
+    JSON.stringify({ type: 'cost-state', modelUsage: { x: { inputTokens: 9000, outputTokens: 90, cacheReadInputTokens: 3000, cacheCreationInputTokens: 200 } }, totalCostUSD: 1.234 }),
+    a('2026-10-04T13:00:00Z', 'm3', 500, 9)].join('\n') + '\n';
+  fs.writeFileSync(path.join(proj, 'sid-1.jsonl'), main);
+  fs.writeFileSync(path.join(proj, 'sid-1', 'subagents', 'agent-1.jsonl'), a('2026-10-04T10:02:00Z', 's1', 300, 8) + '\n');
+  const raw = execFileSync('python3', [S, '--root', dir]).toString();
+  const r = JSON.parse(raw);
+  const t = (iso) => Date.parse(iso) / 1000;
+  check('local script: each model call counts once, subagents included, plus what Claude Code counted that the transcript lost',
+    r.sessionId === 'sid-1' && r.calls === 4 && r.tok === 12909 && r.untimed === 8562 && r.out === 107 && r.usd === 1.23 && r.files === 2, raw);
+  check('local script: the points place each bucket of calls, with the total before a bucket that follows a gap',
+    JSON.stringify(r.pts) === JSON.stringify([[t('2026-10-04T10:00:05Z') - 1, 8562], [t('2026-10-04T10:04:00Z'), 12290], [t('2026-10-04T13:00:00Z') - 1, 12290], [t('2026-10-04T13:00:00Z'), 12909]]), JSON.stringify(r.pts));
+  check('local script: no text leaves the transcript, and the transcript stays unchanged', !/PRIVATE/.test(raw) && fs.readFileSync(path.join(proj, 'sid-1.jsonl'), 'utf8') === main);
+  let code = 0, err = '';
+  try { execFileSync('python3', [S, '--root', path.join(dir, 'none')], { stdio: 'pipe' }); } catch (e) { code = e.status; err = e.stdout.toString(); }
+  check('local script: with no transcript it says so and writes no figure', code === 2 && /no transcript found/.test(err) && !/"tok"/.test(err), `${code} ${err}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync reads Cowork sessions with get_session: counts only, marked via get ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-get-'));
+  const S = new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname;
+  const py = (...a) => JSON.parse(execFileSync('python3', [S, ...a]).toString().trim().split('\n').pop());
+  fs.writeFileSync(path.join(dir, 'sync.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [{ id: 'session_A', title: 'A', status: 'running', tok: 1000, out: 1, usd: 0, createdAt: '2026-10-04T00:00:00Z', repos: [] }] }));
+  fs.mkdirSync(path.join(dir, 'ses', 'sessions'), { recursive: true });
+  for (const id of ['session_A', 'session_01COWORK', 'cowork-notes']) fs.writeFileSync(path.join(dir, 'ses', 'sessions', `${id}.json`), JSON.stringify({ id, data: {} }));
+  const ids = py('local-ids', path.join(dir, 'sync.json'), path.join(dir, 'ses'));
+  check('get: the sync asks get_session only for reporting sessions that the listing lacks', JSON.stringify(ids.ids) === '["session_01COWORK"]', JSON.stringify(ids));
+  const ans = path.join(dir, 'gs1.txt');
+  fs.writeFileSync(ans, `<other-session nonce="n">\n${JSON.stringify({ ccr: { id: 'session_01COWORK', title: 'Claude.ai E1 upgraded conversation', session_status: 'SESSION_STATUS_RUNNING', created_at: '2026-10-04T01:00:00Z', updated_at: '2026-10-04T05:29:00Z', post_turn_summary: { status_detail: 'PRIVATE SUMMARY' }, external_metadata: { usage: { input_tokens: 10, cache_read_tokens: 900, cache_write_tokens: 80, output_tokens: 10, cost_usd: 1.5 } } } })}\n</other-session>`);
+  const add = py('add-local', path.join(dir, 'sync.json'), '--daily', path.join(dir, 'daily.json'), ans);
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const row = out.sessions.find((r) => r.id === 'session_01COWORK');
+  check('get: add-local adds the Cowork session with its totals, marked via get', add.added === 1 && !!row && row.via === 'get' && row.tok === 1000 && row.usd === 1.5 && row.status === 'running', JSON.stringify([add, row]));
+  check('get: no summary text reaches the reading, and the answer file is deleted', !/PRIVATE/.test(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')) && !fs.existsSync(ans));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  check('get: the ledger entry carries the Cowork session and marks it', daily.cols.includes('via') && daily.rows.some((r) => r[0] === 'session_01COWORK' && r[daily.cols.indexOf('via')] === 'get'), JSON.stringify(daily.cols));
+  /* the sync writes only the count fields of each answer, in the form that docs/SYNC.md gives: the row is the same */
+  const form = fs.readFileSync(new URL('../docs/SYNC.md', import.meta.url), 'utf8').split('\n').map((l) => l.trim()).find((l) => l.startsWith('{"id": "<id>"')) || '';
+  const nums = [10, 900, 80, 10, 1.5];
+  const vals = { id: 'session_01COWORK2', title: 'T', session_status: 'SESSION_STATUS_IDLE', status_bucket: '', created_at: '2026-10-04T01:00:00Z', updated_at: '2026-10-04T05:29:00Z', last_served_model: 'm' };
+  const filled = form.replace(/<n>/g, () => String(nums.shift())).replace(/"<([a-z_]+)>"/g, (_, k) => JSON.stringify(vals[k] ?? ''));
+  fs.writeFileSync(path.join(dir, 'sync2.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [] }));
+  fs.writeFileSync(path.join(dir, 'gs2.txt'), filled);
+  const add2 = py('add-local', path.join(dir, 'sync2.json'), path.join(dir, 'gs2.txt'));
+  const row2 = JSON.parse(fs.readFileSync(path.join(dir, 'sync2.json'), 'utf8')).sessions[0];
+  check('get: the count fields that the sync writes give the same row as the whole answer', !!form && add2.added === 1 && !!row2 && row2.via === 'get' && row2.tok === 1000 && row2.usd === 1.5 && row2.status === 'idle' && !fs.existsSync(path.join(dir, 'gs2.txt')),
+    JSON.stringify([form.slice(0, 40), add2, row2]));
+  const plan = py('turns-plan', path.join(dir, 'sync.json'));
+  check('get: the event step skips Cowork sessions, which refuse a cloud caller', JSON.stringify(plan.sessions) === '["session_A"]', JSON.stringify(plan));
+  fs.rmSync('/tmp/turns.json', { force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync sub-agent: its brief asks for the same count fields, and its helper drops rows with copy errors ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-agent-'));
+  const H = new URL('../scripts/sync_agent.py', import.meta.url).pathname;
+  const run = (...a) => JSON.parse(execFileSync('python3', [H, ...a, '--dir', dir], { env: { PATH: process.env.PATH, CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01SELF' } }).toString().trim().split('\n').pop());
+  const formOf = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8').split('\n').map((l) => l.trim()).find((l) => l.startsWith('{"id": "<id>"')) || '';
+  check('agent: the brief asks for the same count fields as docs/SYNC.md', !!formOf('../docs/SYNC_AGENT.md') && formOf('../docs/SYNC_AGENT.md') === formOf('../docs/SYNC.md'));
+  const ses = (id, st, upd, input) => ({ id, title: id, session_status: `SESSION_STATUS_${st}`, created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { usage: { input_tokens: input, output_tokens: 0 } } });
+  const ls = path.join(dir, 'ls1.txt');
+  fs.writeFileSync(ls, JSON.stringify({ ccr: { data: [ses('session_01SELF', 'RUNNING', '2026-10-04T06:00:00Z', 1234), ses('session_01IDLE', 'IDLE', '2026-10-04T01:00:00Z', 1000000), ses('session_01RUN', 'RUNNING', '2026-10-04T06:20:00Z', 5000)] } }));
+  const cow = (id, tok, upd) => ({ id, title: id, status: 'idle', tok, out: tok / 100, usd: tok / 1000, createdAt: '2026-10-04T00:00:00Z', updatedAt: upd, repos: [], via: 'get' });
+  fs.mkdirSync(path.join(dir, 'prev', 'syncs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'prev', 'syncs', '1791091800.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [
+    cow('session_01COWA', 1000, '2026-10-04T05:00:00Z'), cow('session_01COWB', 2000, '2026-10-04T05:00:00Z'), cow('session_01COWC', 3000, '2026-10-04T05:00:00Z'), cow('session_01COWE', 5000, '2026-10-04T05:00:00Z')] }));
+  fs.mkdirSync(path.join(dir, 'ses', 'sessions'), { recursive: true });
+  for (const id of ['session_01COWA', 'session_01COWB', 'session_01COWC', 'session_01COWD', 'session_01COWE', 'session_01IDLE', 'cowork-notes']) fs.writeFileSync(path.join(dir, 'ses', 'sessions', `${id}.json`), JSON.stringify({ id }));
+  const early = run('plan', ls, '--at', '2026-10-04T05:50:00Z');
+  check('agent: a sync less than 30 minutes after the newest reading gives the skip line', early.skip === 'Skipped: syncs/1791091800 is 20 minutes old.' && early.age_min === 20, JSON.stringify(early));
+  const p = run('plan', ls, '--at', '2026-10-04T06:30:00Z');
+  check('agent: the plan holds the listing, the Cowork ids and the sessions to read turns from, without this session',
+    !('skip' in p) && p.age_min === 60 && p.sessions === 3 && p.tok === 1006234 && p.doc_id === '1791095400' && p.day === '2026-10-04'
+    && JSON.stringify(p.ids) === '["session_01COWA","session_01COWB","session_01COWC","session_01COWD","session_01COWE"]' && JSON.stringify(p.turns) === '["session_01RUN"]', JSON.stringify(p));
+  const line = (id, upd, tok) => JSON.stringify({ id, title: 'T "q"', session_status: 'SESSION_STATUS_IDLE', status_bucket: '', created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { last_served_model: 'm', usage: { input_tokens: 0, cache_read_tokens: tok - tok / 100, cache_write_tokens: 0, output_tokens: tok / 100, cost_usd: tok / 1000 } } });
+  /* A: unchanged. B: same updated_at, other counts (a copy error). C: grew with a new updated_at. D: new. E: fell (a copy error). */
+  [line('session_01COWA', '2026-10-04T05:00:00Z', 1000), line('session_01COWB', '2026-10-04T05:00:00Z', 2100), line('session_01COWC', '2026-10-04T06:10:00Z', 3500),
+    line('session_01COWD', '2026-10-04T06:00:00Z', 100), line('session_01COWE', '2026-10-04T06:10:00Z', 4000)].forEach((l, i) => fs.writeFileSync(path.join(dir, `gs${i + 1}.txt`), l));
+  fs.writeFileSync(path.join(dir, 'rl.txt'), JSON.stringify({ ccr: { has_more: false, first_id: 'e1', data: [{ created_at: '2026-10-04T06:29:00Z', rate_limit_event: { rate_limit_info: { status: 'allowed', unifiedWindows: { five_hour: { utilization: 0.09, resetsAt: 1791100000 }, seven_day: { utilization: 0.49, resetsAt: 1791500000 } } } } }] } }));
+  const r = run('rows');
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  const got = out.sessions.filter((x) => x.via === 'get').map((x) => x.id).join(',');
+  check('agent: rows drops the Cowork rows that disagree with the last reading, from the reading and the ledger',
+    r.added === 5 && r.checked === 4 && r.dropped === 2 && r.kept === 3 && got === 'session_01COWA,session_01COWC,session_01COWD'
+    && daily.rows.filter((x) => x[daily.cols.indexOf('via')] === 'get').length === 3, JSON.stringify([r, got]));
+  check('agent: rows writes the reply line, with the limit shares and the skipped steps',
+    r.line === 'Synced 3 sessions, 1,006,234 tokens at 2026-10-04T06:30:00Z. Cowork: 3 of 5 sessions. Limits: 5 h 9%, 7 d 49%. Dropped 2 Cowork rows with copy errors. Skipped steps 12 and 13.', r.line);
+  check('agent: the answer files and the rate-limit page are deleted, and the reading keeps the limit state',
+    !fs.readdirSync(dir).some((f) => /^gs\d+\.txt$|^rl\.txt$/.test(f)) && out.quota && out.quota.windows.five_hour.pct === 9 && out.by === 'session_01SELF');
+  fs.rmSync('/tmp/turns.json', { force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the sync sub-agent: the runs of scheduled tasks that the listing leaves out, and sessions that are gone ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-tasks-'));
+  const H = new URL('../scripts/sync_agent.py', import.meta.url).pathname;
+  const run = (...a) => JSON.parse(execFileSync('python3', [H, ...a, '--dir', dir], { env: { PATH: process.env.PATH, CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01SELF' } }).toString().trim().split('\n').pop());
+  const ses = (id, upd, input) => ({ id, title: id, session_status: 'SESSION_STATUS_IDLE', created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { usage: { input_tokens: input, output_tokens: 0 } } });
+  const ls = path.join(dir, 'ls1.txt');
+  fs.writeFileSync(ls, JSON.stringify({ ccr: { data: [ses('session_01SELF', '2026-10-04T06:00:00Z', 1234), ses('session_01KEEPS', '2026-10-04T05:00:00Z', 50)] } }));
+  const task = (id, title, tok, usd, runs, lastRun, status, last) => ({ id, title, status, bucket: status === 'running' ? 'working' : 'completed', model: 'm', createdAt: '2026-10-03T12:50:00Z',
+    updatedAt: '2026-10-04T05:20:00Z', tok, out: 10, usd, repos: [], via: 'trigger', runs, lastRun, last });
+  fs.mkdirSync(path.join(dir, 'prev', 'syncs'), { recursive: true });
+  /* the earlier reading counted run A of the hourly task, and run W of the weekly task while it ran */
+  fs.writeFileSync(path.join(dir, 'prev', 'syncs', '1791091800.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [
+    task('trig_01HOURLY', 'Hourly task', 3000, 0.3, 3, 'session_01RUNA', 'idle', { tok: 1000, out: 10, usd: 0.1 }),
+    task('trig_01WEEKLY', 'Weekly task', 500, 0.05, 1, 'session_01RUNW', 'running', { tok: 500, out: 10, usd: 0.05 })] }));
+  fs.mkdirSync(path.join(dir, 'ses', 'sessions'), { recursive: true });
+  for (const [id, doc] of [['session_01COWX', {}], ['session_01GONE', { gone: '2026-10-04T03:30:00Z' }], ['session_01SELFREP', {}]]) fs.writeFileSync(path.join(dir, 'ses', 'sessions', `${id}.json`), JSON.stringify({ title: id, ...doc }));
+  const p = run('plan', ls, '--at', '2026-10-04T06:30:00Z');
+  check('tasks: the plan leaves out a session document marked gone', JSON.stringify(p.ids) === '["session_01COWX","session_01SELFREP"]', JSON.stringify(p.ids));
+  const t = (id, name, persist, cse) => ({ id, name, persist_session: persist, last_run: { session_id: cse } });
+  const list = [t('trig_01HOURLY', 'Hourly task', false, 'cse_01RUNB'), t('trig_01WEEKLY', 'Weekly task', false, 'cse_01RUNW'), t('trig_01PERSIST', 'Persistent', true, 'cse_01KEEPS'),
+    t('trig_01REPORTS', 'Reports itself', false, 'cse_01SELFREP'), t('trig_01NEW', 'New "task"', false, 'cse_01RUNN')];
+  const ids = '["session_01COWX","session_01SELFREP","session_01RUNB","session_01RUNW","session_01RUNN"]';
+  fs.writeFileSync(path.join(dir, 'tr.json'), JSON.stringify({ data: list, has_more: false }));
+  const ra = run('runs', path.join(dir, 'tr.json'));
+  fs.writeFileSync(path.join(dir, 'tr.txt'), list.map((x) => JSON.stringify(x)).join('\n') + '\n');
+  const rb = run('runs', path.join(dir, 'tr.txt'));
+  check('tasks: runs reads the new run of each fresh-session task and a run that was running, from the answer or from lines',
+    JSON.stringify(ra.ids) === ids && ra.runs === 3 && JSON.stringify(rb) === JSON.stringify(ra), JSON.stringify([ra, rb]));
+  const line = (id, tok, usd) => JSON.stringify({ id, title: 'T', session_status: 'SESSION_STATUS_IDLE', status_bucket: 'SESSION_STATUS_BUCKET_REVIEW_READY', created_at: '2026-10-04T05:50:00Z',
+    updated_at: '2026-10-04T05:55:00Z', external_metadata: { last_served_model: 'm', usage: { input_tokens: 0, cache_read_tokens: tok - 10, cache_write_tokens: 0, output_tokens: 10, cost_usd: usd } } });
+  [line('session_01COWX', 700, 0.07), line('session_01SELFREP', 800, 0.08), line('session_01RUNB', 1200, 0.12), line('session_01RUNW', 900, 0.09), line('session_01RUNN', 400, 0.04)]
+    .forEach((l, i) => fs.writeFileSync(path.join(dir, `gs${i + 1}.txt`), l));
+  const r1 = run('rows');
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  const of = (doc, id) => doc.sessions.find((x) => x.id === id) || {};
+  const h = of(out, 'trig_01HOURLY'), w = of(out, 'trig_01WEEKLY'), n = of(out, 'trig_01NEW');
+  check('tasks: a new run adds to its task row, and a run read again replaces its own earlier totals',
+    h.tok === 4200 && h.out === 20 && h.usd === 0.42 && h.runs === 4 && h.lastRun === 'session_01RUNB' && h.createdAt === '2026-10-03T12:50:00Z'
+    && w.tok === 900 && w.usd === 0.09 && w.runs === 1 && w.status === 'idle' && w.bucket === 'completed'
+    && n.tok === 400 && n.runs === 1 && n.title === 'New "task"' && n.createdAt === '2026-10-04T05:50:00Z', JSON.stringify([h, w, n]));
+  check('tasks: runs are not session rows, the Cowork rows stay, and the ledger keeps the task rows',
+    !out.sessions.some((x) => /RUN[BWN]$/.test(x.id)) && out.sessions.filter((x) => x.via === 'get').length === 2
+    && daily.rows.filter((x) => x[daily.cols.indexOf('via')] === 'trigger').length === 3 && !fs.readdirSync(dir).some((f) => /^gs\d+\.txt$/.test(f)), JSON.stringify(out.sessions.map((x) => x.id)));
+  check('tasks: the reply line counts the runs', r1.line === 'Synced 2 sessions, 1,284 tokens at 2026-10-04T06:30:00Z. Cowork: 2 sessions. Scheduled: 3 runs.', r1.line);
+  const r2 = run('rows');
+  check('tasks: a second rows pass in the same sync counts no run twice', r2.line === r1.line && of(JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')), 'trig_01HOURLY').tok === 4200, r2.line);
+  /* the next hour: no new run, so the task rows carry over unchanged */
+  fs.renameSync(path.join(dir, 'sync.json'), path.join(dir, 'prev', 'syncs', '1791095400.json'));
+  const p2 = run('plan', ls, '--at', '2026-10-04T07:30:00Z');
+  fs.writeFileSync(path.join(dir, 'tr.txt'), list.slice(0, 2).map((x) => JSON.stringify(x)).join('\n') + '\n');
+  const r3 = run('runs', path.join(dir, 'tr.txt'));
+  [line('session_01COWX', 700, 0.07), line('session_01SELFREP', 800, 0.08)].forEach((l, i) => fs.writeFileSync(path.join(dir, `gs${i + 1}.txt`), l));
+  const r4 = run('rows');
+  const out3 = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  check('tasks: the next hour carries the task rows, and a counted run is not read again',
+    p2.age_min === 60 && JSON.stringify(r3.ids) === '["session_01COWX","session_01SELFREP"]' && r3.runs === 0 && !/Scheduled/.test(r4.line)
+    && of(out3, 'trig_01HOURLY').tok === 4200 && of(out3, 'trig_01WEEKLY').tok === 900 && of(out3, 'trig_01NEW').tok === 400, JSON.stringify([r3, r4.line]));
+  fs.rmSync('/tmp/turns.json', { force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- the 5-hour and 7-day tiles: tokens and covered time from the same readings, and no hints for fields that nobody reports ---- */
+{
+  const tiles = async (db) => {
+    const s = await open({ db, now: NOW, viewer: 'owner', width: 1100 });
+    await s.page.click('button[data-key="f-person:david"]');
+    await s.page.waitForTimeout(300);
+    const out = await s.page.evaluate(() => ({ body: document.body.innerText, kpis: document.getElementById('kpis').innerText, wins: [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText) }));
+    await s.close();
+    return out;
+  };
+  const rate = '[\\d.]+(?: [kMB])?\\/h';
+  const a = await tiles(DB);
+  const h5 = a.wins.find((x) => /^5-h limit/i.test(x)) || '', d7 = a.wins.find((x) => /^7-day/i.test(x)) || '';
+  check('windows: the 5-hour tile says how much of the window the readings measured, the rate, and the cost', new RegExp(`1 h 57 min of 5 h measured · ${rate} · ≈\\$\\d[\\d,]*`).test(h5), JSON.stringify(h5));
+  check('windows: no 7-day limit tile repeats the Last 7 d figure when Claude Code reports no weekly limit', !d7 && /LAST 7 D\n[\d.]+ [kMB]/.test(a.kpis) && /LAST 5 H\n[\d.]+ [kMB]/.test(a.kpis), JSON.stringify([d7, a.kpis.slice(0, 300)]));
+  check('windows: no hint asks for a field that Claude Code does not report', !/post quota/.test(a.body), (a.body.match(/.*post quota.*/) || [''])[0]);
+  /* a new window that no reading reaches yet, and a snapshot after the newest reading */
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-win-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'meta', 'quota.json'), JSON.stringify({ status: 'allowed', type: 'five_hour', resetsAt: '2026-10-04T05:24:00Z', overage: false, updatedAt: '2026-10-04T00:24:00Z' }));
+  fs.mkdirSync(path.join(dir, 'ticks'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ticks', 'session_01ATLAS01~2026-10-04.json'), JSON.stringify({ sid: 'session_01ATLAS01', day: '2026-10-04', pts: [[Date.parse('2026-10-04T00:24:30Z') / 1000, 405_000_000]], src: 'ccr' }));
+  const b = await tiles(dir);
+  const g5 = b.wins.find((x) => /^5-h limit/i.test(x)) || '';
+  check('windows: a limit window that no reading reaches yet says so, instead of tokens at a rate of zero', /\n—\n/.test(g5) && /No reading since it began · next about/.test(g5) && !/ 0\/h|0 s measured/.test(g5), JSON.stringify(g5));
+  check('windows: the trailing 5 hours still show a figure then', /LAST 5 H\n[\d.]+ [kMB]/.test(b.kpis), b.kpis.slice(0, 300));
+  fs.rmSync(dir, { recursive: true, force: true });
+  /* Claude Code reports only the limit that applies: the newest reading names the 7-day limit, near its cap */
+  const wdir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-week-'));
+  fs.cpSync(DB, wdir, { recursive: true });
+  const wf = path.join(wdir, 'syncs', '1791073380.json');
+  const wd = JSON.parse(fs.readFileSync(wf, 'utf8'));
+  wd.quota = { status: 'allowed_warning', type: 'seven_day', resetsAt: '2026-10-09T05:00:00Z', overage: false, asOf: '2026-10-04T00:23:30Z' };
+  fs.writeFileSync(wf, JSON.stringify(wd));
+  const w = await tiles(wdir);
+  const wk = w.wins.find((x) => /^7-day limit/i.test(x)) || '', w5 = w.wins.find((x) => /^5-h limit/i.test(x)) || '';
+  check('limits: a 7-day report near the cap shows as an amber pill and a line that names the window and the reset',
+    /Near the limit/i.test(w.body) && /Near the 7-day limit\. Long jobs can stop before the reset, Oct 9/.test(w.body), (w.body.match(/.*limit.*/gi) || []).slice(0, 4).join(' | '));
+  check('limits: the 7-day tile counts from its reset less 7 days and says how little of the week the readings measured', /resets Oct 9/.test(wk) && /of 7 d measured/.test(wk) && /Near the limit/.test(wk), JSON.stringify(wk));
+  check('limits: the 5-hour window stays from its last report while its reset is ahead', /of 5 h measured/.test(w5) && /\(last report\)/.test(w5), JSON.stringify(w5));
+  fs.rmSync(wdir, { recursive: true, force: true });
+}
+
+/* ---- only the ledger: the range buttons stay, and 30 d reads the ledger ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-ledger-'));
+  fs.cpSync(DB, dir, { recursive: true });
+  for (const d of ['syncs', 'data__users__u_drew__profile__syncs', 'data__users__u_priya__profile__syncs']) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+  const s = await open({ db: dir, now: NOW, viewer: 'owner', width: 1100 });
+  const g = await s.page.evaluate(() => ({ hidden: document.getElementById('density').hidden, buttons: document.querySelectorAll('#density-range button').length, sub: document.getElementById('density-sub').innerText }));
+  check('ledger only: the range buttons stay when the hourly readings measured nothing', !g.hidden && g.buttons === 6 && /Pick a longer range/.test(g.sub), JSON.stringify(g).slice(0, 200));
+  await s.page.click('button[data-key="density-range:720"]');
+  await s.page.waitForTimeout(250);
+  const segs = await s.page.evaluate(() => document.querySelectorAll('#density-plot .seg').length);
+  check('ledger only: 30 d draws the days from the ledger', segs > 0, String(segs));
+  await s.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/* ---- a saved project filter whose project was renamed must not empty the board ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', width: 1100 });
+  const stored = await s.page.evaluate(() => { try { localStorage.setItem('cad.project', 'A label from before the rename'); return true; } catch (e) { return false; } });
+  if (stored) {
+    await s.page.reload();
+    await s.page.waitForTimeout(900);
+    const n = await s.page.evaluate(() => document.querySelectorAll('.proj-card').length);
+    check('names: a saved project filter that no longer exists does not empty the board', n > 0, String(n));
+  } else console.log('SKIP  names: this browser blocks localStorage for file pages');
+  await s.close();
+}
+
+/* ---- a person's view ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'person', uid: 'u_drew', name: 'Drew', width: 1100 });
+  const p = s.page;
+  check('person: page loads without errors', s.problems.length === 0, s.problems.join(' | '));
+  const body = await p.evaluate(() => document.body.innerText);
+  check('person: sees their own projects', /clinic.scheduler/i.test(body) && /faq.site/i.test(body));
+  check('person: sees nothing of the owner or of another person', !/Atlas|Harbor|Quarterly|Priya|David C/.test(body.replace(/David C activity board/g, '')), body.match(/Atlas|Harbor|Quarterly|Priya/)?.[0]);
+  const w = await p.evaluate(() => window.__writes.map((x) => `${x[0]} ${x[1]}`));
+  check('person: every write is in their own subtree or is their own join entry', w.length > 0 && w.every((x) => /^(update join\/u_drew|set data\/users\/u_drew\/)/.test(x)), w.join(' | '));
+  check('person: the page filled the ledger day that had hourly readings and no entry', w.includes('set data/users/u_drew/profile/daily/2026-10-03'), w.join(' | '));
+  const ui = await p.evaluate(() => ({ people: !document.getElementById('people-wrap').hidden, setup: !!document.querySelector('button[data-key="f-person:add"]'), live: document.getElementById('livenote').innerText }));
+  check('person: no people table, and a way to set up their own Claude', !ui.people && ui.setup, JSON.stringify(ui));
+  check('person: no live read on the owner connector', !/live read/.test(ui.live), ui.live);
+  await p.click('#exp-daily');
+  await p.waitForTimeout(400);
+  await p.click('#exp-hourly');
+  await p.waitForTimeout(400);
+  const texts = await p.evaluate(() => window.__saved.filter((f) => /^claude-usage-/.test(f.filename)).map((f) => new TextDecoder().decode(Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0)))));
+  check('person: both exports hold only their own sessions', texts.length === 2 && texts.every((t0) => /session_01DREW/.test(t0) && !/HARBOR|ATLAS|MODEL|PRIYA|RETIRE/.test(t0)), texts.map((t0) => t0.length).join(','));
+  await s.close();
+}
+
+/* ---- limit shares: the sync reads them from its own rate-limit events; both skins show them; a window that reset is over ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-limits-'));
+  const S = new URL('../scripts/ccr_sync_doc.py', import.meta.url).pathname;
+  const py = (args, env = {}) => JSON.parse(execFileSync('python3', [S, ...args], { env: { PATH: process.env.PATH, ...env } }).toString().trim().split('\n').pop() || 'null');
+  const raw = (args, env = {}) => execFileSync('python3', [S, ...args], { env: { PATH: process.env.PATH, ...env } }).toString().trim();
+  check('limits: self-id names the session from the environment, and nothing outside it', raw(['self-id'], { CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01TESTSYNC' }) === 'session_01TESTSYNC' && raw(['self-id']) === '');
+  const sync = path.join(dir, 'sync.json');
+  fs.writeFileSync(sync, JSON.stringify({ at: '2026-10-04T00:23:00Z', src: 'routine', sessions: [], quota: { status: 'allowed', type: 'five_hour', resetsAt: '2026-10-04T03:00:00Z', overage: false, asOf: '2026-10-04T00:20:00Z' } }));
+  const ev = (at, five, week) => ({ created_at: at, rate_limit_event: { internal_anthropic_catchall: { rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour', resetsAt: 1791082800, isUsingOverage: false,
+    unifiedWindows: { five_hour: { resetsAt: 1791082800, utilization: five }, seven_day: { resetsAt: 1791435600, utilization: week } } } } } });
+  const page = path.join(dir, 'rl.txt');
+  fs.writeFileSync(page, JSON.stringify({ ccr: { data: [ev('2026-10-04T00:10:00.5Z', 0.02, 0.25), ev('2026-10-04T00:21:40.1Z', 0.03, 0.29), { created_at: '2026-10-04T00:22:00Z', assistant: { internal_anthropic_catchall: { message: { id: 'm', content: 'PRIVATE TEXT' } } } }], has_more: true, first_id: 'e1' } }));
+  const out = py(['limits', sync, page]);
+  const doc = JSON.parse(fs.readFileSync(sync, 'utf8'));
+  check('limits: the newest rate-limit event gives the share and the reset of each window', out.five_hour === 3 && out.seven_day === 29 && out.more === false
+    && doc.quota.windows.five_hour.pct === 3 && doc.quota.windows.seven_day.pct === 29 && doc.quota.windows.seven_day.resetsAt === '2026-10-08T05:00:00Z' && doc.quota.windowsAt === '2026-10-04T00:21:40Z', JSON.stringify([out, doc.quota]));
+  check('limits: the page is deleted and no text reaches the reading', !fs.existsSync(page) && !/PRIVATE/.test(JSON.stringify(doc)), JSON.stringify(doc).slice(0, 200));
+  fs.writeFileSync(page, JSON.stringify({ ccr: { data: [], has_more: true, first_id: 'e9' } }));
+  const none = py(['limits', sync, page]);
+  check('limits: a page with no rate-limit event asks for the next page and changes nothing', none.more === true && none.before_id === 'e9' && JSON.parse(fs.readFileSync(sync, 'utf8')).quota.windows.five_hour.pct === 3, JSON.stringify(none));
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  /* the page: the owner's newest reading carries the shares, and so does Drew's */
+  const ldir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-limits-db-'));
+  fs.cpSync(DB, ldir, { recursive: true });
+  const put = (f, fn) => { const d = JSON.parse(fs.readFileSync(f, 'utf8')); fn(d); fs.writeFileSync(f, JSON.stringify(d)); };
+  put(path.join(ldir, 'syncs', '1791073380.json'), (d) => { d.quota.windows = { five_hour: { pct: 41, resetsAt: '2026-10-04T03:00:00Z' }, seven_day: { pct: 62, resetsAt: '2026-10-08T05:00:00Z' } }; d.quota.windowsAt = '2026-10-04T00:22:00Z'; });
+  put(path.join(ldir, 'data__users__u_drew__profile__syncs', '1791073380.json'), (d) => { d.quota.windows = { five_hour: { pct: 12, resetsAt: '2026-10-04T03:00:00Z' }, seven_day: { pct: 33, resetsAt: '2026-10-09T05:00:00Z' } }; d.quota.windowsAt = '2026-10-04T00:22:00Z'; });
+  const s = await open({ db: ldir, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const f = await s.page.evaluate(() => {
+    const cells = Object.fromEntries([...document.querySelectorAll('.w-kpi')].map((d) => [d.querySelector('.w-k').textContent.trim().toLowerCase(),
+      { v: d.querySelector('.w-v').textContent.trim(), s: d.querySelector('.w-s').textContent.trim(), m: (d.querySelector('.w-meter i') || {}).style ? d.querySelector('.w-meter i').style.width : '' }]));
+    const lim = document.querySelector('.w-blk.b-lim');
+    return { cells, first: [...document.querySelectorAll('.w-kpi .w-k')].slice(0, 2).map((x) => x.textContent.trim()), lim: lim ? lim.innerText : '' };
+  });
+  check('limits, wall: the share of the 5-hour and 7-day limits leads the figures, with a meter and the reset',
+    JSON.stringify(f.first) === '["5-hour limit","7-day limit"]' && f.cells['5-hour limit'].v === '41%' && /^41(\.0)?%$/.test(f.cells['5-hour limit'].m) && /^resets /.test(f.cells['5-hour limit'].s)
+    && f.cells['7-day limit'].v === '62%' && /^62(\.0)?%$/.test(f.cells['7-day limit'].m) && /^resets /.test(f.cells['7-day limit'].s), JSON.stringify(f));
+  check('limits, wall: the queue names the other people with their shares, not the viewer again', /Drew/.test(f.lim) && /5 h 12% · 7 d 33%/.test(f.lim) && !/David/.test(f.lim), f.lim);
+  await s.close();
+  const c = await open({ db: ldir, now: NOW, viewer: 'owner', width: 1100 });
+  await c.page.click('button[data-key="f-person:david"]');
+  await c.page.waitForTimeout(300);
+  const wins = await c.page.evaluate(() => [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText));
+  const c5 = wins.find((x) => /^5-h limit/i.test(x)) || '', c7 = wins.find((x) => /^7-day/i.test(x)) || '';
+  check('limits, Classic: the window tiles show the same shares', /41% of the limit used, as reported/.test(c5) && /62% of the limit used, as reported/.test(c7) && /resets Oct 8/.test(c7), JSON.stringify([c5, c7]));
+  await c.close();
+
+  /* a 7-day report near the cap whose reset passed, and a 7-day share whose reset passed: both are over */
+  put(path.join(ldir, 'syncs', '1791066360.json'), (d) => { d.quota = { status: 'allowed_warning', type: 'seven_day', resetsAt: '2026-10-03T05:00:00Z', overage: false, asOf: '2026-10-03T22:26:00Z' }; });
+  put(path.join(ldir, 'syncs', '1791073380.json'), (d) => { d.quota.windows.seven_day.resetsAt = '2026-10-03T05:00:00Z'; });
+  const e = await open({ db: ldir, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const g = await e.page.evaluate(() => { const d = [...document.querySelectorAll('.w-kpi')].find((x) => /7-day limit/i.test(x.querySelector('.w-k').textContent)); return { v: d.querySelector('.w-v').textContent.trim(), cls: d.className, text: document.getElementById('wall').innerText }; });
+  check('limits, wall: a window whose reset passed shows no share and no near-limit state', g.v === '—' && !/warn|bad/.test(g.cls) && !/Near limit/i.test(g.text), JSON.stringify(g).slice(0, 200));
+  await e.close();
+  const h = await open({ db: ldir, now: NOW, viewer: 'owner', width: 1100 });
+  await h.page.click('button[data-key="f-person:david"]');
+  await h.page.waitForTimeout(300);
+  const hb = await h.page.evaluate(() => ({ body: document.body.innerText, wins: [...document.querySelectorAll('#density-win .win')].map((w) => w.innerText) }));
+  check('limits, Classic: a 7-day report whose reset passed leaves no 7-day tile and no near-limit line', !hb.wins.some((x) => /^7-day/i.test(x)) && !/Near the 7-day limit|Near the limit/.test(hb.body), JSON.stringify(hb.wins));
+  await h.close();
+  fs.rmSync(ldir, { recursive: true, force: true });
+}
+
+/* ---- the Swiss wall: one fixed screen for a tablet or a photo frame, no controls, no notes ---- */
+for (const [w, h] of [[1280, 800], [1024, 600], [800, 1280], [390, 844]]) {
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: w, height: h });
+  const p = s.page;
+  const g = await p.evaluate(() => {
+    const wall = document.getElementById('wall'), r = wall.getBoundingClientRect(), tb = wall.querySelector('.w-table');
+    const rows = [...wall.querySelectorAll('.w-table tr')];
+    const bottom = rows.length ? Math.max(...rows.map((x) => x.getBoundingClientRect().bottom)) : 0;
+    return {
+      skin: document.documentElement.dataset.skin,
+      shown: getComputedStyle(wall).display !== 'none' && getComputedStyle(document.querySelector('main.wrap')).display === 'none',
+      overX: document.documentElement.scrollWidth - innerWidth, overY: document.documentElement.scrollHeight - innerHeight,
+      inside: r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1,
+      rowsInside: !tb || bottom <= tb.getBoundingClientRect().bottom + 1,
+      controls: wall.querySelectorAll('button, a, input, select, textarea, details, summary, [title]').length,
+      notes: wall.querySelectorAll('sup').length,
+      kpis: wall.querySelectorAll('.w-kpi').length,
+      clipped: [...wall.querySelectorAll('.w-v')].filter((e) => e.scrollWidth > e.clientWidth + 1).length,
+      shown2: wall.querySelectorAll('.w-table tbody tr:not(.more)').length,
+      more: (wall.querySelector('.w-table tr.more') || {}).innerText || '',
+    };
+  });
+  check(`wall ${w}x${h}: page loads without errors`, s.problems.length === 0, s.problems.join(' | '));
+  check(`wall ${w}x${h}: one screen, no scroll either way, no row cut at the bottom`, g.skin === 'swiss' && g.shown && g.overX <= 1 && g.overY <= 1 && g.inside && g.rowsInside, JSON.stringify(g));
+  check(`wall ${w}x${h}: no controls, links, tooltips or note marks`, g.controls === 0 && g.notes === 0, JSON.stringify(g));
+  check(`wall ${w}x${h}: nine figures, none clipped`, g.kpis === 9 && g.clipped === 0, JSON.stringify(g));
+  check(`wall ${w}x${h}: every project shows, or the rest fold into a count`, g.shown2 === 13 || (g.shown2 > 0 && new RegExp(`^\\+${13 - g.shown2} projects? · `).test(g.more)), JSON.stringify(g));
+  if (w === 1280) {
+    const f = await p.evaluate(() => {
+      /* the first text node: a Classic label carries its note number in a superscript */
+      const kv = (sel) => Object.fromEntries([...document.querySelectorAll(sel)].map((d) => [d.querySelector('.w-k, .k').firstChild.textContent.trim().toLowerCase(), d.querySelector('.w-v, .v').textContent.trim()]));
+      const tr = [...document.querySelectorAll('.w-table tbody tr')].map((r) => [...r.children].map((c) => c.innerText.trim()));
+      return { wall: kv('.w-kpi'), classic: kv('#kpis .kpi'), tr, head: document.querySelector('.w-stat').innerText, text: document.getElementById('wall').innerText };
+    });
+    check('wall: the figures are the ones Classic computes', f.wall['1 h'] === f.classic['last hour'] && f.wall['24 h'] === f.classic['last 24 h'] && f.wall['7 d'] === f.classic['last 7 d'] && f.wall.all === f.classic['all tokens'], JSON.stringify([f.wall, f.classic]));
+    const byName = Object.fromEntries(f.tr.map((r) => [r[0], r]));
+    check('wall: working projects come first and say so', /^working$/i.test((f.tr[0] || [])[1] || '') && /^working$/i.test(byName['owner/atlas-port'][1]), JSON.stringify(f.tr.slice(0, 3)));
+    check('wall: the idle project with 9 B lifetime tokens shows no use in the last hour', byName['owner/harbor-docs'] && byName['owner/harbor-docs'][4] === '—' && byName['owner/harbor-docs'][6] === '10.30 B', JSON.stringify(byName['owner/harbor-docs']));
+    check('wall: the header names the working projects and the newest reading', /3 working/.test(f.head) && /read \d/.test(f.head), f.head);
+    check('wall: no sentences that explain the board', !/measured|untimed|not counted|Notes|Fields for|Times are|Pick a|Show all|Copy/.test(f.text), (f.text.match(/measured|untimed|not counted|Notes|Fields for|Times are|Pick a|Show all|Copy/) || [''])[0]);
+    check('wall: the same people as Classic, each with a sync age', /People/i.test(f.text) && /Drew/.test(f.text) && /Priya/.test(f.text), f.text.slice(-200));
+  }
+  await s.close();
+}
+
+/* ---- the wall ignores the filters that this browser saved for Classic, and a long press returns to Classic ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const p = s.page;
+  const stored = await p.evaluate(() => { try { localStorage.setItem('cad.person', 'u_drew'); return true; } catch (e) { return false; } });
+  if (stored) {
+    await p.reload();
+    await p.waitForTimeout(900);
+    const names = await p.evaluate(() => [...document.querySelectorAll('.w-table tbody tr')].map((r) => r.children[0].innerText.trim()));
+    check('wall: a saved Classic filter does not hide projects on the wall', names.includes('owner/atlas-port') && names.includes('drew/clinic-scheduler'), names.join(','));
+    const box = await (await p.$('.w-head')).boundingBox();
+    await p.mouse.move(box.x + 40, box.y + box.height / 2);
+    await p.mouse.down();
+    await p.clock.runFor(1700);
+    await p.mouse.up();
+    /* Classic restores the saved filters after it renders: under load that takes longer than one fixed wait */
+    for (let i = 0; i < 15; i++) {
+      await p.waitForTimeout(200);
+      if (await p.evaluate(() => { const c = [...document.querySelectorAll('.proj-card h2')]; return c.length > 0 && c.every((x) => /clinic.scheduler|faq.site/i.test(x.innerText)); })) break;
+    }
+    const back = await p.evaluate(() => ({ skin: document.documentElement.dataset.skin, saved: localStorage.getItem('cad.skin'), wrap: getComputedStyle(document.querySelector('main.wrap')).display,
+      cards: [...document.querySelectorAll('.proj-card h2')].map((x) => x.innerText.trim()) }));
+    check('wall: a long press on the header returns this browser to Classic', back.skin === 'classic' && back.saved === 'classic' && back.wrap !== 'none', JSON.stringify(back).slice(0, 200));
+    check('wall: Classic gets its saved filters back', back.cards.length > 0 && back.cards.every((n) => /clinic.scheduler|faq.site/i.test(n)), back.cards.join(','));
+  } else console.log('SKIP  wall: this browser blocks localStorage for file pages');
+  await s.close();
+}
+
+/* ---- the wall for a person, and in the dark scheme ---- */
+{
+  const s = await open({ db: DB, now: NOW, viewer: 'person', uid: 'u_drew', name: 'Drew', skin: 'swiss', doctype: true, width: 1280, height: 800 });
+  const t0 = await s.page.evaluate(() => document.getElementById('wall').innerText);
+  check('wall, person: only their own projects, no people list', /clinic.scheduler/.test(t0) && !/atlas|harbor|Priya|People/i.test(t0), t0.slice(0, 300));
+  await s.close();
+  const d = await open({ db: DB, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, dark: true, width: 1280, height: 800 });
+  const c = await d.page.evaluate(() => [getComputedStyle(document.getElementById('wall')).backgroundColor, getComputedStyle(document.querySelector('.w-v')).color]);
+  check('wall, dark: a dark field with light figures', c[0] === 'rgb(10, 10, 10)' && c[1] === 'rgb(245, 245, 245)', c.join(' / '));
+  await d.close();
+}
+
+/* ---- the wall with an empty queue: no question, no open job, no running session, one account ---- */
+{
+  const qdir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-quiet-'));
+  fs.cpSync(DB, qdir, { recursive: true });
+  const put = (f, fn) => { const d = JSON.parse(fs.readFileSync(f, 'utf8')); fn(d); fs.writeFileSync(f, JSON.stringify(d)); };
+  for (const f of fs.readdirSync(qdir)) if (f.startsWith('data__users__') || f === 'join') fs.rmSync(path.join(qdir, f), { recursive: true, force: true });
+  for (const f of fs.readdirSync(path.join(qdir, 'jobs'))) put(path.join(qdir, 'jobs', f), (d) => { if (['running', 'queued', 'waiting'].includes(d.status)) { d.status = 'done'; d.finishedAt = '2026-10-04T00:00:00Z'; } });
+  for (const f of fs.readdirSync(path.join(qdir, 'syncs'))) put(path.join(qdir, 'syncs', f), (d) => { for (const x of d.sessions || []) if (x.status === 'running') x.status = 'idle'; });
+  for (const f of fs.readdirSync(path.join(qdir, 'sessions'))) put(path.join(qdir, 'sessions', f), (d) => { if (d.status === 'running') d.status = 'idle'; });
+  for (const [w, h] of [[1280, 800], [800, 1280]]) {
+    const s = await open({ db: qdir, now: NOW, viewer: 'owner', skin: 'swiss', doctype: true, width: w, height: h });
+    const g = await s.page.evaluate(() => {
+      const wall = document.getElementById('wall'), right = wall.querySelector('.w-right');
+      return { solo: wall.querySelector('.w-main').classList.contains('solo'), queue: getComputedStyle(right).display, blocks: right.children.length,
+        table: Math.round(wall.querySelector('.w-table').getBoundingClientRect().right), kpis: Math.round(wall.querySelector('.w-kpis').getBoundingClientRect().right),
+        overY: document.documentElement.scrollHeight - innerHeight };
+    });
+    check(`wall ${w}x${h}, empty queue: the charts and the table take the full width`, g.solo && g.queue === 'none' && g.blocks === 0 && Math.abs(g.table - g.kpis) <= 2 && g.overY <= 1, JSON.stringify(g));
+    await s.close();
+  }
+  fs.rmSync(qdir, { recursive: true, force: true });
+}
+
+/* ---- phone width ---- */
+for (const viewer of ['owner', 'person']) {
+  const s = await open({ db: DB, now: NOW, viewer, uid: 'u_drew', name: 'Drew', width: 390 });
+  const overflow = await s.page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check(`phone width, ${viewer}: no horizontal scroll`, overflow <= 1, `${overflow}px`);
+  await s.close();
+}
+
+console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
+process.exit(failed ? 1 : 0);
