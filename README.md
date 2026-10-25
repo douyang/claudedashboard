@@ -107,7 +107,7 @@ A person who opens the board sees their own usage, and a **Set up my Claude** bu
 
 ## The hourly sync
 
-A routine sends `sync` to the usage-sync session at minute 26 of every hour. The session starts one Haiku sub-agent with the brief `docs/SYNC_AGENT.md` and relays its one-line reply. The sub-agent writes `syncs/<epoch>`. The brief is `docs/SYNC.md` in a short form, with the values of this board. `CLAUDE.md` holds the dispatch steps, so the procedure survives a context reset.
+A routine sends `sync` to the usage-sync session at minute 26 of every hour. The session runs on Haiku 5.5 at low effort and does nothing else. It starts the `hourly-sync` sub-agent (`.claude/agents/hourly-sync.md`: Haiku, low effort) with the brief `docs/SYNC_AGENT.md` and relays its one-line reply. The sub-agent writes `syncs/<epoch>`. The brief is `docs/SYNC.md` in a short form, with the values of this board. `CLAUDE.md` holds the dispatch steps, so the procedure survives a context reset.
 
 After the listing, the sub-agent reads each Cowork session that reports to the board with `get_session`, and the share of each limit window from the session's own rate-limit events. It also calls `list_triggers`, and `scripts/sync_agent.py runs` picks the newest run of each scheduled task that no reading counted yet. The sub-agent reads those runs with `get_session` too. It writes only the count fields of each `get_session` answer, never the summary. `scripts/sync_agent.py rows` drops a Cowork row that disagrees with the last reading: a Claude Code total never falls, and it changes only together with `updated_at`. In 2,556 row pairs of 72 readings, no total broke either rule. The usage-sync session never sees a task summary or an event. The sync skips the turn reads of `docs/SYNC.md` steps 12 and 13, because the permission check of the usage-sync session refuses `turns-add`.
 
@@ -124,6 +124,8 @@ Claude Code's cost record gives these costs at API list prices. It prices the ca
 - The 19:26 cost includes $0.54 for the one-time cache write of the compacted context. It leaves out the `/compact` call, about $0.24.
 - With a warm cache at a context of about 115k tokens, a sync costs $0.27 to $0.33. The Haiku sub-agent is $0.09 to $0.12 of that.
 - In the old procedure, each sync added about 25k tokens to the session context, so each sync cost more than the one before. A sync now adds about 3k tokens.
+- By 24 Oct the session ran on Opus 5.5 at a context of 556k tokens, and a sync cost about $0.72 ($17 a day). On 25 Oct a new routine started to wake a new usage-sync session on Haiku 5.5. The old routine stays paused.
+- Keep the hourly cadence. The session keeps its cache for 1 hour. A 2-hour gap would make each sync write the whole context to the cache again, and that cancels most of the saving.
 
 - The routine wakes one session that stays alive. A routine that starts a fresh session each hour does not work: fresh routine sessions do not get the Claude Code Remote tools, so they cannot call `list_sessions`.
 - A routine message that arrives while the session works on another turn waits until that turn ends. If the newest reading is then more than 70 minutes old, the session starts the sync at the end of the turn. The sub-agent skips a late `sync` that arrives less than 30 minutes after a reading. `CLAUDE.md` holds both rules. The page marks a reading older than 80 minutes as late.
