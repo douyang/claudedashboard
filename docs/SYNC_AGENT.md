@@ -51,7 +51,7 @@ On `sync`, the usage-sync session starts one sub-agent with this brief (see `CLA
    - If the tool saved the list_events answer to a file, write `cp <that path> .sync/rl.txt` in place of the `cat` part. Leave out the `cat` part when step 2 made no list_events call.
 
    The command prints one JSON line. Then:
-   - If the line has "skip", make the calls of step 8, reply with the text of "skip", and stop.
+   - If the line has "skip", run step 8, reply with the text of "skip", and stop.
    - If "more" is true, call `list_sessions` with {"limit": 100, "after_id": "<after_id>"}. Run `python3 scripts/sync_agent.py plan LS1 LS2 --at T` with every answer file in order. Repeat until "more" is false.
    - "ids" lists the Cowork sessions for step 4.
 
@@ -101,20 +101,12 @@ On `sync`, the usage-sync session starts one sub-agent with this brief (see `CLA
 
 7. Look at the result of the "syncs" set. If it says that 20,000 or more of 25,000 documents are used, add "Storage is nearly full." to the reply.
 
-8. [16] Make these two calls in one message:
-   - Bash with `cd /home/user/claudedashboard && python3 scripts/sync_agent.py clean`. The script empties the sync folder.
-   - Bash with this command. It deletes the answers that the tools saved:
-
-     ```
-     find /root/.claude/projects/-home-user-claudedashboard/ \( -name '*list_sessions*' -o -name '*list_events*' -o -name '*get_session*' -o -name '*list_triggers*' \) -delete; echo done
-     ```
-
-   If the permission check refuses a call of this step, add "Clean-up refused." to the reply.
+8. [16] Run `cd /home/user/claudedashboard && python3 scripts/sync_agent.py clean`. The script empties the sync folder. If the permission check refuses the command, add "Clean-up refused." to the reply.
 
 9. [17] Reply with the "line" of step 5, the notes of steps 7 and 8, and the notes of failed steps. Reply with nothing else.
 
 ## Failures
 
-- If step 1b, list_sessions, the command of step 3, or the "syncs" set fails: make the calls of step 8, reply with one line that names the step and the error, and stop.
+- If step 1b, list_sessions, the command of step 3, or the "syncs" set fails: run step 8, reply with one line that names the step and the error, and stop.
 - If another call or command fails, go on with the next step, and name the failed step in the reply.
-- If the "syncs" set fails because the document exists, make the calls of step 8 and reply "Stopped: syncs/<doc_id> exists."
+- If the "syncs" set fails because the document exists, run step 8 and reply "Stopped: syncs/<doc_id> exists."

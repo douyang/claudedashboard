@@ -113,7 +113,7 @@ After the listing, the sub-agent reads each Cowork session that reports to the b
 
 The sub-agent keeps every file of a sync in the sync folder `.sync/` in the checkout. `.gitignore` lists the folder, because its files hold session titles. `scripts/sync_agent.py start` empties the folder at the start of a sync, and `clean` empties it at the end. Both delete only the file names of the brief. The brief runs no `rm`.
 
-On 26 Oct, the permission check of the usage-sync session refused the old `rm -rf` of these files in `/tmp`, and the board got no reading after 03:27 UTC. The brief now runs `git pull` in its own call, so a refused command cannot block a fix of the brief.
+On 26 Oct, the permission check of the usage-sync session refused the old `rm -rf` of these files in `/tmp`, and the board got no reading after 03:27 UTC. The brief now runs `git pull` in its own call, so a refused command cannot block a fix of the brief. The brief also dropped the `find -delete` of the answers that the tools save in the session folder. The check could refuse it in every sync. Those answers now stay in the private container of the usage-sync session.
 
 Each call of the usage-sync session reads its whole conversation again. So the session only starts the sub-agent and relays its line, in three calls. After each turn, Claude Code makes one more call at the full context. If the sub-agent runs longer than about 2 minutes, the Agent tool moves it to the background, and the line arrives in a second turn.
 
