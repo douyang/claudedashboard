@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 skills/*.zip
+# The sync folder of the hourly sync (docs/SYNC_AGENT.md). It holds session titles and counts: never commit it.
+.sync/
