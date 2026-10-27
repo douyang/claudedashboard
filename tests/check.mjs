@@ -587,6 +587,34 @@ for (const allUnknown of [false, true]) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/* ---- the sync sub-agent: start and clean delete only the files of a sync, and the brief runs no rm and no /tmp ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-clean-'));
+  const H = new URL('../scripts/sync_agent.py', import.meta.url).pathname;
+  const lines = (...a) => execFileSync('python3', [H, ...a, '--dir', dir], { env: { PATH: process.env.PATH, CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01SELF' } }).toString().trim().split('\n');
+  const ours = ['ls1.txt', 'ls12.txt', 'gs1.txt', 'gs3.txt', 'tr.txt', 'rl.txt', 'ev.txt', 'sync.json', 'daily.json', 'plan.json', 'turns.json'];
+  const keep = ['gs.txt', 'lsx.txt', 'notes.txt', 'other', 'sync.json.bak'];
+  const fill = () => {
+    for (const f of [...ours, ...keep.filter((k) => k !== 'other')]) fs.writeFileSync(path.join(dir, f), 'x');
+    for (const d of ['ses/sessions', 'prev/syncs', 'other']) { fs.mkdirSync(path.join(dir, d), { recursive: true }); fs.writeFileSync(path.join(dir, d, 'a.json'), 'x'); }
+  };
+  const left = () => fs.readdirSync(dir).sort().join(',');
+  fill();
+  const out = lines('start');
+  check('agent: start deletes the files of the last sync, keeps every other file, and prints SELF and T',
+    out.length === 2 && out[0] === 'self=session_01SELF' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(out[1]) && left() === keep.join(','), JSON.stringify([out, left()]));
+  fill();
+  const end = JSON.parse(lines('clean').pop());
+  check('agent: clean deletes the same files at the end of a sync', end.deleted === ours.length + 2 && left() === keep.join(','), JSON.stringify([end, left()]));
+  const fresh = path.join(dir, 'other', '.sync');
+  execFileSync('python3', [H, 'clean', '--dir', fresh]);
+  check('agent: clean makes a missing sync folder', fs.existsSync(fresh) && fs.readdirSync(fresh).length === 0);
+  const brief = fs.readFileSync(new URL('../docs/SYNC_AGENT.md', import.meta.url), 'utf8');
+  check('agent: the brief writes no file to /tmp and runs no rm', !brief.includes('/tmp') && !/\brm\s+-/.test(brief));
+  check('agent: git ignores the sync folder', fs.readFileSync(new URL('../.gitignore', import.meta.url), 'utf8').split('\n').includes('.sync/'));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- the sync sub-agent: the runs of scheduled tasks that the listing leaves out, and sessions that are gone ---- */
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-tasks-'));

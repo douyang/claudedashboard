@@ -2,13 +2,21 @@
 """Helpers for the sub-agent that runs the hourly sync (docs/SYNC_AGENT.md). They run scripts/ccr_sync_doc.py.
 
 Usage:
-  python3 scripts/sync_agent.py plan LS_FILE [LS_FILE ...] --at T [--dir /tmp]
-  python3 scripts/sync_agent.py runs TR_FILE [--dir /tmp]
-  python3 scripts/sync_agent.py rows [--dir /tmp]
+  python3 scripts/sync_agent.py start [--dir DIR]
+  python3 scripts/sync_agent.py plan LS_FILE [LS_FILE ...] --at T [--dir DIR]
+  python3 scripts/sync_agent.py runs TR_FILE [--dir DIR]
+  python3 scripts/sync_agent.py rows [--dir DIR]
+  python3 scripts/sync_agent.py clean [--dir DIR]
 
-They use the files of docs/SYNC.md in --dir: sync.json, daily.json, ses/ (the saved session documents),
-prev/ (the saved earlier readings), rl.txt (a rate-limit event page), gs<N>.txt (the get_session count fields),
-and plan.json.
+DIR is the sync folder, by default .sync in the checkout. .gitignore lists it. The commands use the files of
+docs/SYNC.md in it: sync.json, daily.json, ses/ (the saved session documents), prev/ (the saved earlier readings),
+rl.txt (a rate-limit event page), gs<N>.txt (the get_session count fields), ls<N>.txt, tr.txt and plan.json.
+
+start empties the sync folder and makes it if it is missing. It prints two lines: "self=" and SELF, the id of this
+session, then T, the UTC time of the reading.
+
+clean empties the sync folder at the end of a sync. start and clean delete only the file names above, and ses/ and
+prev/. They leave every other file. The usage-sync session refused `rm -rf` on these files in /tmp on 26 Oct 2026.
 
 plan makes the reading from the list_sessions answers, saves plan.json, and prints it as one JSON line:
   age_min, newest   the age in minutes at T and the doc id of the newest earlier reading; null when there is none
@@ -40,14 +48,18 @@ import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from ccr_sync_doc import daily_doc, row  # noqa: E402
+from ccr_sync_doc import daily_doc, row, self_id  # noqa: E402
 
 DOC = os.path.join(HERE, 'ccr_sync_doc.py')
+SYNC_DIR = os.path.join(os.path.dirname(HERE), '.sync')     # the sync folder; .gitignore lists it
+SYNC_FILES = re.compile(r'(?:ls|gs)\d+\.txt|(?:tr|rl|ev)\.txt|(?:sync|daily|plan|turns)\.json')
+SYNC_FOLDERS = ('ses', 'prev')
 SKIP_MIN = 30
 TASK = 'trigger'        # the `via` of a scheduled task's row
 
@@ -281,20 +293,49 @@ def rows(a):
     print(json.dumps(out))
 
 
+def empty(d):
+    """Delete the files of a sync from the folder d: the names of SYNC_FILES and the folders SYNC_FOLDERS. Leave every
+    other file. Make d if it is missing. Return the number of names deleted."""
+    os.makedirs(d, exist_ok=True)
+    n = 0
+    for name in os.listdir(d):
+        p = os.path.join(d, name)
+        if name in SYNC_FOLDERS and os.path.isdir(p) and not os.path.islink(p):
+            shutil.rmtree(p)
+        elif (name in SYNC_FOLDERS and os.path.islink(p)) or (SYNC_FILES.fullmatch(name) and not os.path.isdir(p)):
+            os.remove(p)            # a link goes, not its target
+        else:
+            continue
+        n += 1
+    return n
+
+
+def start(a):
+    empty(a.dir)
+    print(f'self={self_id()}')
+    print(dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+
+
+def clean(a):
+    print(json.dumps({'deleted': empty(a.dir)}))
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
+    st = sub.add_parser('start')
     pl = sub.add_parser('plan')
     pl.add_argument('answers', nargs='+', help='the list_sessions answer files')
     pl.add_argument('--at', required=True, help='T, the UTC time of the reading')
-    pl.add_argument('--dir', default='/tmp')
     ru = sub.add_parser('runs')
     ru.add_argument('files', nargs='+', help='the list_triggers answer, or the file of one line per task')
-    ru.add_argument('--dir', default='/tmp')
     ro = sub.add_parser('rows')
-    ro.add_argument('--dir', default='/tmp')
+    cl = sub.add_parser('clean')
+    for p in (st, pl, ru, ro, cl):
+        p.add_argument('--dir', default=SYNC_DIR, help='the sync folder (default: .sync in the checkout)')
     a = ap.parse_args()
-    {'plan': plan, 'runs': runs, 'rows': rows}[a.cmd](a)
+    os.makedirs(a.dir, exist_ok=True)
+    {'start': start, 'plan': plan, 'runs': runs, 'rows': rows, 'clean': clean}[a.cmd](a)
 
 
 if __name__ == '__main__':
