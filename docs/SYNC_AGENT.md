@@ -53,9 +53,9 @@ On `sync`, the usage-sync session starts one sub-agent with this brief (see `CLA
    The command prints one JSON line. Then:
    - If the line has "skip", run step 8, reply with the text of "skip", and stop.
    - If "more" is true, call `list_sessions` with {"limit": 100, "after_id": "<after_id>"}. Run `python3 scripts/sync_agent.py plan LS1 LS2 --at T` with every answer file in order. Repeat until "more" is false.
-   - "ids" lists the Cowork sessions for step 4.
+   - "ids" lists the sessions to read in step 4: the Cowork sessions, then the listed sessions that changed since the last reading. The listing gives no token counts, so the script reads these with `get_session`.
 
-4. [7c] Read the Cowork sessions and the newest run of each scheduled task. The listing leaves out the runs of a task that starts a fresh session for each run.
+4. [7c] Read the sessions of "ids" and the newest run of each scheduled task. The listing leaves out the runs of a task that starts a fresh session for each run.
    a. Call `list_triggers` with {"limit": 100}.
    b. Run one command that writes one line for each task whose "persist_session" is false and that has a "last_run", and prints the sessions to read:
 
