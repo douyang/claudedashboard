@@ -4,7 +4,7 @@ This repository is the source of the board https://claude.ai/artifact/DLbfexxF2F
 
 ## The `sync` message
 
-The usage-sync session runs on Haiku 5.5 at low effort and does only the sync. A routine sends the message `sync` to it every hour (UTC minute 26). On `sync`, do only this:
+The usage-sync session runs on Opus 5.5 and does only the sync. A routine sends the message `sync` to it every hour (UTC minute 26). On `sync`, do only this:
 
 1. Start one sub-agent with the Agent tool:
    - `subagent_type`: "hourly-sync"
@@ -12,7 +12,7 @@ The usage-sync session runs on Haiku 5.5 at low effort and does only the sync. A
    - `description`: "Hourly sync"
    - `prompt`: "Read /home/user/claudedashboard/docs/SYNC_AGENT.md and do what it says. Reply with its one line only."
 
-   `.claude/agents/hourly-sync.md` sets the model (Haiku) and the effort (low). If that agent type is missing, use `subagent_type` "general-purpose" with `model` "haiku".
+   `.claude/agents/hourly-sync.md` sets the model (Opus) and the effort (low). If that agent type is missing, use `subagent_type` "general-purpose" with `model` "opus".
 2. If its reply does not start with "Synced", "Skipped" or "Stopped", start it once more with `model` "sonnet".
 3. Reply with the sub-agent's line only.
 

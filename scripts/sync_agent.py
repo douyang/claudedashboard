@@ -22,9 +22,17 @@ plan makes the reading from the list_sessions answers, saves plan.json, and prin
   age_min, newest   the age in minutes at T and the doc id of the newest earlier reading; null when there is none
   skip              the reply when that reading is less than 30 minutes old; absent otherwise
   doc_id, day, sessions, tok, more, after_id   from the reading; sessions and tok count the listing only
-  ids               the sessions that report to the board and that the listing lacks: read them with get_session.
+  ids               the sessions to read with get_session: cowork, then read.
+  cowork            the sessions that report to the board and that the listing lacks.
                     A session document marked `gone` is left out: get_session no longer finds that session.
+  read              the listed sessions whose counts the listing leaves out and that changed since the newest
+                    earlier reading (see carry)
   turns             the sessions whose turns docs/SYNC.md steps 12 and 13 read
+
+Since 27 Oct 2026 list_sessions gives no counts, model or repos, only the id, title, status and times. carry gives
+a listed session the totals of the newest earlier reading when its updated_at is the same there: a total changes
+only together with updated_at. It marks the other listed sessions `nocount` and puts them in read. rows fills them
+from their get_session answers and leaves out a session that is still `nocount`.
 
 runs adds the scheduled tasks that start a fresh session for each run. The listing leaves out such runs. TR_FILE
 holds the list_triggers answer, or one line per task with id, name, persist_session and last_run.session_id. runs
@@ -54,7 +62,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from ccr_sync_doc import daily_doc, row, self_id  # noqa: E402
+from ccr_sync_doc import daily_doc, load_sessions, row, self_id  # noqa: E402
 
 DOC = os.path.join(HERE, 'ccr_sync_doc.py')
 SYNC_DIR = os.path.join(os.path.dirname(HERE), '.sync')     # the sync folder; .gitignore lists it
@@ -142,6 +150,62 @@ def task_rows(d):
     return rows
 
 
+COUNTS = ('input_tokens', 'cache_read_tokens', 'cache_write_tokens', 'output_tokens')
+
+
+def nocount(s):
+    """True when an answer holds no token counts."""
+    u = (s.get('external_metadata') or {}).get('usage')
+    return not isinstance(u, dict) or all(u.get(k) is None for k in COUNTS)
+
+
+def carry(d, answers, prev):
+    """Give each listed session without counts the totals of the newest earlier reading when its updated_at is the
+    same there. Mark the others `nocount`, with `floor`, the earlier total, and return their ids."""
+    blank = {s['id'] for path in answers for s in load_sessions(path)[0] if isinstance(s, dict) and s.get('id') and nocount(s)}
+    if not blank:
+        return []
+    old = {}
+    if prev:
+        doc = unwrap(json.load(open(prev[0][1])))
+        old = {r['id']: r for r in doc.get('sessions') or [] if isinstance(r, dict) and r.get('id') and not r.get('via')}
+    path = os.path.join(d, 'sync.json')
+    sync, read = json.load(open(path)), []
+    for r in sync['sessions']:
+        if r['id'] not in blank:
+            continue
+        o = old.get(r['id']) or {}
+        r['repos'] = r.get('repos') or o.get('repos') or []
+        if o and o.get('updatedAt') == r.get('updatedAt'):
+            r.update({k: o[k] for k in ('tok', 'out', 'usd', 'model') if k in o})
+        else:
+            r.update({'nocount': True, 'floor': int(o.get('tok') or 0)})
+            read.append(r['id'])
+    json.dump(sync, open(path, 'w'), ensure_ascii=False)
+    json.dump(daily_doc(sync), open(os.path.join(d, 'daily.json'), 'w'), ensure_ascii=False)
+    return read
+
+
+def fill(d, answers):
+    """Write the counts of each get_session answer into its `nocount` row, then leave out the rows that are still
+    `nocount`. A total below the earlier one is a copy error: that row stays out. Return the number left out."""
+    path = os.path.join(d, 'sync.json')
+    sync, keep = json.load(open(path)), []
+    for r in sync['sessions']:
+        s = answers.get(r['id']) if r.get('nocount') else None
+        if s and not nocount(s) and row(s)['tok'] >= int(r.get('floor') or 0):
+            n = row(s)
+            r.update({k: n[k] for k in ('tok', 'out', 'usd')}, model=n['model'] or r.get('model', ''))
+            r.pop('nocount', None)
+            r.pop('floor', None)
+        if not r.get('nocount'):
+            keep.append(r)
+    left = len(sync['sessions']) - len(keep)
+    sync['sessions'] = keep
+    json.dump(sync, open(path, 'w'), ensure_ascii=False)
+    return left
+
+
 def plan(a):
     d, prev = a.dir, earlier(a.dir)
     sync = os.path.join(d, 'sync.json')
@@ -152,8 +216,11 @@ def plan(a):
         if age < SKIP_MIN:
             out['skip'] = f'Skipped: syncs/{prev[0][0]} is {age} minutes old.'
     out.update(json.loads(run(*a.answers, sync, '--daily', os.path.join(d, 'daily.json'), '--at', a.at)))
+    out['read'] = carry(d, a.answers, prev)
+    out['tok'] = sum(r['tok'] for r in json.load(open(sync))['sessions'])
     saved = saved_docs(d)
-    out['ids'] = [i for i in json.loads(run('local-ids', sync, os.path.join(d, 'ses')))['ids'] if not (saved.get(i) or {}).get('gone')]
+    out['cowork'] = [i for i in json.loads(run('local-ids', sync, os.path.join(d, 'ses')))['ids'] if not (saved.get(i) or {}).get('gone')]
+    out['ids'] = out['cowork'] + out['read']
     out['turns'] = json.loads(run('turns-plan', sync, *[x for _, p in prev for x in ('--prev', p)]))['sessions']
     out['at'] = a.at
     json.dump(out, open(os.path.join(d, 'plan.json'), 'w'))
@@ -253,14 +320,18 @@ def rows(a):
             out['limits'] = json.loads(run('limits', os.path.join(d, 'sync.json'), rl))
         except (subprocess.CalledProcessError, ValueError) as e:
             failed.append(f'Rate limits failed: {error(e)}.')
-    want, gs, got = {x['sid'] for x in p.get('runs') or []}, [], {}
+    want, read, gs, got, listed = {x['sid'] for x in p.get('runs') or []}, set(p.get('read') or []), [], {}, {}
     for f in sorted(glob.glob(os.path.join(d, 'gs*.txt'))):
-        s = answer(f) if want else None
+        s = answer(f) if want or read else None
         if s and s.get('id') in want:                # a run of a scheduled task: its counts go to the task's row
             got[s['id']] = s
             os.remove(f)
+        elif s and s.get('id') in read:              # a listed session: its counts go to its own row
+            listed[s['id']] = s
+            os.remove(f)
         else:
             gs.append(f)
+    out['left'] = fill(d, listed)
     out['added'] = 0
     if gs:
         try:
@@ -275,9 +346,13 @@ def rows(a):
     c = check(d)
     sync = c.pop('sync')
     out.update(c)
-    line = f"Synced {p['sessions']} sessions, {p['tok']:,} tokens at {p['at']}."
-    if p['ids']:
-        line += f" Cowork: {c['kept']} sessions." if c['kept'] == len(p['ids']) else f" Cowork: {c['kept']} of {len(p['ids'])} sessions."
+    own = [r for r in sync['sessions'] if not r.get('via')]
+    line = f"Synced {len(own)} sessions, {sum(r['tok'] for r in own):,} tokens at {p['at']}."
+    cowork = p.get('cowork', p['ids'])
+    if cowork:
+        line += f" Cowork: {c['kept']} sessions." if c['kept'] == len(cowork) else f" Cowork: {c['kept']} of {len(cowork)} sessions."
+    if out['left']:
+        line += f" Left out {out['left']} {'session' if out['left'] == 1 else 'sessions'} without counts."
     n, m = out['runs'], len(p.get('runs') or [])
     if m:
         line += f" Scheduled: {n} {'run' if n == 1 else 'runs'}." if n == m else f" Scheduled: {n} of {m} runs."

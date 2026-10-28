@@ -1,7 +1,7 @@
 ---
 name: hourly-sync
 description: Runs one sync of the Claude activity board with docs/SYNC_AGENT.md and replies with one line. The usage-sync session starts it on each `sync` message.
-model: haiku
+model: opus
 effort: low
 omitClaudeMd: true
 ---

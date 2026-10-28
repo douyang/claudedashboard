@@ -615,6 +615,45 @@ for (const allUnknown of [false, true]) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/* ---- the sync sub-agent: a listing without counts (list_sessions since 27 Oct 2026) ---- */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-nocount-'));
+  const H = new URL('../scripts/sync_agent.py', import.meta.url).pathname;
+  const run = (...a) => JSON.parse(execFileSync('python3', [H, ...a, '--dir', dir], { env: { PATH: process.env.PATH, CLAUDE_CODE_REMOTE_SESSION_ID: 'cse_01SELF' } }).toString().trim().split('\n').pop());
+  const bare = (id, upd) => ({ id, title: id, session_status: 'SESSION_STATUS_IDLE', status_bucket: 'SESSION_STATUS_BUCKET_COMPLETED', created_at: '2026-10-04T00:00:00Z', updated_at: upd });
+  const ls = path.join(dir, 'ls1.txt');
+  /* A: unchanged since the last reading. B and C: changed. D: new. */
+  fs.writeFileSync(ls, JSON.stringify({ ccr: { data: [bare('session_01A', '2026-10-04T05:00:00Z'), bare('session_01B', '2026-10-04T06:10:00Z'),
+    bare('session_01C', '2026-10-04T06:10:00Z'), bare('session_01D', '2026-10-04T06:00:00Z')] } }));
+  const old = (id, tok) => ({ id, title: id, status: 'idle', tok, out: tok / 100, usd: tok / 1000, model: 'm', createdAt: '2026-10-04T00:00:00Z', updatedAt: '2026-10-04T05:00:00Z', repos: ['o/r'] });
+  fs.mkdirSync(path.join(dir, 'prev', 'syncs'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'prev', 'syncs', '1791091800.json'), JSON.stringify({ at: '2026-10-04T05:30:00Z', src: 'routine', sessions: [old('session_01A', 1000), old('session_01B', 2000), old('session_01C', 3000)] }));
+  const p = run('plan', ls, '--at', '2026-10-04T06:30:00Z');
+  check('nocount: the plan carries an unchanged session and reads the changed and new ones',
+    p.tok === 1000 && JSON.stringify(p.read) === '["session_01B","session_01C","session_01D"]' && JSON.stringify(p.ids) === JSON.stringify(p.read) && JSON.stringify(p.cowork) === '[]', JSON.stringify(p));
+  const line = (id, upd, tok) => JSON.stringify({ id, title: id, session_status: 'SESSION_STATUS_IDLE', status_bucket: '', created_at: '2026-10-04T00:00:00Z', updated_at: upd, external_metadata: { last_served_model: 'n', usage: { input_tokens: 0, cache_read_tokens: tok - tok / 100, cache_write_tokens: 0, output_tokens: tok / 100, cost_usd: tok / 1000 } } });
+  /* B grew. C has no answer. D is new. */
+  fs.writeFileSync(path.join(dir, 'gs1.txt'), line('session_01B', '2026-10-04T06:10:00Z', 2500));
+  fs.writeFileSync(path.join(dir, 'gs2.txt'), line('session_01D', '2026-10-04T06:00:00Z', 100));
+  const r = run('rows');
+  const out = JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8'));
+  const daily = JSON.parse(fs.readFileSync(path.join(dir, 'daily.json'), 'utf8'));
+  const by = Object.fromEntries(out.sessions.map((x) => [x.id, x]));
+  check('nocount: rows fills the read sessions, keeps their repos, and leaves out a session without counts',
+    r.left === 1 && !by.session_01C && by.session_01A.tok === 1000 && by.session_01A.model === 'm' && by.session_01B.tok === 2500 && by.session_01B.model === 'n'
+    && by.session_01B.repos[0] === 'o/r' && by.session_01D.tok === 100 && !by.session_01B.via && !out.sessions.some((x) => 'nocount' in x || 'floor' in x)
+    && daily.rows.length === 3 && !fs.readdirSync(dir).some((f) => /^gs\d+\.txt$/.test(f)), JSON.stringify([r, out.sessions]));
+  check('nocount: the reply counts the sessions with counts and names the one left out',
+    r.line.startsWith('Synced 3 sessions, 3,600 tokens at 2026-10-04T06:30:00Z. Left out 1 session without counts.'), r.line);
+  fs.writeFileSync(path.join(dir, 'gs1.txt'), line('session_01B', '2026-10-04T06:10:00Z', 1500));
+  fs.writeFileSync(ls, JSON.stringify({ ccr: { data: [bare('session_01B', '2026-10-04T06:10:00Z')] } }));
+  run('plan', ls, '--at', '2026-10-04T06:30:00Z');
+  const r2 = run('rows');
+  check('nocount: a total below the last reading is a copy error and stays out', r2.left === 1 && !JSON.parse(fs.readFileSync(path.join(dir, 'sync.json'), 'utf8')).sessions.length, JSON.stringify(r2));
+  fs.rmSync('/tmp/turns.json', { force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 /* ---- the sync sub-agent: the runs of scheduled tasks that the listing leaves out, and sessions that are gone ---- */
 {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-tasks-'));
